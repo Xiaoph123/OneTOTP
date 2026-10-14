@@ -3,14 +3,17 @@ import {
   unregister,
 } from "@tauri-apps/plugin-global-shortcut";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { isDesktop } from "./platform";
 
 /**
- * 注册全局快捷键用于唤起/隐藏主窗口。
+ * 注册全局快捷键用于唤起/隐藏主窗口（仅桌面端）。
+ * 移动端无全局快捷键概念，所有操作降级为空操作。
  * - shortcut 为空表示清除快捷键
  * - 注册前先注销旧快捷键，避免冲突
  * - 返回实际生效的快捷键字符串（失败时为空）
  */
 export async function applyToggleShortcut(shortcut: string): Promise<string> {
+  if (!isDesktop()) return "";
   const prev = getRegisteredToggleShortcut();
   if (prev) {
     try {
@@ -53,6 +56,7 @@ export function setRegisteredToggleShortcut(value: string) {
  * 在应用启动时应用已保存的快捷键
  */
 export async function initToggleShortcut(shortcut: string): Promise<void> {
+  if (!isDesktop()) return;
   const applied = await applyToggleShortcut(shortcut);
   setRegisteredToggleShortcut(applied);
 }

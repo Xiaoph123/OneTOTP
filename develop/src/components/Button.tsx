@@ -34,7 +34,7 @@ export function Button({
     gap: 6,
     height: heights[size],
     padding: size === "sm" ? "0 12px" : "0 16px",
-    borderRadius: "var(--radius-sm)",
+    borderRadius: "var(--radius-md)",
     border: "none",
     fontSize: fontSizes[size],
     fontWeight: variant === "primary" ? "var(--font-weight-medium)" : "var(--font-weight-regular)",

@@ -1,4 +1,6 @@
 :root {
+  /* 字号缩放因子：由设置项动态覆盖（见 lib/fontScale.ts） */
+  --font-scale: 1;
   /* === Colors === */
   --primary-yuanliBlue-1: #f3f7ff;
   --primary-yuanliBlue-2: #ebf1ff;
@@ -116,21 +118,21 @@
   --font-body: "PingFang SC", "Roboto", "Helvetica Neue", Arial, sans-serif;
   --font-mono: "SFMono-Regular", "SF Mono", "Roboto Mono", "Consolas", "Liberation Mono", monospace;
   --font-family-base: "PingFang SC", "Roboto", "Helvetica Neue", Arial, sans-serif;
-  --font-size-display: 24px;
-  --font-size-h1: 20px;
-  --font-size-h2: 18px;
-  --font-size-h3: 16px;
-  --font-size-h4: 14px;
-  --font-size-body: 12px;
-  --font-size-lead: 13px;
-  --font-size-caption: 10px;
-  --font-size-eyebrow: 10px;
-  --font-size-mono: 12px;
-  --font-size-price: 20px;
-  --type-display-sm: 24px;
-  --type-heading-sm: 14px;
-  --type-body-md: 12px;
-  --type-body-sm: 10px;
+  --font-size-display: calc(var(--font-scale, 1) * 24px);
+  --font-size-h1: calc(var(--font-scale, 1) * 20px);
+  --font-size-h2: calc(var(--font-scale, 1) * 18px);
+  --font-size-h3: calc(var(--font-scale, 1) * 16px);
+  --font-size-h4: calc(var(--font-scale, 1) * 14px);
+  --font-size-body: calc(var(--font-scale, 1) * 12px);
+  --font-size-lead: calc(var(--font-scale, 1) * 13px);
+  --font-size-caption: calc(var(--font-scale, 1) * 10px);
+  --font-size-eyebrow: calc(var(--font-scale, 1) * 10px);
+  --font-size-mono: calc(var(--font-scale, 1) * 12px);
+  --font-size-price: calc(var(--font-scale, 1) * 20px);
+  --type-display-sm: calc(var(--font-scale, 1) * 24px);
+  --type-heading-sm: calc(var(--font-scale, 1) * 14px);
+  --type-body-md: calc(var(--font-scale, 1) * 12px);
+  --type-body-sm: calc(var(--font-scale, 1) * 10px);
   --font-weight-regular: 400;
   --font-weight-medium: 500;
   --font-weight-semibold: 600;

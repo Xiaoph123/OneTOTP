@@ -7,6 +7,7 @@ import { Select } from "../components/Select";
 import { useToast } from "../components/Toast";
 import { AlertTriangle, Camera, ChevronLeft, Check, Copy, Info, Upload } from "../components/icons";
 import { copyText } from "../lib/utils";
+import { useI18n } from "../i18n";
 
 type Mode = "scan" | "manual" | "file";
 
@@ -17,7 +18,6 @@ const OTP_TYPES = [
 const ALGORITHMS = ["SHA1", "SHA256", "SHA512"];
 const DIGITS = [6, 7, 8];
 const PERIODS = [30, 60];
-const CATEGORIES = ["未分类", "工作", "个人", "开发", "其他"];
 
 /** 由账户信息重建 otpauth 链接 */
 function buildOtpauth(a: {
@@ -52,8 +52,9 @@ interface Props {
 }
 
 export function AddAccountPage({ editing }: Props) {
-  const { navigate, refreshAccounts } = useApp();
+  const { navigate, goBack, refreshAccounts, categories } = useApp();
   const toast = useToast();
+  const { t } = useI18n();
   const isEdit = Boolean(editing);
 
   const [mode, setMode] = useState<Mode>(isEdit ? "manual" : "scan");
@@ -81,7 +82,7 @@ export function AddAccountPage({ editing }: Props) {
   const [digits, setDigits] = useState(editing?.digits ?? 6);
   const [period, setPeriod] = useState(editing?.period ?? 30);
   const [counter, setCounter] = useState(editing?.counter ?? 0);
-  const [category, setCategory] = useState(editing?.category || "未分类");
+  const [categoryId, setCategoryId] = useState(editing?.categoryId ?? "");
   const [uriText, setUriText] = useState("");
   const [saving, setSaving] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
@@ -120,11 +121,11 @@ export function AddAccountPage({ editing }: Props) {
   const handleDecoded = useCallback(
     async (text: string) => {
       stopCamera();
-      setScanNotice("已识别二维码，正在添加…");
+      setScanNotice(t("已识别二维码，正在添加…"));
       try {
         const parsed = await api.parseOtpauth(text);
         await api.addAccount({
-          issuer: parsed.issuer || parsed.account || "未命名账户",
+          issuer: parsed.issuer || parsed.account || t("未命名账户"),
           account: parsed.account,
           secret: parsed.secret,
           otpType: parsed.otpType,
@@ -132,14 +133,14 @@ export function AddAccountPage({ editing }: Props) {
           digits: parsed.digits,
           period: parsed.period,
           counter: parsed.counter,
-          category: "",
+          categoryId: "",
         });
         await refreshAccounts();
-        toast.success("已扫码添加账户");
+        toast.success(t("已扫码添加账户"));
         navigate({ name: "codes" });
       } catch (e) {
-        setScanNotice(`未能识别二维码内容：${String(e)}`);
-        toast.error("二维码识别失败");
+        setScanNotice(t("未能识别二维码内容：{msg}", { msg: String(e) }));
+        toast.error(t("二维码识别失败"));
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -164,15 +165,15 @@ export function AddAccountPage({ editing }: Props) {
   const handleParseToken = async () => {
     setTokenNotice(null);
     if (!token.trim()) {
-      setTokenNotice("请粘贴 otpauth 链接");
+      setTokenNotice(t("请粘贴 otpauth 链接"));
       return;
     }
     try {
       const parsed = await api.parseOtpauth(token.trim());
       applyParsed(parsed);
-      setTokenNotice("已从令牌解析账户信息");
+      setTokenNotice(t("已从令牌解析账户信息"));
     } catch (e) {
-      setTokenNotice(`令牌解析失败：${String(e)}`);
+      setTokenNotice(t("令牌解析失败：{msg}", { msg: String(e) }));
     }
   };
 
@@ -193,7 +194,7 @@ export function AddAccountPage({ editing }: Props) {
           if (text) {
             handleDecoded(text);
           } else {
-            setScanNotice("未在图片中识别到二维码，请尝试更清晰、完整包含二维码的图片");
+            setScanNotice(t("未在图片中识别到二维码，请尝试更清晰、完整包含二维码的图片"));
           }
         };
         img.src = reader.result as string;
@@ -232,7 +233,7 @@ export function AddAccountPage({ editing }: Props) {
       rafRef.current = requestAnimationFrame(tick);
     } catch {
       setScanning(false);
-      setScanNotice("无法访问摄像头，请改用「从图片选择」方式。");
+      setScanNotice(t("无法访问摄像头，请改用「从图片选择」方式。"));
     }
   };
 
@@ -240,8 +241,8 @@ export function AddAccountPage({ editing }: Props) {
     setLocalError(null);
     setSaving(true);
     try {
-      if (!displayName.trim()) throw new Error("请填写显示名称");
-      if (!secret.trim()) throw new Error("请填写密钥");
+      if (!displayName.trim()) throw new Error(t("请填写显示名称"));
+      if (!secret.trim()) throw new Error(t("请填写密钥"));
       const payload = {
         issuer: displayName.trim(),
         account: account.trim(),
@@ -251,14 +252,14 @@ export function AddAccountPage({ editing }: Props) {
         digits,
         period,
         counter,
-        category: category === "未分类" ? "" : category,
+        categoryId,
       };
       if (isEdit && editing) {
         await api.updateAccount(editing.id, payload);
-        toast.success("账户已更新");
+        toast.success(t("账户已更新"));
       } else {
         await api.addAccount(payload);
-        toast.success("账户已添加");
+        toast.success(t("账户已添加"));
       }
       await refreshAccounts();
       if (keepGoing && !isEdit) {
@@ -271,7 +272,7 @@ export function AddAccountPage({ editing }: Props) {
         setDigits(6);
         setPeriod(30);
         setCounter(0);
-        setCategory("未分类");
+        setCategoryId("");
       } else {
         navigate({ name: "codes" });
       }
@@ -287,10 +288,10 @@ export function AddAccountPage({ editing }: Props) {
   const handleImportFile = async () => {
     setLocalError(null);
     try {
-      if (!uriText.trim()) throw new Error("请粘贴 otpauth 链接");
+      if (!uriText.trim()) throw new Error(t("请粘贴 otpauth 链接"));
       const count = await api.importOtpauthText(uriText);
       await refreshAccounts();
-      toast.success(`已导入 ${count} 个账户`);
+      toast.success(t("已导入 {n} 个账户", { n: count }));
       navigate({ name: "codes" });
     } catch (e) {
       const msg = String(e);
@@ -302,11 +303,11 @@ export function AddAccountPage({ editing }: Props) {
   return (
     <>
       <header className="app-bar">
-        <IconButton label="返回" onClick={() => navigate({ name: "codes" })}>
+        <IconButton label={t("返回")} onClick={() => goBack()}>
           <ChevronLeft />
         </IconButton>
         <span style={{ fontSize: "var(--font-size-h4)", fontWeight: 500 }}>
-          {isEdit ? "编辑账户" : "添加账户"}
+          {isEdit ? t("编辑账户") : t("添加账户")}
         </span>
       </header>
 
@@ -315,9 +316,9 @@ export function AddAccountPage({ editing }: Props) {
           <div className="segmented" style={{ width: "100%", marginBottom: 12 }} role="tablist">
             {(
               [
-                ["scan", "扫码"],
-                ["manual", "手动"],
-                ["file", "文件"],
+                ["scan", t("扫码")],
+                ["manual", t("手动")],
+                ["file", t("文件")],
               ] as [Mode, string][]
             ).map(([key, label]) => (
               <button
@@ -346,13 +347,13 @@ export function AddAccountPage({ editing }: Props) {
                   style={{
                     width: 200,
                     height: 200,
-                    borderRadius: "var(--radius-sm)",
+                    borderRadius: "var(--radius-md)",
                     objectFit: "cover",
                     background: "#000",
                   }}
                 />
               ) : (
-                <div className="qr-placeholder" aria-label="扫码区域">
+                <div className="qr-placeholder" aria-label={t("扫码区域")}>
                   <svg viewBox="0 0 64 64" width="120" height="120" aria-hidden>
                     <rect x="2" y="2" width="60" height="60" rx="8" fill="var(--color-bg-5)" />
                     <path d="M18 18h12v12H18zM34 18h12v12H34zM18 34h12v12H18z" fill="var(--color-border-4)" />
@@ -362,24 +363,24 @@ export function AddAccountPage({ editing }: Props) {
               )}
               <div style={{ textAlign: "center" }}>
                 <div style={{ fontSize: "var(--font-size-lead)", fontWeight: 500 }}>
-                  {scanning ? "正在识别二维码…" : "扫描二维码添加账户"}
+                  {scanning ? t("正在识别二维码…") : t("扫描二维码添加账户")}
                 </div>
                 <div style={{ fontSize: "var(--font-size-body)", color: "var(--color-text-3)", marginTop: 3 }}>
-                  支持摄像头实时扫码，或从本地图片识别（完全离线）
+                  {t("支持摄像头实时扫码，或从本地图片识别（完全离线）")}
                 </div>
               </div>
               <div style={{ display: "flex", gap: 8 }}>
                 {scanning ? (
                   <Button variant="secondary" onClick={stopCamera}>
-                    停止扫描
+                    {t("停止扫描")}
                   </Button>
                 ) : (
                   <Button variant="primary" icon={<Camera style={{ width: 14, height: 14 }} />} onClick={startCamera}>
-                    开启摄像头
+                    {t("开启摄像头")}
                   </Button>
                 )}
                 <Button variant="secondary" icon={<Upload style={{ width: 14, height: 14 }} />} onClick={handlePickImage}>
-                  从图片选择
+                  {t("从图片选择")}
                 </Button>
               </div>
             </div>
@@ -402,86 +403,86 @@ export function AddAccountPage({ editing }: Props) {
         {mode === "manual" || isEdit ? (
           <div className="panel" style={{ padding: 14 }}>
             <div style={{ fontSize: "var(--font-size-h4)", fontWeight: 500, marginBottom: 4 }}>
-              {isEdit ? "编辑账户信息" : "手动添加到身份验证器"}
+              {isEdit ? t("编辑账户信息") : t("手动添加到身份验证器")}
             </div>
             <div style={{ fontSize: "var(--font-size-body)", color: "var(--color-text-3)", marginBottom: 14 }}>
-              填写显示名称与密钥，或直接粘贴令牌自动解析
+              {t("填写显示名称与密钥，或直接粘贴令牌自动解析")}
             </div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               {/* 显示名称 */}
               <div className="field">
                 <label className="field-label">
-                  显示名称 <span className="req">*</span>
+                  {t("显示名称")} <span className="req">*</span>
                 </label>
                 <div style={{ position: "relative" }}>
                   <input
                     className="ui-input"
                     value={displayName}
                     onChange={(e) => setDisplayName(e.target.value)}
-                    placeholder="例如 GitHub、公司 VPN"
+                    placeholder={t("例如 GitHub、公司 VPN")}
                     style={{ paddingRight: 40 }}
                   />
                   <IconButton
-                    label="复制显示名称"
+                    label={t("复制显示名称")}
                     style={{ position: "absolute", right: 4, top: 0 }}
                     onClick={() => displayName && copyText(displayName)}
                   >
                     <Copy />
                   </IconButton>
                 </div>
-                <span className="field-help">显示在验证码卡片上的名称。</span>
+                <span className="field-help">{t("显示在验证码卡片上的名称。")}</span>
               </div>
 
               {/* 账号 */}
               <div className="field">
-                <label className="field-label">账号</label>
+                <label className="field-label">{t("账号")}</label>
                 <div style={{ position: "relative" }}>
                   <input
                     className="ui-input"
                     value={account}
                     onChange={(e) => setAccount(e.target.value)}
-                    placeholder="例如 wanghao@example.com"
+                    placeholder={t("例如 wanghao@example.com")}
                     style={{ paddingRight: 40 }}
                   />
                   <IconButton
-                    label="复制账号"
+                    label={t("复制账号")}
                     style={{ position: "absolute", right: 4, top: 0 }}
                     onClick={() => account && copyText(account)}
                   >
                     <Copy />
                   </IconButton>
                 </div>
-                <span className="field-help">用于区分同一服务下的多个账户。</span>
+                <span className="field-help">{t("用于区分同一服务下的多个账户。")}</span>
               </div>
 
               {/* 密钥 */}
               <div className="field">
                 <label className="field-label">
-                  密钥 <span className="req">*</span>
+                  {t("密钥")} <span className="req">*</span>
                 </label>
                 <div style={{ position: "relative" }}>
                   <input
                     className="ui-input"
                     value={secret}
                     onChange={(e) => setSecret(e.target.value)}
-                    placeholder="Base32 密钥，例如 JBSWY3DPEHPK3PXP"
+                    placeholder={t("Base32 密钥，例如 JBSWY3DPEHPK3PXP")}
                     style={{ paddingRight: 40, fontFamily: "var(--font-mono)" }}
                   />
                   <IconButton
-                    label="复制密钥"
+                    label={t("复制密钥")}
                     style={{ position: "absolute", right: 4, top: 0 }}
                     onClick={() => secret && copyText(secret)}
                   >
                     <Copy />
                   </IconButton>
                 </div>
-                <span className="field-help">密钥仅保存在本机，不会上传。</span>
+                <span className="field-help">{t("密钥仅保存在本机，不会上传。")}</span>
               </div>
 
               {/* 令牌 */}
               <div className="field">
-                <label className="field-label">令牌</label>
+                <label className="field-label">{t("令牌")}</label>
                 <div style={{ position: "relative" }}>
                   <input
                     className="ui-input"
@@ -490,11 +491,11 @@ export function AddAccountPage({ editing }: Props) {
                       setToken(e.target.value);
                       setTokenNotice(null);
                     }}
-                    placeholder="粘贴 otpauth:// 链接可自动解析"
+                    placeholder={t("粘贴 otpauth:// 链接可自动解析")}
                     style={{ paddingRight: 40, fontFamily: "var(--font-mono)", fontSize: "var(--font-size-body)" }}
                   />
                   <IconButton
-                    label="复制令牌"
+                    label={t("复制令牌")}
                     style={{ position: "absolute", right: 4, top: 0 }}
                     onClick={() => token && copyText(token)}
                   >
@@ -516,7 +517,7 @@ export function AddAccountPage({ editing }: Props) {
                       cursor: "pointer",
                     }}
                   >
-                    从令牌解析并回填
+                    {t("从令牌解析并回填")}
                   </button>
                 ) : null}
               </div>
@@ -542,19 +543,19 @@ export function AddAccountPage({ editing }: Props) {
                 }}
               >
                 <div style={{ fontSize: "var(--font-size-lead)", fontWeight: 500, marginBottom: 12 }}>
-                  高级选项
+                  {t("高级选项")}
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                   <div className="field">
-                    <label className="field-label">类型</label>
+                    <label className="field-label">{t("类型")}</label>
                     <Select
                       value={otpType}
                       onChange={setOtpType}
-                      options={OTP_TYPES}
+                      options={OTP_TYPES.map((o) => ({ value: o.value, label: t(o.label) }))}
                     />
                   </div>
                   <div className="field">
-                    <label className="field-label">算法</label>
+                    <label className="field-label">{t("算法")}</label>
                     <Select
                       value={algorithm}
                       onChange={setAlgorithm}
@@ -562,16 +563,16 @@ export function AddAccountPage({ editing }: Props) {
                     />
                   </div>
                   <div className="field">
-                    <label className="field-label">位数</label>
+                    <label className="field-label">{t("位数")}</label>
                     <Select
                       value={digits}
                       onChange={setDigits}
-                      options={DIGITS.map((d) => ({ value: d, label: `${d} 位` }))}
+                      options={DIGITS.map((d) => ({ value: d, label: t("{n} 位", { n: d }) }))}
                     />
                   </div>
                   {otpType === "hotp" ? (
                     <div className="field">
-                      <label className="field-label">计数器</label>
+                      <label className="field-label">{t("计数器")}</label>
                       <input
                         className="ui-input"
                         type="number"
@@ -583,20 +584,23 @@ export function AddAccountPage({ editing }: Props) {
                     </div>
                   ) : (
                     <div className="field">
-                      <label className="field-label">周期</label>
+                      <label className="field-label">{t("周期")}</label>
                       <Select
                         value={period}
                         onChange={setPeriod}
-                        options={PERIODS.map((p) => ({ value: p, label: `${p} 秒` }))}
+                        options={PERIODS.map((p) => ({ value: p, label: t("{n} 秒", { n: p }) }))}
                       />
                     </div>
                   )}
                   <div className="field">
-                    <label className="field-label">分类</label>
+                    <label className="field-label">{t("分类")}</label>
                     <Select
-                      value={category}
-                      onChange={setCategory}
-                      options={CATEGORIES.map((c) => ({ value: c, label: c }))}
+                      value={categoryId}
+                      onChange={setCategoryId}
+                      options={[
+                        { value: "", label: t("未分类") },
+                        ...categories.map((c) => ({ value: c.id, label: c.name })),
+                      ]}
                     />
                   </div>
                 </div>
@@ -607,17 +611,17 @@ export function AddAccountPage({ editing }: Props) {
 
         {mode === "file" && !isEdit ? (
           <div className="panel" style={{ padding: 14 }}>
-            <div style={{ fontSize: "var(--font-size-h4)", fontWeight: 500, marginBottom: 12 }}>从文本导入</div>
+            <div style={{ fontSize: "var(--font-size-h4)", fontWeight: 500, marginBottom: 12 }}>{t("从文本导入")}</div>
             <div className="field">
-              <label className="field-label">粘贴 otpauth 链接</label>
+              <label className="field-label">{t("粘贴 otpauth 链接")}</label>
               <textarea
                 className="ui-textarea"
                 value={uriText}
                 onChange={(e) => setUriText(e.target.value)}
-                placeholder={"每行一条，例如：\notpauth://totp/GitHub:wanghao@example.com?secret=JBSWY3DPEHPK3PXP&issuer=GitHub"}
+                placeholder={t("每行一条，例如：\notpauth://totp/GitHub:wanghao@example.com?secret=JBSWY3DPEHPK3PXP&issuer=GitHub")}
                 rows={6}
               />
-              <span className="field-help">支持一次导入多条，逐行解析 otpauth 链接。</span>
+              <span className="field-help">{t("支持一次导入多条，逐行解析 otpauth 链接。")}</span>
             </div>
             <Button
               variant="secondary"
@@ -626,7 +630,7 @@ export function AddAccountPage({ editing }: Props) {
               icon={<Upload style={{ width: 14, height: 14 }} />}
               onClick={handleImportFile}
             >
-              解析并导入
+              {t("解析并导入")}
             </Button>
           </div>
         ) : null}
@@ -647,14 +651,14 @@ export function AddAccountPage({ editing }: Props) {
             style={{ marginTop: 12, background: "var(--color-primary-container)", color: "var(--color-on-primary-container)" }}
           >
             <Info style={{ color: "var(--color-primary)" }} />
-            请同时保存好恢复码，避免设备丢失后无法登录。
+            {t("请同时保存好恢复码，避免设备丢失后无法登录。")}
           </div>
         ) : null}
       </section>
 
       {mode === "manual" || isEdit ? (
         <div className="sticky-actions">
-          <Button onClick={() => navigate({ name: "codes" })}>取消</Button>
+          <Button onClick={() => navigate({ name: "codes" })}>{t("取消")}</Button>
           <Button
             variant="primary"
             block
@@ -662,11 +666,11 @@ export function AddAccountPage({ editing }: Props) {
             icon={<Check style={{ width: 14, height: 14 }} />}
             onClick={() => handleSave(false)}
           >
-            {isEdit ? "保存修改" : "保存账户"}
+            {isEdit ? t("保存修改") : t("保存账户")}
           </Button>
           {!isEdit ? (
             <Button disabled={saving} onClick={() => handleSave(true)}>
-              保存并继续
+              {t("保存并继续")}
             </Button>
           ) : null}
         </div>

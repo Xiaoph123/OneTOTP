@@ -25,8 +25,11 @@ pub struct Account {
     /// HOTP 计数器（仅 hotp 类型使用）
     #[serde(default)]
     pub counter: u64,
-    /// 分类
+    /// 所属分类 id；空字符串表示「未分类」
     #[serde(default)]
+    pub category_id: String,
+    /// 旧版分类名称（用于一次性迁移到 category_id）
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub category: String,
     #[serde(default)]
     pub favorite: bool,
@@ -36,6 +39,26 @@ pub struct Account {
     /// 最近使用时间（毫秒时间戳）
     #[serde(default)]
     pub last_used_at: i64,
+}
+
+/// 用户自定义分类（持久化时随载荷一起加密）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Category {
+    pub id: String,
+    /// 分类名称，例如「工作」
+    pub name: String,
+    /// 标识色（十六进制，如 #1664FF）
+    #[serde(default = "default_category_color")]
+    pub color: String,
+    /// 排序序号，越小越靠前
+    #[serde(default)]
+    pub order: i32,
+    #[serde(default)]
+    pub created_at: i64,
+}
+
+fn default_category_color() -> String {
+    "#1664FF".to_string()
 }
 
 fn default_otp_type() -> String {
@@ -105,6 +128,27 @@ pub struct AppSettings {
     /// 全局快捷键（唤起/隐藏），空字符串表示未设置
     #[serde(default)]
     pub shortcut_toggle: String,
+    /// 界面语言：auto | zh | en，auto 表示跟随系统语言环境
+    #[serde(default = "default_language")]
+    pub language: String,
+    /// 窗口尺寸档位：compact（紧凑）| standard（标准）| expanded（扩展）
+    #[serde(default = "default_window_size")]
+    pub window_size: String,
+    /// 字体大小：small | standard | large | xlarge
+    #[serde(default = "default_font_scale")]
+    pub font_scale: String,
+}
+
+fn default_font_scale() -> String {
+    "standard".to_string()
+}
+
+fn default_window_size() -> String {
+    "standard".to_string()
+}
+
+fn default_language() -> String {
+    "auto".to_string()
 }
 
 fn default_card_density() -> String {
@@ -153,6 +197,9 @@ impl Default for AppSettings {
             card_detail: "standard".to_string(),
             close_behavior: "quit".to_string(),
             shortcut_toggle: String::new(),
+            language: "auto".to_string(),
+            window_size: "standard".to_string(),
+            font_scale: "standard".to_string(),
         }
     }
 }
@@ -164,6 +211,9 @@ pub struct VaultPayload {
     pub accounts: Vec<Account>,
     #[serde(default)]
     pub settings: AppSettings,
+    /// 用户自定义分类
+    #[serde(default)]
+    pub categories: Vec<Category>,
 }
 
 /// 磁盘上的加密保险库文件结构
@@ -215,13 +265,42 @@ pub struct AccountView {
     pub digits: u32,
     pub period: u32,
     pub counter: u64,
-    pub category: String,
+    pub category_id: String,
+    /// 分类名称（由后端联表填充，便于前端直接展示）
+    pub category_name: String,
+    /// 分类颜色（联表填充）
+    pub category_color: String,
     pub favorite: bool,
     pub created_at: i64,
     pub last_used_at: i64,
 }
 
+impl AccountView {
+    /// 从账户与分类列表构造视图，填充分类名称与颜色
+    pub fn from_with_categories(account: &Account, categories: &[Category]) -> Self {
+        let matched = categories.iter().find(|c| c.id == account.category_id);
+        Self {
+            id: account.id.clone(),
+            issuer: account.issuer.clone(),
+            account: account.account.clone(),
+            secret: account.secret.clone(),
+            otp_type: account.otp_type.clone(),
+            algorithm: account.algorithm.clone(),
+            digits: account.digits,
+            period: account.period,
+            counter: account.counter,
+            category_id: account.category_id.clone(),
+            category_name: matched.map(|c| c.name.clone()).unwrap_or_default(),
+            category_color: matched.map(|c| c.color.clone()).unwrap_or_default(),
+            favorite: account.favorite,
+            created_at: account.created_at,
+            last_used_at: account.last_used_at,
+        }
+    }
+}
+
 impl From<&Account> for AccountView {
+    /// 无分类信息时的降级视图（分类名/颜色为空）
     fn from(a: &Account) -> Self {
         Self {
             id: a.id.clone(),
@@ -233,7 +312,9 @@ impl From<&Account> for AccountView {
             digits: a.digits,
             period: a.period,
             counter: a.counter,
-            category: a.category.clone(),
+            category_id: a.category_id.clone(),
+            category_name: String::new(),
+            category_color: String::new(),
             favorite: a.favorite,
             created_at: a.created_at,
             last_used_at: a.last_used_at,
@@ -252,6 +333,9 @@ pub struct CodeResult {
     pub remaining: u32,
     /// 当前周期进度百分比 0-100（HOTP 恒为 0）
     pub progress: u32,
+    /// 下一个周期的验证码（仅 TOTP 提供，HOTP 为 None）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub next_code: Option<String>,
 }
 
 /// 新增/更新账户入参
@@ -271,5 +355,13 @@ pub struct AccountInput {
     #[serde(default)]
     pub counter: u64,
     #[serde(default)]
-    pub category: String,
+    pub category_id: String,
+}
+
+/// 分类新增/更新入参
+#[derive(Debug, Clone, Deserialize)]
+pub struct CategoryInput {
+    pub name: String,
+    #[serde(default = "default_category_color")]
+    pub color: String,
 }

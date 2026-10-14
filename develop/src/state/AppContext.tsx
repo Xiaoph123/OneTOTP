@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { api, type AccountView, type AppSettings, type CodeResult } from "../lib/api";
+import { api, type AccountView, type AppSettings, type Category, type CodeResult } from "../lib/api";
 import { applyTheme } from "../lib/theme";
+import { applyWindowSize } from "../lib/windowSize";
 import { initToggleShortcut } from "../lib/shortcut";
 
 export type Route =
@@ -10,6 +11,7 @@ export type Route =
   | { name: "edit"; accountId: string }
   | { name: "settings" }
   | { name: "security" }
+  | { name: "categories" }
   | { name: "importExport" }
   | { name: "lock" };
 
@@ -19,7 +21,10 @@ interface AppContextValue {
   phase: LoadPhase;
   route: Route;
   navigate: (route: Route) => void;
+  /** 返回上一级（移动端返回键 / 页面返回按钮使用）；返回 false 表示已在根页面 */
+  goBack: () => boolean;
   accounts: AccountView[];
+  categories: Category[];
   codes: Record<string, CodeResult>;
   settings: AppSettings | null;
   passwordHint: string;
@@ -27,6 +32,7 @@ interface AppContextValue {
   error: string | null;
   setError: (msg: string | null) => void;
   refreshAccounts: () => Promise<void>;
+  refreshCategories: () => Promise<void>;
   refreshSettings: () => Promise<void>;
   boot: () => Promise<void>;
   unlockWithPassword: (password: string) => Promise<boolean>;
@@ -46,15 +52,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [phase, setPhase] = useState<LoadPhase>("booting");
   const [route, setRoute] = useState<Route>({ name: "codes" });
   const [accounts, setAccounts] = useState<AccountView[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [codes, setCodes] = useState<Record<string, CodeResult>>({});
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [passwordHint, setPasswordHint] = useState("");
   const [hasLock, setHasLock] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // 导航历史栈：记录来路，供返回键 / 返回按钮回退
+  const historyRef = useRef<Route[]>([]);
 
   const refreshAccounts = useCallback(async () => {
     const list = await api.listAccounts();
     setAccounts(list);
+  }, []);
+
+  const refreshCategories = useCallback(async () => {
+    const list = await api.listCategories();
+    setCategories(list);
   }, []);
 
   const refreshSettings = useCallback(async () => {
@@ -75,6 +89,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         const s = await api.getSettings();
         setSettings(s);
         await refreshAccounts();
+        await refreshCategories();
         setPhase("ready");
         setRoute({ name: "codes" });
         return;
@@ -93,13 +108,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const s = await api.getSettings();
       setSettings(s);
       await refreshAccounts();
+      await refreshCategories();
       setPhase("ready");
       setRoute({ name: "codes" });
     } catch (e) {
       setError(String(e));
       setPhase("locked");
     }
-  }, [refreshAccounts]);
+  }, [refreshAccounts, refreshCategories]);
 
   const unlockWithPassword = useCallback(
     async (password: string) => {
@@ -109,6 +125,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         const s = await api.getSettings();
         setSettings(s);
         await refreshAccounts();
+        await refreshCategories();
         setPhase("ready");
         setRoute({ name: "codes" });
         return true;
@@ -117,12 +134,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         return false;
       }
     },
-    [refreshAccounts],
+    [refreshAccounts, refreshCategories],
   );
 
   const lockApp = useCallback(async () => {
     await api.lock();
     setAccounts([]);
+    setCategories([]);
     setCodes({});
     setPhase("locked");
     setRoute({ name: "lock" });
@@ -133,7 +151,28 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setSettings(next);
   }, []);
 
-  const navigate = useCallback((next: Route) => setRoute(next), []);
+  const navigate = useCallback((next: Route) => {
+    setRoute((prev) => {
+      // 同路由不重复入栈
+      if (prev.name === next.name && (prev as any).accountId === (next as any).accountId) {
+        return next;
+      }
+      // 记录来路，供返回使用；限制栈深避免无限增长
+      historyRef.current.push(prev);
+      if (historyRef.current.length > 50) historyRef.current.shift();
+      return next;
+    });
+  }, []);
+
+  /** 返回上一级；根页面（无需返回）时返回 false，交由系统处理（移动端退出应用） */
+  const goBack = useCallback(() => {
+    const prev = historyRef.current.pop();
+    if (prev && prev.name !== "lock") {
+      setRoute(prev);
+      return true;
+    }
+    return false;
+  }, []);
 
   // 解锁后轮询验证码
   useEffect(() => {
@@ -183,12 +222,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return () => mql.removeEventListener("change", onChange);
   }, [settings?.theme]);
 
+  // 窗口尺寸：设置变化时应用对应宽度
+  useEffect(() => {
+    if (!settings?.windowSize) return;
+    applyWindowSize(settings.windowSize).catch(() => {});
+  }, [settings?.windowSize]);
+
   const value = useMemo<AppContextValue>(
     () => ({
       phase,
       route,
       navigate,
+      goBack,
       accounts,
+      categories,
       codes,
       settings,
       passwordHint,
@@ -196,6 +243,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       error,
       setError,
       refreshAccounts,
+      refreshCategories,
       refreshSettings,
       boot,
       unlockWithPassword,
@@ -206,13 +254,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       phase,
       route,
       navigate,
+      goBack,
       accounts,
+      categories,
       codes,
       settings,
       passwordHint,
       hasLock,
       error,
       refreshAccounts,
+      refreshCategories,
       refreshSettings,
       boot,
       unlockWithPassword,

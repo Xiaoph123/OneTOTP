@@ -64,18 +64,28 @@ select {
   position: relative;
   z-index: 30;
   flex-shrink: 0;
-  height: 32px;
+  height: 40px;
   display: flex;
   align-items: center;
-  padding-left: 14px;
+  padding-left: 16px;
   background: var(--color-bg-1);
   -webkit-app-region: drag;
   user-select: none;
 }
+.titlebar-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.titlebar-logo {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
 .titlebar-title {
-  font-size: var(--font-size-body);
+  font-size: var(--font-size-h4);
   font-weight: var(--font-weight-medium);
-  color: var(--color-text-3);
+  color: var(--color-text-2);
   letter-spacing: 0.3px;
 }
 .titlebar-actions {
@@ -85,21 +95,21 @@ select {
   -webkit-app-region: no-drag;
 }
 .titlebar-btn {
-  width: 44px;
+  width: 48px;
   align-self: stretch;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   border: none;
   background: transparent;
-  color: var(--color-text-3);
+  color: var(--color-text-2);
   cursor: pointer;
   transition: background 140ms ease, color 140ms ease;
   -webkit-app-region: no-drag;
 }
 .titlebar-btn svg {
-  width: 12px;
-  height: 12px;
+  width: 15px;
+  height: 15px;
 }
 .titlebar-btn:hover {
   background: var(--color-bg-5);
@@ -142,6 +152,61 @@ select {
   min-height: 0;
   overflow-y: auto;
   padding: 16px 14px 20px;
+  /* 隐藏滚动条但保留滚动能力 */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.app-body::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
+/* 内容不足时把尾部元素（如提示条）顶到底部 */
+.app-body.is-column {
+  display: flex;
+  flex-direction: column;
+}
+.app-body.is-column > .body-spacer {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* 搜索行：搜索框与添加按钮统一高度；添加按钮为图标+文字的主操作 */
+.search-row {
+  --search-add-h: 36px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.search-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 auto;
+  min-width: 0;
+  height: var(--search-add-h);
+  padding: 0 12px;
+  background: var(--color-bg-4);
+  border-radius: var(--radius-md);
+  /* 常态：边框比浅色分隔线深一档，轮廓更清晰（源力 input 规范） */
+  box-shadow: inset 0 0 0 1px var(--color-border-3);
+  transition: box-shadow 150ms ease;
+}
+/* 悬停：边框转主色（半透明），给出可交互暗示 */
+.search-bar:hover {
+  box-shadow: inset 0 0 0 1px var(--primary-5);
+}
+/* 聚焦：主色描边 + 3px 蓝色光晕，与源力 input 聚焦态一致 */
+.search-bar:focus-within {
+  box-shadow: 0 0 0 1px var(--color-primary), 0 0 0 3px rgba(22, 100, 255, 0.3);
+}
+/* 主操作：图标+文字；与搜索框等高、同圆角 */
+.search-add-btn {
+  flex-shrink: 0;
+  padding: 0 14px;
+  width: auto;
 }
 
 /* 图标按钮 */
@@ -151,7 +216,7 @@ select {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   background: transparent;
   color: var(--color-text-2);
   border: none;
@@ -198,6 +263,17 @@ select {
   border: 1px solid var(--color-border-light);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-1);
+}
+
+/* 账户详情页：身份头部 */
+.account-hero {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.account-info-panel {
+  padding: 12px 16px;
 }
 
 /* 底部标签导航 */
@@ -297,10 +373,24 @@ select {
   color: var(--color-text-3);
   margin-top: 2px;
 }
+/* 分组标题：源力 section-title 规范 —— 主色竖条 + 标题文字 */
 .s-group-title {
-  font-size: var(--font-size-body);
-  color: var(--color-text-3);
-  padding: 6px 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--font-size-h4);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-1);
+  line-height: 20px;
+  padding: 8px 4px 6px;
+}
+.s-group-title::before {
+  content: "";
+  flex-shrink: 0;
+  width: 3px;
+  height: 14px;
+  border-radius: 2px;
+  background: var(--color-primary);
 }
 
 /* 分段控件 */
@@ -310,11 +400,14 @@ select {
   gap: 4px;
   padding: 4px;
   background: var(--color-bg-5);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
+  /* 父级为 flex column 时不被拉伸，宽度仅包裹内部按钮 */
+  width: fit-content;
+  align-self: flex-start;
 }
 .segmented button {
   border: none;
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--color-text-2);
   font-size: var(--font-size-lead);
@@ -356,7 +449,7 @@ select {
   display: flex;
   gap: 8px;
   padding: 10px 12px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   font-size: var(--font-size-body);
   line-height: 18px;
 }
@@ -393,17 +486,87 @@ select {
   flex-direction: column;
   gap: 12px;
 }
+
+/* 分类分组 */
+.otp-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.otp-group-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  transition: background 140ms ease;
+}
+/* 悬停/按下：整行浮起高亮块，明确表达"可点击" */
+.otp-group-head:hover {
+  background: var(--color-bg-4);
+}
+.otp-group-head:active {
+  background: var(--color-bg-5);
+}
+/* 折叠状态：用分类色的淡色持续高亮，一眼辨识所属分类 */
+.otp-group-head.is-collapsed {
+  /* --cat-rgb 由组件按分类色注入（"r, g, b"）；缺省回退中性灰 */
+  background: rgba(var(--cat-rgb, 241, 243, 245), 0.12);
+}
+.otp-group-head.is-collapsed:hover {
+  background: rgba(var(--cat-rgb, 241, 243, 245), 0.2);
+}
+.otp-group-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.otp-group-name {
+  font-size: var(--font-size-lead);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-1);
+}
+.otp-group-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 9px;
+  background: var(--color-bg-5);
+  color: var(--color-text-3);
+  font-size: var(--font-size-caption);
+  font-variant-numeric: tabular-nums;
+}
+.otp-group-chevron {
+  margin-left: auto;
+  color: var(--color-text-3);
+  transition: transform 180ms ease;
+}
+.otp-group-chevron.is-collapsed {
+  transform: rotate(-90deg);
+}
 .otp-card {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
   background: var(--color-bg-card);
   border: 1px solid var(--color-border-light);
   border-radius: var(--radius-md);
-  padding: 14px;
+  padding: 12px;
   box-shadow: var(--shadow-1);
   transition: box-shadow 180ms ease, border-color 150ms ease;
   cursor: pointer;
+  /* 卡片内文字不做选中（验证码通过点击复制，无需划选） */
+  user-select: none;
+  -webkit-user-select: none;
 }
 .otp-card:hover {
   box-shadow: var(--shadow-3);
@@ -419,20 +582,20 @@ select {
   gap: 8px;
 }
 .otp-card.is-compact .otp-code {
-  font-size: 28px;
-  line-height: 34px;
+  font-size: 26px;
+  line-height: 32px;
   letter-spacing: 4px;
 }
 .otp-card.is-compact .otp-ring,
 .otp-card.is-compact .otp-ring svg {
-  width: 46px;
-  height: 46px;
+  width: 42px;
+  height: 42px;
 }
 .otp-card.is-compact .otp-ring-num {
   font-size: var(--font-size-body);
 }
 .otp-card.is-compact .otp-codelabel {
-  margin-bottom: 2px;
+  margin-bottom: -4px;
 }
 .otp-head {
   display: flex;
@@ -467,30 +630,31 @@ select {
 }
 .otp-codelabel {
   font-size: var(--font-size-body);
-  color: var(--color-text-3);
-  margin-bottom: 6px;
+  color: var(--color-primary);
+  /* 复制反馈：抵消卡片 gap，紧贴验证码行，避免高度跳动 */
+  margin-bottom: -6px;
 }
 .otp-code {
   font-family: var(--font-mono);
-  font-size: 40px;
-  letter-spacing: 6px;
+  font-size: 34px;
+  letter-spacing: 5px;
   font-weight: var(--font-weight-semibold);
   color: var(--color-text-1);
-  line-height: 48px;
+  line-height: 40px;
   font-variant-numeric: tabular-nums;
 }
 .otp-card.is-expiring .otp-code {
   color: var(--color-danger);
 }
 .otp-ring {
-  width: 64px;
-  height: 64px;
+  width: 52px;
+  height: 52px;
   flex-shrink: 0;
   position: relative;
 }
 .otp-ring svg {
-  width: 64px;
-  height: 64px;
+  width: 52px;
+  height: 52px;
   transform: rotate(-90deg);
 }
 .otp-ring-num {
@@ -499,7 +663,7 @@ select {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: var(--font-size-h4);
+  font-size: var(--font-size-body);
   font-weight: var(--font-weight-semibold);
   color: var(--color-text-1);
   font-variant-numeric: tabular-nums;
@@ -516,14 +680,34 @@ select {
   gap: 6px;
   flex-wrap: wrap;
 }
+/* 下一个验证码（复杂模式，位于标签行右侧） */
+.otp-next {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.otp-next-label {
+  font-size: var(--font-size-body);
+  color: var(--color-text-3);
+  flex-shrink: 0;
+}
+.otp-next-code {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-lead);
+  letter-spacing: 2px;
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-3);
+  font-variant-numeric: tabular-nums;
+}
 .avatar-sq {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: var(--radius-md);
-  font-size: var(--font-size-lead);
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-body);
   font-weight: var(--font-weight-medium);
   flex-shrink: 0;
 }
@@ -578,6 +762,34 @@ select {
 }
 .action-row:hover {
   background: var(--color-bg-4);
+}
+
+/* 本地数据占用：尺寸药丸（点击可清理备份） */
+.usage-pill {
+  display: inline-flex;
+  align-items: center;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  cursor: pointer;
+}
+.usage-size {
+  display: inline-flex;
+  align-items: center;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-5);
+  color: var(--color-text-1);
+  font-size: var(--font-size-body);
+  font-variant-numeric: tabular-nums;
+  transition: background 150ms ease, color 150ms ease;
+}
+.usage-pill:hover .usage-size {
+  background: var(--color-bg-4);
+  color: var(--color-primary);
 }
 
 /* 居中弹窗（二次确认） */
@@ -653,6 +865,73 @@ select {
   }
 }
 
+/* ===== 关于弹窗 ===== */
+.about-dialog {
+  max-width: 340px;
+}
+.about-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 0 16px;
+}
+.about-logo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 60px;
+  height: 60px;
+  margin-bottom: 10px;
+}
+.about-name {
+  font-size: var(--font-size-h3);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-1);
+  line-height: 26px;
+}
+.about-ver {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-body);
+  color: var(--color-text-3);
+}
+.about-tagline {
+  margin-top: 2px;
+  font-size: var(--font-size-body);
+  color: var(--color-text-3);
+}
+.about-rows {
+  border-top: 1px solid var(--color-border-light);
+}
+.about-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--color-border-light);
+  font-size: var(--font-size-lead);
+}
+.about-row-label {
+  color: var(--color-text-3);
+  flex-shrink: 0;
+}
+.about-row-value {
+  color: var(--color-text-1);
+  text-align: right;
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}
+.about-note {
+  margin: 12px 0 16px;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  background: var(--color-bg-4);
+  font-size: var(--font-size-body);
+  color: var(--color-text-3);
+  line-height: 17px;
+}
+
 /* ===== 源力 Message 全局提示 ===== */
 .message-container {
   position: fixed;
@@ -676,7 +955,7 @@ select {
   max-width: 100%;
   background: var(--color-bg-1);
   border: 0.5px solid var(--color-border-light);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   box-shadow: var(--shadow-3);
   font-size: var(--font-size-h4);
   line-height: var(--line-height-h4);
@@ -753,7 +1032,7 @@ select {
   height: 32px;
   padding: 0 12px;
   border: none;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   outline: none;
   background-color: var(--color-bg-1);
   box-shadow: 0 0 0 1px var(--color-border-3), 0 1px 1px rgba(0, 0, 0, 0.05);
@@ -777,7 +1056,7 @@ select {
   min-height: 96px;
   padding: 8px 12px;
   border: none;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   outline: none;
   background-color: var(--color-bg-1);
   box-shadow: 0 0 0 1px var(--color-border-3), 0 1px 1px rgba(0, 0, 0, 0.05);
@@ -810,7 +1089,7 @@ select {
   height: 32px;
   padding: 0 12px;
   background: var(--color-bg-1);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   box-shadow: 0 0 0 1px var(--color-border-3), 0 1px 1px rgba(0, 0, 0, 0.05);
   color: var(--color-text-1);
   cursor: pointer;
@@ -883,7 +1162,7 @@ select {
   left: 0;
   width: 100%;
   background: var(--color-bg-1);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   box-shadow: var(--shadow-4);
   border: 1px solid var(--color-border-light);
   padding: 5px;
@@ -1015,28 +1294,40 @@ select {
   cursor: not-allowed;
 }
 
-/* 启动加载 */
+/* 启动加载：品牌 Logo + 循环扫光，替代传统转圈 */
 .boot-screen {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 12px;
+  gap: 16px;
   flex: 1;
   min-height: 0;
   color: var(--color-text-3);
 }
-.boot-spinner {
-  width: 28px;
-  height: 28px;
-  border: 3px solid var(--color-bg-5);
-  border-top-color: var(--color-primary);
-  border-radius: 50%;
-  animation: boot-spin 0.8s linear infinite;
+.boot-logo {
+  width: 72px;
+  height: 72px;
+  display: block;
 }
-@keyframes boot-spin {
-  to {
-    transform: rotate(360deg);
+/* 扫光条：从左至右循环掠过，被裁切在盾牌轮廓内 */
+.onetotp-shine {
+  animation: onetotp-shine-sweep 1.8s ease-in-out infinite;
+  will-change: transform;
+}
+@keyframes onetotp-shine-sweep {
+  0% {
+    transform: translateX(-10px);
+  }
+  100% {
+    transform: translateX(30px);
+  }
+}
+/* 尊重系统「减少动态效果」偏好 */
+@media (prefers-reduced-motion: reduce) {
+  .onetotp-shine {
+    animation: none;
+    opacity: 0;
   }
 }
 
@@ -1050,3 +1341,113 @@ select {
     transition-duration: 0.001ms !important;
   }
 }
+
+/* ─────────────────────────────────────────────
+   移动端适配（Android / iOS）
+   通过 <html data-platform="mobile"> 判定，桌面端不受影响
+   注：状态栏/导航栏避让由 Android 原生侧 setPadding 处理（见 MainActivity.kt），
+   WebView 不支持下 env(safe-area-inset-*)，故此处不再叠加安全区。
+   ───────────────────────────────────────────── */
+
+/* 移动端全屏铺满，取消窗口圆角/阴影 */
+html[data-platform="mobile"] .app-window {
+  border-radius: 0;
+  box-shadow: none;
+}
+
+html[data-platform="mobile"] .titlebar {
+  display: none;
+}
+
+/* 内容区：左右留白更舒展，底部预留手势条空间 */
+html[data-platform="mobile"] .app-body {
+  padding: 16px 16px 24px;
+}
+
+/* 内容整体限制最大宽度并水平居中，避免大屏手机上元素被拉得过散 */
+html[data-platform="mobile"] .app-body > * {
+  width: 100%;
+  max-width: 560px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* 页头（如添加账户）：加高、加大返回按钮点按区 */
+html[data-platform="mobile"] .app-bar {
+  height: 56px;
+  padding: 0 12px;
+}
+
+/* 底部导航吸附 */
+html[data-platform="mobile"] .tab-bar {
+  height: 60px;
+}
+html[data-platform="mobile"] .tab-item {
+  font-size: calc(var(--font-scale, 1) * 12px);
+}
+html[data-platform="mobile"] .tab-item svg {
+  width: 22px;
+  height: 22px;
+}
+
+/* 顶部提示条下移，避开原生顶部内边距 */
+html[data-platform="mobile"] .message {
+  top: 8px;
+  padding: 0 16px;
+}
+
+/* 触控目标：图标按钮与输入/选择控件统一为 44px，符合移动端最小触控尺寸 */
+html[data-platform="mobile"] .icon-btn {
+  width: 44px;
+  height: 44px;
+}
+html[data-platform="mobile"] .ui-input,
+html[data-platform="mobile"] .select-trigger {
+  height: 44px;
+}
+
+/* 搜索栏与"添加"按钮在移动端保持等高：统一 44px */
+html[data-platform="mobile"] .search-row {
+  --search-add-h: 44px;
+}
+html[data-platform="mobile"] .search-add-btn {
+  padding: 0 16px;
+}
+
+/* 设置项：加大行高与内边距，右侧控件不再固定窄宽 */
+html[data-platform="mobile"] .s-row {
+  padding: 15px 16px;
+  gap: 10px;
+}
+
+/* 按钮整体加高，便于点按 */
+html[data-platform="mobile"] .btn-primary-inline {
+  height: 44px !important;
+}
+
+/* 分段控件加高 */
+html[data-platform="mobile"] .segmented button {
+  padding: 9px 14px;
+}
+
+/* 弹窗在移动端留出安全边距 */
+html[data-platform="mobile"] .modal-dialog {
+  max-width: min(400px, calc(100vw - 32px));
+}
+
+/* 锁定页卡片横向留白 */
+html[data-platform="mobile"] .lock-card {
+  max-width: min(340px, calc(100vw - 40px));
+}
+
+/* 移动端禁用文本长按选中与点击高亮，提升原生化观感 */
+html[data-platform="mobile"] body {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+}
+
+/* 底部吸附操作条加高，避让手势条 */
+html[data-platform="mobile"] .sticky-actions {
+  padding: 12px 16px;
+}
+

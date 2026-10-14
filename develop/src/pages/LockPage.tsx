@@ -1,10 +1,12 @@
 import { useState } from "react";
 import { useApp } from "../state/AppContext";
 import { IconButton } from "../components/Button";
-import { Backspace, Eye, EyeOff, Fingerprint, Lock, ShieldCheck } from "../components/icons";
+import { Backspace, Eye, EyeOff, Fingerprint, Lock, OneTotpMark } from "../components/icons";
+import { useI18n } from "../i18n";
 
 export function LockPage() {
   const { unlockWithPassword, passwordHint, hasLock, boot } = useApp();
+  const { t } = useI18n();
   const [password, setPassword] = useState("");
   const [show, setShow] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -15,9 +17,9 @@ export function LockPage() {
     return (
       <div className="lock-page">
         <div className="lock-card" style={{ textAlign: "center" }}>
-          <ShieldCheck style={{ width: 40, height: 40, color: "var(--color-primary)" }} />
+          <OneTotpMark style={{ width: 56, height: 56 }} />
           <div style={{ fontSize: "var(--font-size-h3)", fontWeight: 500, marginTop: 12 }}>
-            正在打开 OneTotp
+            {t("正在打开 OneTotp")}
           </div>
           <button
             onClick={boot}
@@ -26,13 +28,13 @@ export function LockPage() {
               height: 36,
               padding: "0 20px",
               border: "none",
-              borderRadius: "var(--radius-sm)",
+              borderRadius: "var(--radius-md)",
               background: "var(--color-primary)",
               color: "var(--color-white)",
               cursor: "pointer",
             }}
           >
-            进入应用
+            {t("进入应用")}
           </button>
         </div>
       </div>
@@ -45,7 +47,7 @@ export function LockPage() {
     setError(null);
     const ok = await unlockWithPassword(password);
     if (!ok) {
-      setError("密码错误，请重试");
+      setError(t("密码错误，请重试"));
       setPassword("");
     }
     setBusy(false);
@@ -62,9 +64,9 @@ export function LockPage() {
     <div className="lock-page">
       <div className="lock-card">
         <div className="lock-avatar">王</div>
-        <div style={{ fontSize: "var(--font-size-h3)", fontWeight: 500 }}>应用已锁定</div>
+        <div style={{ fontSize: "var(--font-size-h3)", fontWeight: 500 }}>{t("应用已锁定")}</div>
         <div style={{ fontSize: "var(--font-size-lead)", color: "var(--color-text-3)", marginTop: 4 }}>
-          请输入密码以解锁 OneTotp
+          {t("请输入密码以解锁 OneTotp")}
         </div>
 
         <form
@@ -80,7 +82,7 @@ export function LockPage() {
               type={show ? "text" : "password"}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="输入锁定密码"
+              placeholder={t("输入锁定密码")}
               autoFocus
               autoComplete="current-password"
               style={{
@@ -91,7 +93,7 @@ export function LockPage() {
               }}
             />
             <IconButton
-              label={show ? "隐藏密码" : "显示密码"}
+              label={show ? t("隐藏密码") : t("显示密码")}
               style={{ position: "absolute", right: 6, top: 6 }}
               onClick={() => setShow((s) => !s)}
             >
@@ -140,7 +142,7 @@ export function LockPage() {
               justifyContent: "center",
               gap: 6,
               border: "none",
-              borderRadius: "var(--radius-sm)",
+              borderRadius: "var(--radius-md)",
               background: "var(--color-primary)",
               color: "var(--color-white)",
               fontSize: "var(--font-size-h4)",
@@ -150,7 +152,7 @@ export function LockPage() {
             }}
           >
             <Lock style={{ width: 16, height: 16 }} />
-            解锁
+            {t("解锁")}
           </button>
         </form>
 
@@ -160,7 +162,7 @@ export function LockPage() {
               {d}
             </button>
           ))}
-          <button className="key-btn ghost" type="button" aria-label="生物识别" disabled title="需系统支持">
+          <button className="key-btn ghost" type="button" aria-label={t("生物识别")} disabled title={t("需系统支持")}>
             <Fingerprint style={{ width: 22, height: 22 }} />
           </button>
           <button className="key-btn" type="button" onClick={() => press("0")}>
@@ -169,7 +171,7 @@ export function LockPage() {
           <button
             className="key-btn ghost"
             type="button"
-            aria-label="删除"
+            aria-label={t("删除")}
             onClick={() => setPassword((p) => p.slice(0, -1))}
           >
             <Backspace style={{ width: 22, height: 22 }} />
@@ -178,7 +180,7 @@ export function LockPage() {
 
         {passwordHint ? (
           <div style={{ marginTop: 16, fontSize: "var(--font-size-body)", color: "var(--color-text-3)" }}>
-            密码提示：{passwordHint}
+            {t("密码提示：{hint}", { hint: passwordHint })}
           </div>
         ) : null}
 
@@ -186,7 +188,7 @@ export function LockPage() {
           style={{
             marginTop: 16,
             padding: "10px 12px",
-            borderRadius: "var(--radius-sm)",
+            borderRadius: "var(--radius-md)",
             background: "var(--color-bg-4)",
             display: "flex",
             gap: 8,
@@ -198,7 +200,7 @@ export function LockPage() {
             <path d="M8 7.4v3.4M8 5.3v.1" strokeLinecap="round" />
           </svg>
           <span style={{ fontSize: "var(--font-size-body)", color: "var(--color-text-3)", lineHeight: "18px" }}>
-            密码仅用于本机解锁，忘记后无法找回，只能通过加密备份在新设备恢复。
+            {t("密码仅用于本机解锁，忘记后无法找回，只能通过加密备份在新设备恢复。")}
           </span>
         </div>
       </div>

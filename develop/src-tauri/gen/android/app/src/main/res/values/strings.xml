@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">"OneTotp"</string>
+    <string name="main_activity_title">"OneTotp"</string>
+</resources>

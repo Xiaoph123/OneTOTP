@@ -1,4 +1,4 @@
-import type { SVGProps } from "react";
+import { useId, type SVGProps } from "react";
 
 type IconProps = SVGProps<SVGSVGElement>;
 
@@ -39,6 +39,103 @@ export const Plus = (p: IconProps) => (
   </svg>
 );
 
+/** 盾牌轮廓路径，供品牌图标与启动扫光复用 */
+const SHIELD_PATH =
+  "M12 2.2 3.8 5.9v6.2c0 4.9 3.5 8.6 8.2 10 4.7-1.4 8.2-5.1 8.2-10V5.9L12 2.2z";
+
+/**
+ * 品牌图标：渐变色盾牌 + 反白衬线「1」，与 OneTotp 名称呼应。
+ * 渐变 id 用 useId 生成，避免多实例/多页面下的 SVG id 冲突。
+ */
+export const OneTotpMark = (p: IconProps) => {
+  const id = useId();
+  const grad = `onetotp-grad-${id}`;
+  return (
+    <svg viewBox="0 0 24 24" fill="none" {...p}>
+      <defs>
+        <linearGradient id={grad} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#34D399" />
+          <stop offset="0.45" stopColor="#22D3EE" />
+          <stop offset="1" stopColor="#6366F1" />
+        </linearGradient>
+      </defs>
+      <path d={SHIELD_PATH} fill={`url(#${grad})`} />
+      <path
+        d={SHIELD_PATH}
+        stroke={`url(#${grad})`}
+        strokeWidth="1.2"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M10.1 9.3 12.4 7.6V15.6"
+        stroke="#FFFFFF"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path d="M10.3 15.6h4" stroke="#FFFFFF" strokeWidth="2" strokeLinecap="round" />
+      <path d="M10.1 9.3h1.3" stroke="#FFFFFF" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  );
+};
+
+/**
+ * 启动加载图标：品牌盾牌 + 斜向扫光循环划过，替代传统转圈。
+ * 扫光被裁切在盾牌轮廓内，仅掠过盾牌本体。
+ */
+export const OneTotpMarkLoading = (p: IconProps) => {
+  const id = useId();
+  const grad = `onetotp-grad-${id}`;
+  const clip = `onetotp-clip-${id}`;
+  const shine = `onetotp-shine-${id}`;
+  return (
+    <svg viewBox="0 0 24 24" fill="none" {...p}>
+      <defs>
+        <linearGradient id={grad} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#34D399" />
+          <stop offset="0.45" stopColor="#22D3EE" />
+          <stop offset="1" stopColor="#6366F1" />
+        </linearGradient>
+        <linearGradient id={shine} x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0" stopColor="#FFFFFF" stopOpacity="0" />
+          <stop offset="0.5" stopColor="#FFFFFF" stopOpacity="0.75" />
+          <stop offset="1" stopColor="#FFFFFF" stopOpacity="0" />
+        </linearGradient>
+        <clipPath id={clip}>
+          <path d={SHIELD_PATH} />
+        </clipPath>
+      </defs>
+
+      {/* 盾牌底色 + 反白 1 */}
+      <path d={SHIELD_PATH} fill={`url(#${grad})`} />
+      <path
+        d="M10.1 9.3 12.4 7.6V15.6"
+        stroke="#FFFFFF"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path d="M10.3 15.6h4" stroke="#FFFFFF" strokeWidth="2" strokeLinecap="round" />
+      <path d="M10.1 9.3h1.3" stroke="#FFFFFF" strokeWidth="2" strokeLinecap="round" />
+
+      {/* 扫光：被裁切在盾牌内，斜向掠过 */}
+      <g clipPath={`url(#${clip})`}>
+        <g transform="skewX(-20)">
+          <rect className="onetotp-shine" x="0" y="-2" width="6" height="28" fill={`url(#${shine})`} />
+        </g>
+      </g>
+
+      {/* 轮廓描边压在扫光之上，保证边缘清晰 */}
+      <path
+        d={SHIELD_PATH}
+        stroke={`url(#${grad})`}
+        strokeWidth="1.2"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+};
+
 export const Lock = (p: IconProps) => (
   <svg {...base(p)}>
     <rect x="4" y="8" width="10" height="7" rx="1.6" />
@@ -70,6 +167,19 @@ export const ChevronLeft = (p: IconProps) => (
 export const ChevronRight = (p: IconProps) => (
   <svg {...base(p)}>
     <path d="M6 4l4 4-4 4" />
+  </svg>
+);
+
+export const ChevronDown = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M4 6.5l5 5 5-5" />
+  </svg>
+);
+
+export const FolderPlus = (p: IconProps) => (
+  <svg {...base(p)} strokeWidth={1.5}>
+    <path d="M2.5 5.2A1.2 1.2 0 0 1 3.7 4h3l1.3 1.6h6.3a1.2 1.2 0 0 1 1.2 1.2v6.4a1.2 1.2 0 0 1-1.2 1.2H3.7a1.2 1.2 0 0 1-1.2-1.2V5.2z" />
+    <path d="M9 8.4v3.2M7.4 10h3.2" />
   </svg>
 );
 

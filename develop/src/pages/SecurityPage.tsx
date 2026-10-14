@@ -7,28 +7,32 @@ import { Select } from "../components/Select";
 import { useToast } from "../components/Toast";
 import { Button, IconButton } from "../components/Button";
 import { AlertTriangle, ChevronLeft, Eye, EyeOff } from "../components/icons";
+import { useI18n } from "../i18n";
+
+type Translate = (key: string, params?: Record<string, string | number>) => string;
 
 /** 检测当前平台是否可能提供系统级生物识别 */
-function detectBiometricSupport(): { available: boolean; label: string; hint: string } {
+function detectBiometricSupport(t: Translate): { available: boolean; label: string; hint: string } {
   const ua = navigator.userAgent.toLowerCase();
   const isMobile = /android|iphone|ipad|ipod/.test(ua);
   const hasWebAuthn = typeof window !== "undefined" && "PublicKeyCredential" in window;
   if (isMobile) {
     return {
       available: hasWebAuthn,
-      label: "指纹 / 面容解锁",
-      hint: hasWebAuthn ? "调用系统指纹或面容快速解锁" : "当前设备不支持生物识别",
+      label: t("指纹 / 面容解锁"),
+      hint: hasWebAuthn ? t("调用系统指纹或面容快速解锁") : t("当前设备不支持生物识别"),
     };
   }
   return {
     available: hasWebAuthn,
-    label: "Windows Hello 解锁",
-    hint: hasWebAuthn ? "使用系统指纹、人脸或 PIN 快速解锁" : "当前设备不支持 Windows Hello",
+    label: t("Windows Hello 解锁"),
+    hint: hasWebAuthn ? t("使用系统指纹、人脸或 PIN 快速解锁") : t("当前设备不支持 Windows Hello"),
   };
 }
 
 export function SecurityPage() {
-  const { settings, saveSettings, navigate } = useApp();
+  const { t } = useI18n();
+  const { settings, saveSettings, navigate, goBack } = useApp();
   const toast = useToast();
   const [draft, setDraft] = useState(settings);
   const [current, setCurrent] = useState("");
@@ -42,7 +46,7 @@ export function SecurityPage() {
   const pwdPanelRef = useRef<HTMLDivElement | null>(null);
   const passwordInputRef = useRef<HTMLInputElement | null>(null);
 
-  const bio = detectBiometricSupport();
+  const bio = detectBiometricSupport(t);
 
   useEffect(() => {
     if (settings) setHint(settings.passwordHint || "");
@@ -52,14 +56,14 @@ export function SecurityPage() {
     return (
       <>
         <header className="app-bar">
-          <IconButton label="返回" onClick={() => navigate({ name: "settings" })}>
+          <IconButton label={t("返回")} onClick={() => goBack()}>
             <ChevronLeft />
           </IconButton>
-          <span style={{ fontSize: "var(--font-size-h4)", fontWeight: 500 }}>安全与锁定</span>
+          <span style={{ fontSize: "var(--font-size-h4)", fontWeight: 500 }}>{t("安全与锁定")}</span>
         </header>
         <section className="app-body">
           <div className="empty-state">
-            <span className="empty-desc">正在加载…</span>
+            <span className="empty-desc">{t("正在加载…")}</span>
           </div>
         </section>
       </>
@@ -73,8 +77,8 @@ export function SecurityPage() {
     if (!enabled) {
       // 关闭锁定：需要确认当前密码
       if (!current) {
-        setMessage({ type: "err", text: "请输入当前密码以关闭锁定" });
-        toast.error("请输入当前密码以关闭锁定");
+        setMessage({ type: "err", text: t("请输入当前密码以关闭锁定") });
+        toast.error(t("请输入当前密码以关闭锁定"));
         return;
       }
       setBusy(true);
@@ -85,8 +89,8 @@ export function SecurityPage() {
         await saveSettings(s);
         setDraft(s);
         setCurrent("");
-        setMessage({ type: "ok", text: "已关闭应用锁定" });
-        toast.success("已关闭应用锁定");
+        setMessage({ type: "ok", text: t("已关闭应用锁定") });
+        toast.success(t("已关闭应用锁定"));
       } catch (e) {
         setMessage({ type: "err", text: String(e) });
         toast.error(String(e));
@@ -97,7 +101,7 @@ export function SecurityPage() {
     }
 
     // 开启锁定必须设置密码：引导用户到密码设置区
-    toast.info("请先在下方设置锁定密码");
+    toast.info(t("请先在下方设置锁定密码"));
     pwdPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     setTimeout(() => passwordInputRef.current?.focus(), 300);
   };
@@ -105,13 +109,13 @@ export function SecurityPage() {
   const handleChangePassword = async () => {
     setMessage(null);
     if (next !== confirm) {
-      setMessage({ type: "err", text: "两次输入的新密码不一致" });
-      toast.error("两次输入的新密码不一致");
+      setMessage({ type: "err", text: t("两次输入的新密码不一致") });
+      toast.error(t("两次输入的新密码不一致"));
       return;
     }
     if (next.length < 8) {
-      setMessage({ type: "err", text: "新密码长度至少 8 位" });
-      toast.error("新密码长度至少 8 位");
+      setMessage({ type: "err", text: t("新密码长度至少 8 位") });
+      toast.error(t("新密码长度至少 8 位"));
       return;
     }
     setBusy(true);
@@ -127,8 +131,8 @@ export function SecurityPage() {
       setCurrent("");
       setNext("");
       setConfirm("");
-      setMessage({ type: "ok", text: "密码已更新" });
-      toast.success(lockEnabled ? "锁定密码已更新" : "已启用应用锁定");
+      setMessage({ type: "ok", text: t("密码已更新") });
+      toast.success(lockEnabled ? t("锁定密码已更新") : t("已启用应用锁定"));
     } catch (e) {
       setMessage({ type: "err", text: String(e) });
       toast.error(String(e));
@@ -146,25 +150,25 @@ export function SecurityPage() {
   return (
     <>
       <header className="app-bar">
-        <IconButton label="返回" onClick={() => navigate({ name: "settings" })}>
+        <IconButton label={t("返回")} onClick={() => goBack()}>
           <ChevronLeft />
         </IconButton>
-        <span style={{ fontSize: "var(--font-size-h4)", fontWeight: 500 }}>安全与锁定</span>
+        <span style={{ fontSize: "var(--font-size-h4)", fontWeight: 500 }}>{t("安全与锁定")}</span>
       </header>
 
       <section className="app-body">
         <div className="panel">
           <div className="s-row">
             <div className="s-main">
-              <div className="s-title">启用应用锁定</div>
-              <div className="s-desc">打开应用时需输入密码才能查看验证码</div>
+              <div className="s-title">{t("启用应用锁定")}</div>
+              <div className="s-desc">{t("打开应用时需输入密码才能查看验证码")}</div>
             </div>
-            <Switch checked={lockEnabled} onChange={handleEnableChange} label="启用应用锁定" disabled={busy} />
+            <Switch checked={lockEnabled} onChange={handleEnableChange} label={t("启用应用锁定")} disabled={busy} />
           </div>
           <div className="s-row">
             <div className="s-main">
-              <div className="s-title">离开后台时自动锁定</div>
-              <div className="s-desc">失去焦点或最小化后自动锁定</div>
+              <div className="s-title">{t("离开后台时自动锁定")}</div>
+              <div className="s-desc">{t("失去焦点或最小化后自动锁定")}</div>
             </div>
             <Switch
               checked={draft.lockOnBlur}
@@ -174,13 +178,13 @@ export function SecurityPage() {
                 setDraft(nextDraft);
                 await saveSettings(nextDraft);
               }}
-              label="离开后台自动锁定"
+              label={t("离开后台自动锁定")}
             />
           </div>
           <div className="s-row">
             <div className="s-main">
-              <div className="s-title">自动锁定时长</div>
-              <div className="s-desc">无操作超过该时长后锁定</div>
+              <div className="s-title">{t("自动锁定时长")}</div>
+              <div className="s-desc">{t("无操作超过该时长后锁定")}</div>
             </div>
             <Select
               width={124}
@@ -192,11 +196,11 @@ export function SecurityPage() {
                 await saveSettings(nextDraft);
               }}
               options={[
-                { value: 0, label: "立即" },
-                { value: 60, label: "1 分钟" },
-                { value: 300, label: "5 分钟" },
-                { value: 900, label: "15 分钟" },
-                { value: 999999, label: "从不" },
+                { value: 0, label: t("立即") },
+                { value: 60, label: t("1 分钟") },
+                { value: 300, label: t("5 分钟") },
+                { value: 900, label: t("15 分钟") },
+                { value: 999999, label: t("从不") },
               ]}
             />
           </div>
@@ -204,29 +208,29 @@ export function SecurityPage() {
 
         <div className="panel" ref={pwdPanelRef} style={{ padding: 14, marginTop: 12 }}>
           <div style={{ fontSize: "var(--font-size-h4)", fontWeight: 500 }}>
-            {lockEnabled ? "锁定密码" : "设置锁定密码"}
+            {lockEnabled ? t("锁定密码") : t("设置锁定密码")}
           </div>
           <div style={{ fontSize: "var(--font-size-body)", color: "var(--color-text-3)", margin: "4px 0 12px" }}>
             {lockEnabled
-              ? "密码经加盐哈希（Argon2id）存储在本地，不会上传或同步"
-              : "开启应用锁定后，需设置密码才能进入；密码加盐哈希存储在本地"}
+              ? t("密码经加盐哈希（Argon2id）存储在本地，不会上传或同步")
+              : t("开启应用锁定后，需设置密码才能进入；密码加盐哈希存储在本地")}
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             {lockEnabled ? (
               <div className="field">
-                <label className="field-label">当前密码</label>
+                <label className="field-label">{t("当前密码")}</label>
                 <div style={{ position: "relative" }}>
                   <input
                     className="ui-input"
                     type={showPwd ? "text" : "password"}
                     value={current}
                     onChange={(e) => setCurrent(e.target.value)}
-                    placeholder="输入当前锁定密码"
+                    placeholder={t("输入当前锁定密码")}
                     style={{ paddingRight: 40 }}
                     autoComplete="current-password"
                   />
                   <IconButton
-                    label={showPwd ? "隐藏密码" : "显示密码"}
+                    label={showPwd ? t("隐藏密码") : t("显示密码")}
                     style={{ position: "absolute", right: 4, top: 0 }}
                     onClick={() => setShowPwd((s) => !s)}
                   >
@@ -236,14 +240,14 @@ export function SecurityPage() {
               </div>
             ) : null}
             <div className="field">
-              <label className="field-label">{lockEnabled ? "新密码" : "设置密码"}</label>
+              <label className="field-label">{lockEnabled ? t("新密码") : t("设置密码")}</label>
               <input
                 ref={passwordInputRef}
                 className="ui-input"
                 type={showPwd ? "text" : "password"}
                 value={next}
                 onChange={(e) => setNext(e.target.value)}
-                placeholder="至少 8 位"
+                placeholder={t("至少 8 位")}
                 autoComplete="new-password"
               />
               <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
@@ -261,23 +265,23 @@ export function SecurityPage() {
               </div>
             </div>
             <div className="field">
-              <label className="field-label">确认新密码</label>
+              <label className="field-label">{t("确认新密码")}</label>
               <input
                 className="ui-input"
                 type={showPwd ? "text" : "password"}
                 value={confirm}
                 onChange={(e) => setConfirm(e.target.value)}
-                placeholder="再次输入新密码"
+                placeholder={t("再次输入新密码")}
                 autoComplete="new-password"
               />
             </div>
             <div className="field">
-              <label className="field-label">密码提示（可选）</label>
+              <label className="field-label">{t("密码提示（可选）")}</label>
               <input
                 className="ui-input"
                 value={hint}
                 onChange={(e) => setHint(e.target.value)}
-                placeholder="例如：常用的一串数字"
+                placeholder={t("例如：常用的一串数字")}
               />
             </div>
           </div>
@@ -301,7 +305,7 @@ export function SecurityPage() {
 
           <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
             <Button variant="primary" block disabled={busy} onClick={handleChangePassword}>
-              {lockEnabled ? "修改密码" : "启用锁定"}
+              {lockEnabled ? t("修改密码") : t("启用锁定")}
             </Button>
           </div>
         </div>
@@ -319,8 +323,8 @@ export function SecurityPage() {
                 setBiometric(v);
                 toast.info(
                   v
-                    ? "已记录偏好；生物识别将在下次解锁时由系统唤起"
-                    : "已关闭生物识别解锁",
+                    ? t("已记录偏好；生物识别将在下次解锁时由系统唤起")
+                    : t("已关闭生物识别解锁"),
                 );
               }}
               label={bio.label}
@@ -328,10 +332,10 @@ export function SecurityPage() {
           </div>
           <div className="s-row">
             <div className="s-main">
-              <div className="s-title">失败 5 次后清除剪贴板</div>
-              <div className="s-desc">防止暴力尝试，自动清空最近复制内容</div>
+              <div className="s-title">{t("失败 5 次后清除剪贴板")}</div>
+              <div className="s-desc">{t("防止暴力尝试，自动清空最近复制内容")}</div>
             </div>
-            <Switch checked onChange={() => {}} label="失败清除剪贴板" />
+            <Switch checked onChange={() => {}} label={t("失败清除剪贴板")} />
           </div>
         </div>
 
@@ -340,7 +344,7 @@ export function SecurityPage() {
           style={{ marginTop: 12, background: "var(--status-yuanliWarning-2)", color: "var(--status-yuanliWarning-6)" }}
         >
           <AlertTriangle style={{ color: "var(--status-yuanliWarning-6)" }} />
-          忘记密码将无法恢复，只能通过事先导出的加密备份在新设备恢复账户。
+          {t("忘记密码将无法恢复，只能通过事先导出的加密备份在新设备恢复账户。")}
         </div>
       </section>
 

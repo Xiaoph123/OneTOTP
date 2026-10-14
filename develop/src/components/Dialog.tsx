@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { AlertTriangle } from "./icons";
 import { Button } from "./Button";
+import { useI18n } from "../i18n";
 
 interface Props {
   open: boolean;
@@ -18,12 +19,13 @@ export function ConfirmDialog({
   open,
   title,
   description,
-  confirmText = "确认",
-  cancelText = "取消",
+  confirmText,
+  cancelText,
   danger,
   onConfirm,
   onCancel,
 }: Props) {
+  const { t } = useI18n();
   if (!open) return null;
 
   return (
@@ -48,10 +50,10 @@ export function ConfirmDialog({
         </div>
         <div className="modal-actions">
           <Button block onClick={onCancel}>
-            {cancelText}
+            {cancelText ?? t("取消")}
           </Button>
           <Button variant={danger ? "danger" : "primary"} block onClick={onConfirm}>
-            {confirmText}
+            {confirmText ?? t("确认")}
           </Button>
         </div>
       </div>

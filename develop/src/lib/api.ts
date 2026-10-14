@@ -10,10 +10,20 @@ export interface AccountView {
   digits: number;
   period: number;
   counter: number;
-  category: string;
+  categoryId: string;
+  categoryName: string;
+  categoryColor: string;
   favorite: boolean;
   createdAt: number;
   lastUsedAt: number;
+}
+
+export interface Category {
+  id: string;
+  name: string;
+  color: string;
+  order: number;
+  createdAt: number;
 }
 
 /** Rust 侧使用 snake_case，这里做一层映射 */
@@ -27,7 +37,9 @@ interface RawAccount {
   digits: number;
   period: number;
   counter: number;
-  category: string;
+  category_id: string;
+  category_name: string;
+  category_color: string;
   favorite: boolean;
   created_at: number;
   last_used_at: number;
@@ -44,10 +56,30 @@ function mapAccount(raw: RawAccount): AccountView {
     digits: raw.digits,
     period: raw.period,
     counter: raw.counter,
-    category: raw.category,
+    categoryId: raw.category_id,
+    categoryName: raw.category_name,
+    categoryColor: raw.category_color,
     favorite: raw.favorite,
     createdAt: raw.created_at,
     lastUsedAt: raw.last_used_at,
+  };
+}
+
+interface RawCategory {
+  id: string;
+  name: string;
+  color: string;
+  order: number;
+  created_at: number;
+}
+
+function mapCategory(raw: RawCategory): Category {
+  return {
+    id: raw.id,
+    name: raw.name,
+    color: raw.color,
+    order: raw.order,
+    createdAt: raw.created_at,
   };
 }
 
@@ -57,6 +89,8 @@ export interface CodeResult {
   otpType: string;
   remaining: number;
   progress: number;
+  /** 下一个周期的验证码（仅 TOTP 提供） */
+  nextCode?: string;
 }
 
 interface RawCodeResult {
@@ -65,6 +99,7 @@ interface RawCodeResult {
   otp_type: string;
   remaining: number;
   progress: number;
+  next_code?: string;
 }
 
 export type ThemeMode = "light" | "dark" | "system";
@@ -91,7 +126,15 @@ export interface AppSettings {
   cardDetail: CardDetail;
   closeBehavior: CloseBehavior;
   shortcutToggle: string;
+  language: LangPref;
+  windowSize: WindowSize;
+  fontScale: FontScale;
 }
+
+export type FontScale = "small" | "standard" | "large" | "xlarge";
+
+export type LangPref = "auto" | "zh" | "en";
+export type WindowSize = "compact" | "standard" | "expanded";
 
 interface RawSettings {
   lock_enabled: boolean;
@@ -111,6 +154,9 @@ interface RawSettings {
   card_detail: string;
   close_behavior: string;
   shortcut_toggle: string;
+  language: string;
+  window_size: string;
+  font_scale: string;
 }
 
 function mapSettings(raw: RawSettings): AppSettings {
@@ -132,6 +178,9 @@ function mapSettings(raw: RawSettings): AppSettings {
     cardDetail: (raw.card_detail as CardDetail) || "standard",
     closeBehavior: (raw.close_behavior as CloseBehavior) || "quit",
     shortcutToggle: raw.shortcut_toggle || "",
+    language: (raw.language as LangPref) || "auto",
+    windowSize: (raw.window_size as WindowSize) || "standard",
+    fontScale: (raw.font_scale as FontScale) || "standard",
   };
 }
 
@@ -154,6 +203,9 @@ function toRawSettings(s: AppSettings): RawSettings {
     card_detail: s.cardDetail,
     close_behavior: s.closeBehavior,
     shortcut_toggle: s.shortcutToggle,
+    language: s.language,
+    window_size: s.windowSize,
+    font_scale: s.fontScale,
   };
 }
 
@@ -178,6 +230,20 @@ export interface BackupView {
   size: number;
 }
 
+export interface StorageUsage {
+  totalBytes: number;
+  backupBytes: number;
+  vaultBytes: number;
+  backupCount: number;
+}
+
+interface RawStorageUsage {
+  total_bytes: number;
+  backup_bytes: number;
+  vault_bytes: number;
+  backup_count: number;
+}
+
 export interface AccountInput {
   issuer: string;
   account: string;
@@ -187,7 +253,7 @@ export interface AccountInput {
   digits: number;
   period: number;
   counter: number;
-  category: string;
+  categoryId: string;
 }
 
 /** Rust 侧 AccountInput 使用 snake_case */
@@ -200,7 +266,7 @@ interface RawAccountInput {
   digits: number;
   period: number;
   counter: number;
-  category: string;
+  category_id: string;
 }
 
 function toRawAccountInput(input: AccountInput): RawAccountInput {
@@ -213,7 +279,7 @@ function toRawAccountInput(input: AccountInput): RawAccountInput {
     digits: input.digits,
     period: input.period,
     counter: input.counter,
-    category: input.category,
+    category_id: input.categoryId,
   };
 }
 
@@ -292,6 +358,7 @@ export const api = {
       otpType: r.otp_type,
       remaining: r.remaining,
       progress: r.progress,
+      nextCode: r.next_code,
     }));
   },
 
@@ -306,6 +373,36 @@ export const api = {
   async updateAccount(id: string, input: AccountInput): Promise<AccountView> {
     return mapAccount(
       await invoke<RawAccount>("update_account", { id, input: toRawAccountInput(input) }),
+    );
+  },
+
+  async listCategories(): Promise<Category[]> {
+    const raw = await invoke<RawCategory[]>("list_categories");
+    return raw.map(mapCategory);
+  },
+
+  async addCategory(name: string, color: string): Promise<Category> {
+    const raw = await invoke<RawCategory>("add_category", { input: { name, color } });
+    return mapCategory(raw);
+  },
+
+  async updateCategory(id: string, name: string, color: string): Promise<Category> {
+    const raw = await invoke<RawCategory>("update_category", { id, input: { name, color } });
+    return mapCategory(raw);
+  },
+
+  /** 删除分类；deleteAccounts 为 true 时一并删除其中账户，否则移到未分类 */
+  deleteCategory(id: string, deleteAccounts: boolean): Promise<number> {
+    return invoke("delete_category", { id, deleteAccounts });
+  },
+
+  reorderCategories(ids: string[]): Promise<void> {
+    return invoke("reorder_categories", { ids });
+  },
+
+  async setAccountCategory(accountId: string, categoryId: string): Promise<AccountView> {
+    return mapAccount(
+      await invoke<RawAccount>("set_account_category", { accountId, categoryId }),
     );
   },
 
@@ -366,5 +463,20 @@ export const api = {
 
   listBackups(): Promise<BackupView[]> {
     return invoke("list_backups");
+  },
+
+  async getStorageUsage(): Promise<StorageUsage> {
+    const raw = await invoke<RawStorageUsage>("get_storage_usage");
+    return {
+      totalBytes: raw.total_bytes,
+      backupBytes: raw.backup_bytes,
+      vaultBytes: raw.vault_bytes,
+      backupCount: raw.backup_count,
+    };
+  },
+
+  /** 清理全部本地备份快照，返回删除数量 */
+  clearBackups(): Promise<number> {
+    return invoke("clear_backups");
   },
 };

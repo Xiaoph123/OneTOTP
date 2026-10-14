@@ -116,6 +116,66 @@ pub fn list_backups(app_dir: &Path) -> Vec<(String, u64)> {
     items
 }
 
+/// 本地数据占用概览
+pub struct StorageUsage {
+    /// 应用数据目录总占用字节数
+    pub total_bytes: u64,
+    /// 备份快照占用字节数
+    pub backup_bytes: u64,
+    /// 保险库文件占用字节数
+    pub vault_bytes: u64,
+    /// 备份快照数量
+    pub backup_count: u32,
+}
+
+/// 递归统计单个路径的占用字节数
+fn dir_size(path: &Path) -> u64 {
+    let Ok(meta) = fs::metadata(path) else {
+        return 0;
+    };
+    if meta.is_file() {
+        return meta.len();
+    }
+    let Ok(entries) = fs::read_dir(path) else {
+        return 0;
+    };
+    entries
+        .filter_map(|e| e.ok())
+        .map(|e| dir_size(&e.path()))
+        .sum()
+}
+
+/// 统计应用本地数据占用：总量、备份、保险库
+pub fn storage_usage(app_dir: &Path) -> StorageUsage {
+    let backup_bytes = dir_size(&backup_dir(app_dir));
+    let vault_bytes = fs::metadata(vault_path(app_dir)).map(|m| m.len()).unwrap_or(0);
+    let total_bytes = dir_size(app_dir);
+    let backup_count = list_backups(app_dir).len() as u32;
+    StorageUsage {
+        total_bytes,
+        backup_bytes,
+        vault_bytes,
+        backup_count,
+    }
+}
+
+/// 删除全部备份快照，返回删除的文件数量
+pub fn clear_backups(app_dir: &Path) -> Result<u32, String> {
+    let dir = backup_dir(app_dir);
+    if !dir.exists() {
+        return Ok(0);
+    }
+    let entries = fs::read_dir(&dir).map_err(|e| format!("读取备份目录失败: {e}"))?;
+    let mut removed = 0u32;
+    for entry in entries.filter_map(|e| e.ok()) {
+        let path = entry.path();
+        if path.extension().map(|x| x == "json").unwrap_or(false) && fs::remove_file(&path).is_ok() {
+            removed += 1;
+        }
+    }
+    Ok(removed)
+}
+
 /// 新建空的加密保险库（使用机器密钥或密码）
 pub fn create_empty_vault(
     app_dir: &Path,
@@ -126,6 +186,7 @@ pub fn create_empty_vault(
     let payload = VaultPayload {
         accounts: Vec::new(),
         settings: AppSettings::default(),
+        categories: Vec::new(),
     };
     let file = crypto::encrypt_payload(&payload, key, salt, uses_machine_key)?;
     write_vault(app_dir, &file)
@@ -245,6 +306,7 @@ pub fn parse_otpauth(uri: &str) -> Result<Account, String> {
         digits,
         period,
         counter,
+        category_id: String::new(),
         category: String::new(),
         favorite: false,
         created_at: crate::totp::now_millis(),

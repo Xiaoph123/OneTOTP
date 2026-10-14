@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useI18n } from "../i18n";
 
 export interface SelectOption<T extends string | number> {
   value: T;
@@ -22,11 +23,12 @@ export function Select<T extends string | number>({
   value,
   options,
   onChange,
-  placeholder = "请选择",
+  placeholder,
   disabled,
   width = "100%",
   size = "default",
 }: Props<T>) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement | null>(null);
 
@@ -72,7 +74,7 @@ export function Select<T extends string | number>({
         }}
       >
         <span className={`select-value${isPlaceholder ? " select-placeholder" : ""}`}>
-          {isPlaceholder ? placeholder : current!.label}
+          {isPlaceholder ? placeholder ?? t("请选择") : current!.label}
         </span>
         <span className="select-suffix">
           <svg

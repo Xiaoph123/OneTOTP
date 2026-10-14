@@ -119,16 +119,16 @@ pub fn hotp_code(secret: &str, counter: u64, algorithm: &str, digits: u32) -> Re
 }
 
 /// 计算当前验证码。
-/// 返回 `(code, remaining_secs, progress_percent)`。
-/// HOTP 无时间维度，remaining / progress 均返回 0。
+/// 返回 `(code, remaining_secs, progress_percent, next_code)`。
+/// HOTP 无时间维度，remaining / progress 均返回 0，next_code 为空（无"下一个"概念）。
 pub fn generate_code(
     account: &Account,
     unix_secs: u64,
-) -> Result<(String, u32, u32), String> {
+) -> Result<(String, u32, u32, Option<String>), String> {
     let otp_type = account.otp_type.trim().to_lowercase();
     if otp_type == "hotp" {
         let code = hotp_code(&account.secret, account.counter, &account.algorithm, account.digits)?;
-        return Ok((code, 0, 0));
+        return Ok((code, 0, 0, None));
     }
 
     let period = if account.period == 0 { 30 } else { account.period };
@@ -139,11 +139,16 @@ pub fn generate_code(
     let digest = hmac_digest(&account.algorithm, &key, &counter.to_be_bytes())?;
     let code = truncate(&digest, digits)?;
 
+    // 下一个周期的验证码（用于卡片预览即将到来的验证码）
+    let next_code = hmac_digest(&account.algorithm, &key, &(counter + 1).to_be_bytes())
+        .ok()
+        .and_then(|d| truncate(&d, digits).ok());
+
     let elapsed = (unix_secs % period as u64) as u32;
     let remaining = period - elapsed;
     let progress = ((period - remaining) * 100) / period;
 
-    Ok((code, remaining, progress))
+    Ok((code, remaining, progress, next_code))
 }
 
 /// 校验前端提交的密钥是否可解析

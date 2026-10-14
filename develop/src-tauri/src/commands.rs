@@ -131,11 +131,15 @@ pub fn initialize_vault(state: State<AppState>) -> Result<(), String> {
 
     let file = store::read_vault(&state.app_dir)?;
     let real_salt = crypto::decode_salt(&file)?;
-    let payload = crypto::decrypt_payload(&file, &key)?;
+    let mut payload = crypto::decrypt_payload(&file, &key)?;
+    let migrated = migrate_categories(&mut payload);
 
     *state.key.lock().map_err(|_| "状态锁异常".to_string())? = Some(key);
     state.sync_close_behavior(&payload);
     *state.payload.lock().map_err(|_| "状态锁异常".to_string())? = Some(payload);
+    if migrated {
+        state.persist()?;
+    }
     let _ = real_salt;
     Ok(())
 }
@@ -152,11 +156,15 @@ pub fn unlock(state: State<AppState>, password: String) -> Result<(), String> {
     }
 
     let file = store::read_vault(&state.app_dir)?;
-    let payload = crypto::decrypt_payload(&file, &key)?;
+    let mut payload = crypto::decrypt_payload(&file, &key)?;
+    let migrated = migrate_categories(&mut payload);
 
     *state.key.lock().map_err(|_| "状态锁异常".to_string())? = Some(key);
     state.sync_close_behavior(&payload);
     *state.payload.lock().map_err(|_| "状态锁异常".to_string())? = Some(payload);
+    if migrated {
+        state.persist()?;
+    }
     Ok(())
 }
 
@@ -241,6 +249,7 @@ pub fn update_account(
     totp::validate_account_input(&input.otp_type, &input.algorithm, input.digits, input.period)?;
     let mut view: Option<AccountView> = None;
     state.with_payload(|p| {
+        let categories = p.categories.clone();
         let acc = p
             .accounts
             .iter_mut()
@@ -254,8 +263,10 @@ pub fn update_account(
         acc.digits = input.digits;
         acc.period = input.period;
         acc.counter = input.counter;
-        acc.category = input.category.clone();
-        view = Some(AccountView::from(&*acc));
+        acc.category_id = input.category_id.clone();
+        // 编辑时按新分类归属，清理旧版分类名残留
+        acc.category = String::new();
+        view = Some(AccountView::from_with_categories(acc, &categories));
         Ok(())
     })?;
     state.persist()?;
@@ -301,7 +312,12 @@ fn normalize_otp_type(value: &str) -> String {
 #[tauri::command]
 pub fn list_accounts(state: State<AppState>) -> Result<Vec<AccountView>, String> {
     state.with_payload(|p| {
-        let mut list: Vec<AccountView> = p.accounts.iter().map(AccountView::from).collect();
+        let categories = p.categories.clone();
+        let mut list: Vec<AccountView> = p
+            .accounts
+            .iter()
+            .map(|a| AccountView::from_with_categories(a, &categories))
+            .collect();
         list.sort_by(|a, b| {
             b.favorite
                 .cmp(&a.favorite)
@@ -318,13 +334,14 @@ pub fn get_codes(state: State<AppState>) -> Result<Vec<CodeResult>, String> {
     state.with_payload(|p| {
         let mut results = Vec::new();
         for account in &p.accounts {
-            if let Ok((code, remaining, progress)) = totp::generate_code(account, now) {
+            if let Ok((code, remaining, progress, next_code)) = totp::generate_code(account, now) {
                 results.push(CodeResult {
                     id: account.id.clone(),
                     code,
                     otp_type: account.otp_type.clone(),
                     remaining,
                     progress,
+                    next_code,
                 });
             }
         }
@@ -338,7 +355,7 @@ pub fn get_account_detail(state: State<AppState>, id: String) -> Result<AccountV
         p.accounts
             .iter()
             .find(|a| a.id == id)
-            .map(AccountView::from)
+            .map(|a| AccountView::from_with_categories(a, &p.categories))
             .ok_or_else(|| "账户不存在".to_string())
     })
 }
@@ -360,18 +377,20 @@ pub fn add_account(state: State<AppState>, input: AccountInput) -> Result<Accoun
         digits: input.digits,
         period: input.period,
         counter: input.counter,
-        category: input.category,
+        category_id: input.category_id,
+        category: String::new(),
         favorite: false,
         created_at: totp::now_millis(),
         last_used_at: 0,
     };
-    let view = AccountView::from(&account);
+    let mut view: Option<AccountView> = None;
     state.with_payload(|p| {
+        view = Some(AccountView::from_with_categories(&account, &p.categories));
         p.accounts.push(account);
         Ok(())
     })?;
     state.persist()?;
-    Ok(view)
+    view.ok_or_else(|| "账户创建失败".to_string())
 }
 
 /// 追加导入一批 otpauth 链接文本
@@ -500,6 +519,12 @@ pub fn export_vault(
         } else {
             AppSettings::default()
         },
+        // 分类随账户一起导出（未导出账户时无需携带）
+        categories: if include_accounts {
+            full.categories.clone()
+        } else {
+            Vec::new()
+        },
     };
 
     let salt = crypto::new_salt();
@@ -533,6 +558,15 @@ pub fn import_vault(
 
     state.with_payload(|p| {
         if scope.accounts {
+            // 先合并分类：按 id 去重，保留现有分类
+            let existing_cats: std::collections::HashSet<String> =
+                p.categories.iter().map(|c| c.id.clone()).collect();
+            for cat in imported.categories.iter() {
+                if !existing_cats.contains(&cat.id) {
+                    p.categories.push(cat.clone());
+                }
+            }
+            // 再合并账户
             let existing: std::collections::HashSet<String> =
                 p.accounts.iter().map(|a| a.id.clone()).collect();
             for acc in imported.accounts.iter() {
@@ -564,6 +598,205 @@ pub struct ImportResult {
     pub total_accounts_in_backup: u32,
 }
 
+/// 分类重命名/改色的入参已在 models::CategoryInput 定义
+
+/// 列出全部分类（按 order 排序）
+#[tauri::command]
+pub fn list_categories(state: State<AppState>) -> Result<Vec<crate::models::Category>, String> {
+    state.with_payload(|p| {
+        let mut list = p.categories.clone();
+        list.sort_by(|a, b| a.order.cmp(&b.order).then(a.created_at.cmp(&b.created_at)));
+        Ok(list)
+    })
+}
+
+/// 新建分类
+#[tauri::command]
+pub fn add_category(
+    state: State<AppState>,
+    input: crate::models::CategoryInput,
+) -> Result<crate::models::Category, String> {
+    let name = input.name.trim();
+    if name.is_empty() {
+        return Err("分类名称不能为空".to_string());
+    }
+    if name.chars().count() > 20 {
+        return Err("分类名称最多 20 个字符".to_string());
+    }
+    let color = normalize_hex_color(&input.color);
+    let mut created: Option<crate::models::Category> = None;
+    state.with_payload(|p| {
+        if p.categories.iter().any(|c| c.name == name) {
+            return Err("已存在同名分类".to_string());
+        }
+        let order = p.categories.iter().map(|c| c.order).max().unwrap_or(0) + 1;
+        let cat = crate::models::Category {
+            id: uuid::Uuid::new_v4().to_string(),
+            name: name.to_string(),
+            color,
+            order,
+            created_at: totp::now_millis(),
+        };
+        created = Some(cat.clone());
+        p.categories.push(cat);
+        Ok(())
+    })?;
+    state.persist()?;
+    created.ok_or_else(|| "分类创建失败".to_string())
+}
+
+/// 更新分类名称与颜色
+#[tauri::command]
+pub fn update_category(
+    state: State<AppState>,
+    id: String,
+    input: crate::models::CategoryInput,
+) -> Result<crate::models::Category, String> {
+    let name = input.name.trim();
+    if name.is_empty() {
+        return Err("分类名称不能为空".to_string());
+    }
+    if name.chars().count() > 20 {
+        return Err("分类名称最多 20 个字符".to_string());
+    }
+    let color = normalize_hex_color(&input.color);
+    let mut updated: Option<crate::models::Category> = None;
+    state.with_payload(|p| {
+        if p.categories.iter().any(|c| c.id != id && c.name == name) {
+            return Err("已存在同名分类".to_string());
+        }
+        let cat = p
+            .categories
+            .iter_mut()
+            .find(|c| c.id == id)
+            .ok_or_else(|| "分类不存在".to_string())?;
+        cat.name = name.to_string();
+        cat.color = color;
+        updated = Some(cat.clone());
+        Ok(())
+    })?;
+    state.persist()?;
+    updated.ok_or_else(|| "分类更新失败".to_string())
+}
+
+/// 删除分类。
+/// `delete_accounts` 为 true 时一并删除该分类下的账户，否则将其移到「未分类」。
+#[tauri::command]
+pub fn delete_category(
+    state: State<AppState>,
+    id: String,
+    delete_accounts: bool,
+) -> Result<u32, String> {
+    let mut affected = 0u32;
+    state.with_payload(|p| {
+        if !p.categories.iter().any(|c| c.id == id) {
+            return Err("分类不存在".to_string());
+        }
+        p.categories.retain(|c| c.id != id);
+        if delete_accounts {
+            let before = p.accounts.len();
+            p.accounts.retain(|a| a.category_id != id);
+            affected = (before - p.accounts.len()) as u32;
+        } else {
+            for a in p.accounts.iter_mut() {
+                if a.category_id == id {
+                    a.category_id = String::new();
+                    affected += 1;
+                }
+            }
+        }
+        Ok(())
+    })?;
+    state.persist()?;
+    Ok(affected)
+}
+
+/// 调整分类顺序（传入按目标顺序排列的分类 id 列表）
+#[tauri::command]
+pub fn reorder_categories(state: State<AppState>, ids: Vec<String>) -> Result<(), String> {
+    state.with_payload(|p| {
+        for (idx, id) in ids.iter().enumerate() {
+            if let Some(cat) = p.categories.iter_mut().find(|c| &c.id == id) {
+                cat.order = idx as i32;
+            }
+        }
+        Ok(())
+    })?;
+    state.persist()?;
+    Ok(())
+}
+
+/// 将账户移动到指定分类（空 id 表示未分类）
+#[tauri::command]
+pub fn set_account_category(
+    state: State<AppState>,
+    account_id: String,
+    category_id: String,
+) -> Result<AccountView, String> {
+    let mut view: Option<AccountView> = None;
+    state.with_payload(|p| {
+        let categories = p.categories.clone();
+        if !category_id.is_empty() && !categories.iter().any(|c| c.id == category_id) {
+            return Err("目标分类不存在".to_string());
+        }
+        let acc = p
+            .accounts
+            .iter_mut()
+            .find(|a| a.id == account_id)
+            .ok_or_else(|| "账户不存在".to_string())?;
+        acc.category_id = category_id;
+        acc.category = String::new();
+        view = Some(AccountView::from_with_categories(acc, &categories));
+        Ok(())
+    })?;
+    state.persist()?;
+    view.ok_or_else(|| "分类移动失败".to_string())
+}
+
+/// 一次性迁移：把旧版 `category` 名称转换为分类实体并回填 category_id。
+/// 返回是否有改动（有则需持久化）。
+pub fn migrate_categories(payload: &mut VaultPayload) -> bool {
+    let mut changed = false;
+    for acc in payload.accounts.iter_mut() {
+        if acc.category_id.is_empty() && !acc.category.is_empty() {
+            let name = acc.category.trim().to_string();
+            if let Some(existing) = payload.categories.iter().find(|c| c.name == name) {
+                acc.category_id = existing.id.clone();
+            } else {
+                let order = payload.categories.iter().map(|c| c.order).max().unwrap_or(0) + 1;
+                let cat = crate::models::Category {
+                    id: uuid::Uuid::new_v4().to_string(),
+                    name,
+                    color: default_category_color_for_migrate(order),
+                    order,
+                    created_at: totp::now_millis(),
+                };
+                acc.category_id = cat.id.clone();
+                payload.categories.push(cat);
+            }
+            acc.category = String::new();
+            changed = true;
+        }
+    }
+    changed
+}
+
+/// 迁移时为分类分配源力色板中的颜色
+fn default_category_color_for_migrate(order: i32) -> String {
+    const PALETTE: [&str; 5] = ["#1664FF", "#2A814B", "#BD7E00", "#D7312A", "#6E4C9F"];
+    PALETTE[(order.rem_euclid(5)) as usize].to_string()
+}
+
+/// 规范化十六进制颜色，非法值回退到源力蓝
+fn normalize_hex_color(color: &str) -> String {
+    let c = color.trim();
+    if c.len() == 7 && c.starts_with('#') && c[1..].chars().all(|x| x.is_ascii_hexdigit()) {
+        c.to_uppercase()
+    } else {
+        "#1664FF".to_string()
+    }
+}
+
 #[tauri::command]
 pub fn list_backups(state: State<AppState>) -> Result<Vec<BackupView>, String> {
     Ok(store::list_backups(&state.app_dir)
@@ -576,6 +809,32 @@ pub fn list_backups(state: State<AppState>) -> Result<Vec<BackupView>, String> {
 pub struct BackupView {
     pub name: String,
     pub size: u64,
+}
+
+#[derive(serde::Serialize)]
+pub struct StorageUsageView {
+    pub total_bytes: u64,
+    pub backup_bytes: u64,
+    pub vault_bytes: u64,
+    pub backup_count: u32,
+}
+
+/// 统计本地数据占用
+#[tauri::command]
+pub fn get_storage_usage(state: State<AppState>) -> StorageUsageView {
+    let usage = store::storage_usage(&state.app_dir);
+    StorageUsageView {
+        total_bytes: usage.total_bytes,
+        backup_bytes: usage.backup_bytes,
+        vault_bytes: usage.vault_bytes,
+        backup_count: usage.backup_count,
+    }
+}
+
+/// 清理全部本地备份快照，返回删除数量
+#[tauri::command]
+pub fn clear_backups(state: State<AppState>) -> Result<u32, String> {
+    store::clear_backups(&state.app_dir)
 }
 
 fn base64_encode(data: &[u8]) -> String {

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useI18n } from "../i18n";
 
 interface Props {
   /** 当前快捷键（空表示未设置） */
@@ -45,6 +46,7 @@ function toShortcut(e: KeyboardEvent): string | null {
  * - 按 Esc 取消录制
  */
 export function ShortcutRecorder({ value, onChange, width = 124 }: Props) {
+  const { t } = useI18n();
   const [recording, setRecording] = useState(false);
   const [hint, setHint] = useState<string | null>(null);
   const btnRef = useRef<HTMLButtonElement | null>(null);
@@ -74,12 +76,12 @@ export function ShortcutRecorder({ value, onChange, width = 124 }: Props) {
         setHint(null);
       } else {
         // 提示需要至少一个修饰键
-        setHint("需配合 Ctrl / Alt / Shift");
+        setHint(t("需配合 Ctrl / Alt / Shift"));
       }
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [recording, onChange]);
+  }, [recording, onChange, t]);
 
   // 点击外部结束录制
   useEffect(() => {
@@ -94,7 +96,7 @@ export function ShortcutRecorder({ value, onChange, width = 124 }: Props) {
     return () => document.removeEventListener("mousedown", onDown);
   }, [recording]);
 
-  const label = recording ? (hint ?? "请按下组合键…") : value || "未设置";
+  const label = recording ? (hint ?? t("请按下组合键…")) : value || t("未设置");
 
   return (
     <button
@@ -115,7 +117,7 @@ export function ShortcutRecorder({ value, onChange, width = 124 }: Props) {
         setHint(null);
         setRecording((r) => !r);
       }}
-      title="点击后按下组合键即可设置，Delete 清除"
+      title={t("点击后按下组合键即可设置，Delete 清除")}
     >
       {label}
     </button>

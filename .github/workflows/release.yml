@@ -1,0 +1,194 @@
+name: Release
+
+# 触发方式：
+#   1. 推送版本 tag（如 v0.1.0）自动构建并发布 Release
+#   2. 在 GitHub Actions 页面手动运行（workflow_dispatch）
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+env:
+  NODE_VERSION: '22'
+
+jobs:
+  # ───────────────────────── Windows x64 ─────────────────────────
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: develop/package-lock.json
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: develop/src-tauri
+
+      - name: Install dependencies
+        working-directory: develop
+        run: npm ci
+
+      - name: Build Windows (NSIS)
+        working-directory: develop
+        run: npm run tauri build -- --bundles nsis
+
+      - name: Collect artifacts
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path artifacts | Out-Null
+          Copy-Item develop/src-tauri/target/release/bundle/nsis/*-setup.exe artifacts/
+          Copy-Item develop/src-tauri/target/release/onetotp.exe artifacts/OneTotp-windows-x64-portable.exe
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-x64
+          path: artifacts/
+
+  # ───────────────────────── macOS (dmg) ─────────────────────────
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: develop/package-lock.json
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: develop/src-tauri
+
+      - name: Install dependencies
+        working-directory: develop
+        run: npm ci
+
+      - name: Build macOS (Universal)
+        working-directory: develop
+        run: npm run tauri build -- --bundles dmg --target universal-apple-darwin
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-universal
+          path: develop/src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
+
+  # ───────────────────────── Android (apk) ─────────────────────────
+  build-android:
+    runs-on: ubuntu-latest
+    env:
+      KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+      KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+      KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: develop/package-lock.json
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+
+      - uses: nttld/setup-ndk@v1
+        id: setup-ndk
+        with:
+          ndk-version: r26b
+          add-to-path: true
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: develop/src-tauri
+
+      - name: Install dependencies
+        working-directory: develop
+        run: npm ci
+
+      # 配置了签名 secrets 时恢复正式 keystore；否则使用 debug 签名
+      - name: Restore release keystore
+        if: env.KEYSTORE_BASE64 != ''
+        shell: bash
+        run: |
+          echo "$KEYSTORE_BASE64" | base64 -d > develop/src-tauri/gen/android/onetotp-release.keystore
+
+      - name: Build Android APK (arm64)
+        working-directory: develop
+        env:
+          NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+        run: npm run tauri android build -- --apk --target aarch64
+
+      - name: Sign APK with release keystore
+        if: env.KEYSTORE_BASE64 != ''
+        shell: bash
+        run: |
+          UNSIGNED=$(find develop/src-tauri/gen/android/app/build/outputs/apk -name '*unsigned.apk' | head -n 1)
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner | sort | tail -n 1)
+          mkdir -p artifacts
+          "$APKSIGNER" sign \
+            --ks develop/src-tauri/gen/android/onetotp-release.keystore \
+            --ks-key-alias "$KEY_ALIAS" \
+            --ks-pass "pass:$KEYSTORE_PASSWORD" \
+            --key-pass "pass:$KEYSTORE_PASSWORD" \
+            --out artifacts/OneTotp-android-arm64.apk \
+            "$UNSIGNED"
+          "$APKSIGNER" verify --verbose artifacts/OneTotp-android-arm64.apk
+
+      - name: Collect unsigned APK (fallback)
+        if: env.KEYSTORE_BASE64 == ''
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          find develop/src-tauri/gen/android/app/build/outputs/apk -name '*.apk' -exec cp {} artifacts/ \;
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-arm64
+          path: artifacts/
+
+  # ───────────────────────── iOS（说明）─────────────────────────
+  # iOS .ipa 需要 Apple 开发者证书（$99/年）+ provisioning profile 才能签名安装。
+  # 未配置证书 secrets 时不出包。后续在仓库 Settings → Secrets 配置：
+  #   APPLE_CERTIFICATE / APPLE_CERTIFICATE_PASSWORD / APPLE_SIGNING_IDENTITY
+  #   APPLE_PROVISIONING_PROFILE / APPLE_TEAM_ID
+  # 再启用本 job 即可。
+
+  # ───────────────────────── 发布 Release ─────────────────────────
+  publish:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: [build-windows, build-macos, build-android]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release
+          merge-multiple: true
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/**/*
+          generate_release_notes: true

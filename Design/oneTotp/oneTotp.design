@@ -1,0 +1,302 @@
+{
+  "data": [
+    {
+      "id": "page-index",
+      "title": "验证码",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1760313600000,
+      "canvasData": {
+        "x": 169,
+        "y": 0,
+        "group": 0,
+        "layoutSnapshot": {
+          "version": 1,
+          "contentHeight": 1174,
+          "viewportWidth": 375,
+          "sourceHash": "fnv1a-1c3d830a",
+          "measuredAt": 1791942517420
+        }
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/index.html",
+        "interactions": [
+          {
+            "domId": "btn-add-account",
+            "targetPageId": "page-add-account",
+            "transitionLabel": "添加账户"
+          },
+          {
+            "domId": "btn-more-github",
+            "targetPageId": "page-account-detail",
+            "transitionLabel": "查看账户详情"
+          },
+          {
+            "domId": "btn-lock",
+            "targetPageId": "page-lock",
+            "hideEdge": true,
+            "transitionLabel": "锁定应用"
+          },
+          {
+            "domId": "tab-settings",
+            "targetPageId": "page-settings",
+            "transitionLabel": "打开设置"
+          }
+        ]
+      }
+    },
+    {
+      "id": "page-account-detail",
+      "title": "账户详情",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1760313600000,
+      "canvasData": {
+        "x": 0,
+        "y": 394,
+        "group": 0,
+        "layoutSnapshot": {
+          "version": 1,
+          "contentHeight": 915,
+          "viewportWidth": 375,
+          "sourceHash": "fnv1a-4a1568e0",
+          "measuredAt": 1791891359770
+        }
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/account-detail.html",
+        "interactions": [
+          {
+            "domId": "btn-back",
+            "targetPageId": "page-index",
+            "hideEdge": true,
+            "transitionLabel": "返回列表"
+          },
+          {
+            "domId": "tab-codes",
+            "targetPageId": "page-index",
+            "hideEdge": true,
+            "transitionLabel": "返回列表"
+          },
+          {
+            "domId": "tab-settings",
+            "targetPageId": "page-settings",
+            "transitionLabel": "打开设置"
+          }
+        ]
+      }
+    },
+    {
+      "id": "page-add-account",
+      "title": "添加账户",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1760313600000,
+      "canvasData": {
+        "x": 0,
+        "y": 0,
+        "group": 0,
+        "layoutSnapshot": {
+          "version": 1,
+          "contentHeight": 978,
+          "viewportWidth": 375,
+          "sourceHash": "fnv1a-1646dd73",
+          "measuredAt": 1791891359770
+        }
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/add-account.html",
+        "interactions": [
+          {
+            "domId": "btn-back",
+            "targetPageId": "page-index",
+            "hideEdge": true,
+            "transitionLabel": "返回列表"
+          },
+          {
+            "domId": "btn-save-account",
+            "targetPageId": "page-index",
+            "transitionLabel": "保存账户"
+          },
+          {
+            "domId": "btn-cancel",
+            "targetPageId": "page-index",
+            "hideEdge": true,
+            "transitionLabel": "取消"
+          }
+        ]
+      }
+    },
+    {
+      "id": "page-settings",
+      "title": "设置",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1760313600000,
+      "canvasData": {
+        "x": 0,
+        "y": 770,
+        "group": 0,
+        "layoutSnapshot": {
+          "version": 1,
+          "contentHeight": 1158,
+          "viewportWidth": 375,
+          "sourceHash": "fnv1a-0464b038",
+          "measuredAt": 1791891359770
+        }
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/settings.html",
+        "interactions": [
+          {
+            "domId": "nav-security",
+            "targetPageId": "page-security",
+            "transitionLabel": "安全与锁定"
+          },
+          {
+            "domId": "btn-goto-import-export",
+            "targetPageId": "page-import-export",
+            "transitionLabel": "导入导出"
+          },
+          {
+            "domId": "tab-codes",
+            "targetPageId": "page-index",
+            "hideEdge": true,
+            "transitionLabel": "返回列表"
+          }
+        ]
+      }
+    },
+    {
+      "id": "page-security",
+      "title": "安全与锁定",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1760313600000,
+      "canvasData": {
+        "x": 0,
+        "y": 1217,
+        "group": 0,
+        "layoutSnapshot": {
+          "version": 1,
+          "contentHeight": 1067,
+          "viewportWidth": 375,
+          "sourceHash": "fnv1a-5c3bf885",
+          "measuredAt": 1791891359770
+        }
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/security.html",
+        "interactions": [
+          {
+            "domId": "btn-back",
+            "targetPageId": "page-settings",
+            "hideEdge": true,
+            "transitionLabel": "返回设置"
+          },
+          {
+            "domId": "btn-change-password",
+            "targetPageId": "page-lock",
+            "transitionLabel": "锁定并验证"
+          },
+          {
+            "domId": "tab-settings",
+            "targetPageId": "page-settings",
+            "hideEdge": true,
+            "transitionLabel": "返回设置"
+          }
+        ]
+      }
+    },
+    {
+      "id": "page-import-export",
+      "title": "导入导出",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1760313600000,
+      "canvasData": {
+        "x": 0,
+        "y": 2009,
+        "group": 0,
+        "layoutSnapshot": {
+          "version": 1,
+          "contentHeight": 1358,
+          "viewportWidth": 375,
+          "sourceHash": "fnv1a-b03b18b1",
+          "measuredAt": 1791891359770
+        }
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/import-export.html",
+        "interactions": [
+          {
+            "domId": "btn-back",
+            "targetPageId": "page-settings",
+            "hideEdge": true,
+            "transitionLabel": "返回设置"
+          },
+          {
+            "domId": "btn-export",
+            "targetPageId": "page-index",
+            "hideEdge": true,
+            "transitionLabel": "导出完成返回"
+          }
+        ]
+      }
+    },
+    {
+      "id": "page-lock",
+      "title": "应用锁定",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1760313600000,
+      "canvasData": {
+        "x": 0,
+        "y": 1637,
+        "group": 0,
+        "layoutSnapshot": {
+          "version": 1,
+          "contentHeight": 900,
+          "viewportWidth": 375,
+          "sourceHash": "fnv1a-6c3c4c72",
+          "measuredAt": 1791891359770
+        }
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/lock.html",
+        "interactions": [
+          {
+            "domId": "btn-unlock",
+            "targetPageId": "page-index",
+            "transitionLabel": "解锁成功"
+          },
+          {
+            "domId": "link-forgot",
+            "targetPageId": "page-import-export",
+            "hideEdge": true,
+            "transitionLabel": "通过备份恢复"
+          },
+          {
+            "domId": "link-switch-account",
+            "targetPageId": "page-settings",
+            "hideEdge": true,
+            "transitionLabel": "切换账户"
+          }
+        ]
+      }
+    }
+  ],
+  "config": {
+    "autoLayout": true,
+    "deviceType": "mobile",
+    "projectName": "oneTotp 身份验证器",
+    "designLibrary": {
+      "name": "源力",
+      "id": "dl_builtin_volcengine",
+      "version": 0,
+      "scope": "built-in-global",
+      "path": "c:\\Users\\wanghao\\.trae-cn\\design_libraries\\Volcengine",
+      "versionSource": "metadata.json"
+    }
+  }
+}

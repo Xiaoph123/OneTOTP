@@ -1,0 +1,47 @@
+[package]
+name = "onetotp"
+version = "0.1.0"
+description = "oneTotp - 纯离线身份验证器"
+authors = ["wanghao"]
+edition = "2021"
+
+[lib]
+name = "onetotp_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-opener = "2"
+tauri-plugin-clipboard-manager = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# 加密与密钥派生
+aes-gcm = "0.10"
+argon2 = "0.5"
+rand = "0.8"
+base64 = "0.22"
+
+# TOTP 计算
+hmac = "0.12"
+sha1 = "0.10"
+sha2 = "0.10"
+
+# 编码
+base32 = "0.5"
+percent-encoding = "2"
+
+# 标识与时间
+uuid = { version = "1", features = ["v4"] }
+time = { version = "0.3", features = ["formatting"] }
+url = "2"
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = 3
+panic = "abort"
+strip = true

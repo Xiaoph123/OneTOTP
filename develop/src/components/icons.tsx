@@ -1,0 +1,236 @@
+import type { SVGProps } from "react";
+
+type IconProps = SVGProps<SVGSVGElement>;
+
+const base = (props: IconProps) => ({
+  viewBox: "0 0 18 18",
+  fill: "none",
+  stroke: "currentColor",
+  strokeWidth: 1.6,
+  strokeLinecap: "round" as const,
+  strokeLinejoin: "round" as const,
+  ...props,
+});
+
+export const ShieldCheck = (p: IconProps) => (
+  <svg viewBox="0 0 24 24" fill="none" {...p}>
+    <path
+      d="M12 2.5 4 6v6c0 4.6 3.4 8.1 8 9.5 4.6-1.4 8-4.9 8-9.5V6l-8-3.5z"
+      fill="currentColor"
+      opacity=".16"
+    />
+    <path
+      d="M12 2.5 4 6v6c0 4.6 3.4 8.1 8 9.5 4.6-1.4 8-4.9 8-9.5V6l-8-3.5z"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M8.7 12.1l2.3 2.3 4.3-4.6"
+      stroke="currentColor"
+      strokeWidth="1.8"
+    />
+  </svg>
+);
+
+export const Plus = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M9 3.5v11M3.5 9h11" />
+  </svg>
+);
+
+export const Lock = (p: IconProps) => (
+  <svg {...base(p)}>
+    <rect x="4" y="8" width="10" height="7" rx="1.6" />
+    <path d="M6.2 8V6a2.8 2.8 0 0 1 5.6 0v2" />
+  </svg>
+);
+
+export const Unlock = (p: IconProps) => (
+  <svg {...base(p)}>
+    <rect x="4" y="8" width="10" height="7" rx="1.6" />
+    <path d="M6.2 8V6a2.8 2.8 0 0 1 5.6 0" />
+  </svg>
+);
+
+export const MoreHorizontal = (p: IconProps) => (
+  <svg {...base(p)} strokeWidth={1.8}>
+    <circle cx="4" cy="9" r="1.1" />
+    <circle cx="9" cy="9" r="1.1" />
+    <circle cx="14" cy="9" r="1.1" />
+  </svg>
+);
+
+export const ChevronLeft = (p: IconProps) => (
+  <svg {...base(p)} strokeWidth={1.7}>
+    <path d="M11 4 6 9l5 5" />
+  </svg>
+);
+
+export const ChevronRight = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M6 4l4 4-4 4" />
+  </svg>
+);
+
+export const Search = (p: IconProps) => (
+  <svg {...base(p)} strokeWidth={1.5}>
+    <circle cx="7.5" cy="7.5" r="4.5" />
+    <path d="M11 11l3.5 3.5" />
+  </svg>
+);
+
+export const Filter = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M3 5h12M5.5 9h7M7.5 13h3" />
+  </svg>
+);
+
+export const Grid = (p: IconProps) => (
+  <svg {...base(p)} strokeWidth={1.5}>
+    <rect x="2.5" y="2.5" width="5" height="5" rx="1" />
+    <rect x="10.5" y="2.5" width="5" height="5" rx="1" />
+    <rect x="2.5" y="10.5" width="5" height="5" rx="1" />
+    <rect x="10.5" y="10.5" width="5" height="5" rx="1" />
+  </svg>
+);
+
+export const Heart = (p: IconProps) => (
+  <svg {...base(p)} strokeWidth={1.5}>
+    <path d="M9 15S3 11.6 3 7.4A2.9 2.9 0 0 1 9 5.6a2.9 2.9 0 0 1 6 1.8C15 11.6 9 15 9 15z" />
+  </svg>
+);
+
+export const Clock = (p: IconProps) => (
+  <svg {...base(p)} strokeWidth={1.5}>
+    <circle cx="9" cy="9" r="6.5" />
+    <path d="M9 5.2V9l2.6 1.6" />
+  </svg>
+);
+
+export const Settings = (p: IconProps) => (
+  <svg {...base(p)} strokeWidth={1.5}>
+    <circle cx="9" cy="9" r="2.3" />
+    <path d="M9 2.2v1.7M9 14.1v1.7M2.6 9h1.7M13.7 9h1.7M4.5 4.5l1.2 1.2M12.3 12.3l1.2 1.2M13.5 4.5l-1.2 1.2M5.7 12.3l-1.2 1.2" />
+  </svg>
+);
+
+export const Copy = (p: IconProps) => (
+  <svg {...base(p)} strokeWidth={1.6}>
+    <rect x="6" y="6" width="9" height="9" rx="1.6" />
+    <path d="M12 6V4a1.6 1.6 0 0 0-1.6-1.6H4A1.6 1.6 0 0 0 2.4 4v6.4A1.6 1.6 0 0 0 4 12h2" />
+  </svg>
+);
+
+export const Refresh = (p: IconProps) => (
+  <svg {...base(p)} strokeWidth={1.6}>
+    <path d="M14.5 9a5.5 5.5 0 1 1-1.6-3.9M14.5 2.6V6h-3.4" />
+  </svg>
+);
+
+export const Edit = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M13 3.2l1.8 1.8M4.5 13.5l7.9-7.9-1.8-1.8-7.9 7.9-.6 2.9 2.9-.6z" />
+  </svg>
+);
+
+export const Trash = (p: IconProps) => (
+  <svg {...base(p)} strokeWidth={1.5}>
+    <path d="M3.5 4.5h9M6 4.5V3.2A.7.7 0 0 1 6.7 2.5h2.6a.7.7 0 0 1 .7.7v1.3M5 4.5l.5 8a1 1 0 0 0 1 .9h3a1 1 0 0 0 1-.9l.5-8" />
+  </svg>
+);
+
+export const Download = (p: IconProps) => (
+  <svg {...base(p)} strokeWidth={1.6}>
+    <path d="M9 2.5v8.5M6 8l3 3 3-3M3.5 14.5h11" />
+  </svg>
+);
+
+export const Upload = (p: IconProps) => (
+  <svg {...base(p)} strokeWidth={1.6}>
+    <path d="M9 11.5V3M6 6l3-3 3 3M3.5 14.5h11" />
+  </svg>
+);
+
+export const Eye = (p: IconProps) => (
+  <svg {...base(p)} strokeWidth={1.5}>
+    <path d="M1.7 9S4.6 4 9 4s7.3 5 7.3 5S13.4 14 9 14 1.7 9 1.7 9z" />
+    <circle cx="9" cy="9" r="2.2" />
+  </svg>
+);
+
+export const EyeOff = (p: IconProps) => (
+  <svg {...base(p)} strokeWidth={1.5}>
+    <path d="M3 3l12 12M7.3 7.4A2.2 2.2 0 0 0 9 11.2M5.1 5.2C3 6.6 1.7 9 1.7 9S4.6 14 9 14c1.3 0 2.5-.4 3.5-1M14.9 11.1C15.9 9.9 16.3 9 16.3 9S13.4 4 9 4c-.4 0-.8 0-1.1.1" />
+  </svg>
+);
+
+export const AlertTriangle = (p: IconProps) => (
+  <svg {...base(p)} strokeWidth={1.6}>
+    <path d="M9 2.6l6.6 12H2.4l6.6-12z" />
+    <path d="M9 7v3.3M9 12.9v.1" />
+  </svg>
+);
+
+export const Info = (p: IconProps) => (
+  <svg {...base(p)} strokeWidth={1.5}>
+    <circle cx="9" cy="9" r="6.5" />
+    <path d="M9 8.2v3.6M9 5.6v.1" />
+  </svg>
+);
+
+export const Check = (p: IconProps) => (
+  <svg {...base(p)} strokeWidth={1.8}>
+    <path d="M3.8 9.3l3.2 3.2 7-7.4" />
+  </svg>
+);
+
+export const Fingerprint = (p: IconProps) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.4} {...p}>
+    <path d="M12 3.5c-2 0-3.8.9-5 2.3M18.6 6.7A7.4 7.4 0 0 1 19.5 11c0 1-.1 2-.3 2.9M5 9.5A7.5 7.5 0 0 0 4.5 11c0 3.3 1.5 6.2 3.8 8M12 7.5a3.5 3.5 0 0 1 3.5 3.5c0 2.5-.6 4.8-1.7 6.8M8.5 11A3.5 3.5 0 0 1 12 7.5M8.6 15.2c.4 1.9 1.1 3.5 2 4.9" strokeLinecap="round" />
+  </svg>
+);
+
+export const Backspace = (p: IconProps) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} {...p}>
+    <path d="M9 5h10a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H9L3 12l6-7z" strokeLinejoin="round" />
+    <path d="M12 9.5l5 5M17 9.5l-5 5" strokeLinecap="round" />
+  </svg>
+);
+
+export const Key = (p: IconProps) => (
+  <svg {...base(p)} strokeWidth={1.5}>
+    <circle cx="6.5" cy="11.5" r="3" />
+    <path d="M8.6 9.4L14 4M12 6l1.6 1.6M14 4l1.5 1.5" />
+  </svg>
+);
+
+export const Camera = (p: IconProps) => (
+  <svg {...base(p)} strokeWidth={1.6}>
+    <path d="M2.5 6.5A1.5 1.5 0 0 1 4 5h1.6l.9-1.4a1 1 0 0 1 .9-.5h2.2a1 1 0 0 1 .9.5L11.4 5H14a1.5 1.5 0 0 1 1.5 1.5v6A1.5 1.5 0 0 1 14 14H4a1.5 1.5 0 0 1-1.5-1.5v-6z" />
+    <circle cx="9" cy="9.5" r="2.6" />
+  </svg>
+);
+
+export const QrCode = (p: IconProps) => (
+  <svg {...base(p)} strokeWidth={1.5}>
+    <rect x="2.5" y="2.5" width="5" height="5" rx="1" />
+    <rect x="10.5" y="2.5" width="5" height="5" rx="1" />
+    <rect x="2.5" y="10.5" width="5" height="5" rx="1" />
+    <path d="M11 11h2v2h-2zM14 14h1.5v1.5H14z" />
+  </svg>
+);
+
+export const Sun = (p: IconProps) => (
+  <svg {...base(p)} strokeWidth={1.5}>
+    <circle cx="9" cy="9" r="3.2" />
+    <path d="M9 1.8v1.6M9 14.6v1.6M1.8 9h1.6M14.6 9h1.6M3.9 3.9l1.1 1.1M13 13l1.1 1.1M14.1 3.9L13 5M5 13l-1.1 1.1" />
+  </svg>
+);
+
+export const Moon = (p: IconProps) => (
+  <svg {...base(p)} strokeWidth={1.5}>
+    <path d="M14.5 10.6A6 6 0 0 1 7.4 3.5a6 6 0 1 0 7.1 7.1z" />
+  </svg>
+);
+

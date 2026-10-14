@@ -1,0 +1,1434 @@
+{
+  "schemaVersion": "1.0",
+  "skillProvenance": {
+    "name": "solo-design",
+    "version": "2026.10.13.09.48.16",
+    "version_source": "skill-release-manifest.json",
+    "read_status": "ok"
+  },
+  "designSource": {
+    "operatingMode": "library-bound",
+    "brandPrefix": "yuanli",
+    "cssFilePath": "colors_and_type.css",
+    "libraryIdentity": {
+      "name": "源力",
+      "id": "dl_builtin_volcengine",
+      "version": 0,
+      "scope": "built-in-global",
+      "path": "c:\\Users\\wanghao\\.trae-cn\\design_libraries\\Volcengine",
+      "versionSource": "metadata.json"
+    },
+    "actualTokenNameReference": [
+      "--primary-6",
+      "--primary-5",
+      "--primary-1",
+      "--primary-2",
+      "--primary-3",
+      "--color-primary",
+      "--color-primary-hover",
+      "--color-primary-bg",
+      "--color-danger",
+      "--color-danger-bg",
+      "--color-success",
+      "--color-success-bg",
+      "--color-warning",
+      "--color-warning-bg",
+      "--color-link",
+      "--color-text-1",
+      "--color-text-2",
+      "--color-text-3",
+      "--color-text-4",
+      "--color-white",
+      "--color-bg-1",
+      "--color-bg-2",
+      "--color-bg-4",
+      "--color-bg-5",
+      "--color-bg-card",
+      "--color-bg-hover",
+      "--color-border",
+      "--color-border-2",
+      "--color-border-light",
+      "--danger-2",
+      "--danger-3",
+      "--danger-5",
+      "--danger-6",
+      "--danger-7",
+      "--success-1",
+      "--success-2",
+      "--success-6",
+      "--warning-1",
+      "--warning-2",
+      "--warning-3",
+      "--warning-6",
+      "--radius-sm",
+      "--radius-md",
+      "--radius-lg",
+      "--radius-full",
+      "--space-1",
+      "--space-2",
+      "--space-3",
+      "--space-4",
+      "--space-6",
+      "--font-size-h2",
+      "--font-size-h3",
+      "--font-size-h4",
+      "--font-size-lead",
+      "--font-size-body",
+      "--font-size-caption",
+      "--font-family-base",
+      "--font-mono",
+      "--font-weight-medium",
+      "--font-weight-semibold",
+      "--line-height-h2",
+      "--line-height-h3",
+      "--line-height-h4",
+      "--shadow-1",
+      "--shadow-2",
+      "--shadow-3",
+      "--shadow-4",
+      "--shadow-blue",
+      "--shadow-gray",
+      "--status-yuanliSuccess-2",
+      "--status-yuanliSuccess-7",
+      "--status-yuanliWarning-2",
+      "--status-yuanliWarning-6",
+      "--status-yuanliDanger-2",
+      "--status-yuanliDanger-6"
+    ],
+    "componentPlan": [],
+    "tokenFidelity": "strict",
+    "styleConstraints": {
+      "radiusMax": 16,
+      "spacingBase": 4,
+      "fontSizeBody": 12,
+      "controlHeightDefault": 32
+    },
+    "iconAssets": {
+      "source": "assets/icons",
+      "projectIconDir": "assets/icons/dl_builtin_volcengine",
+      "libraryKey": "dl_builtin_volcengine",
+      "renderMethod": "inline-svg",
+      "pathTemplate": "../assets/icons/dl_builtin_volcengine/{name}.svg",
+      "totalCount": 650,
+      "coloringRule": "currentColor by default; override with Library token when needed"
+    },
+    "forbiddenInventedComponents": [],
+    "allowedComponents": [
+      "alert",
+      "avatar",
+      "badge",
+      "breadcrumb",
+      "button",
+      "checkbox",
+      "descriptions",
+      "drawer",
+      "dropdown",
+      "form",
+      "icon",
+      "input",
+      "message",
+      "modal",
+      "page-header",
+      "popconfirm",
+      "progress",
+      "segmented-picker",
+      "select",
+      "sidenav",
+      "status-tag",
+      "steps",
+      "switch",
+      "table",
+      "tabs",
+      "tag",
+      "tooltip",
+      "topnav"
+    ]
+  },
+  "project": {
+    "resolvedLane": "library_bound",
+    "operatingMode": "library-bound",
+    "projectName": "oneTotp 身份验证器",
+    "deviceType": "mobile",
+    "language": "zh-CN",
+    "brandPrefix": "yuanli",
+    "selectedIntentWorkflowRead": true,
+    "contextReadScope": "library_bound lane: INTENT_WORKFLOW + 5 required context files + lane runtime files + Design Library distillation + mobile-html-rendering-primitives",
+    "contextRequirementsLoaded": [
+      {
+        "path": "shared-runtime/runtime-boundaries/lane-runtime-contracts.md",
+        "readStatus": "loaded",
+        "bodyRead": true,
+        "recordedAt": "2026-10-13T00:00:00.000Z"
+      },
+      {
+        "path": "shared-runtime/agent-dispatch-runtime/lane-dispatch-index.md",
+        "readStatus": "loaded",
+        "bodyRead": true,
+        "recordedAt": "2026-10-13T00:00:00.000Z"
+      },
+      {
+        "path": "delivery-quality/page-rendering-quality-gate.md",
+        "readStatus": "loaded",
+        "bodyRead": true,
+        "recordedAt": "2026-10-13T00:00:00.000Z"
+      },
+      {
+        "path": "delivery-quality/design-artifact-validation.md",
+        "readStatus": "loaded",
+        "bodyRead": true,
+        "recordedAt": "2026-10-13T00:00:00.000Z"
+      },
+      {
+        "path": "delivery-quality/delivery-evidence-contract.md",
+        "readStatus": "loaded",
+        "bodyRead": true,
+        "recordedAt": "2026-10-13T00:00:00.000Z"
+      }
+    ],
+    "readScopeLedger": [
+      {
+        "actor": "page-sub-agent",
+        "lane": "library_bound",
+        "path": "intent-workflows/intent-page-library-bound/library-bound-page-runtime.md",
+        "reason": "page runtime guide",
+        "scopeClass": "page-runtime",
+        "declaredBeforeRead": true,
+        "recordedAt": "2026-10-13T11:35:07.436Z",
+        "nodeId": "page-index",
+        "htmlSrc": "pages/index.html"
+      },
+      {
+        "actor": "page-sub-agent",
+        "lane": "library_bound",
+        "path": "intent-workflows/intent-page-library-bound/dispatch-contract.md",
+        "reason": "dispatch contract",
+        "scopeClass": "dispatch-contract",
+        "declaredBeforeRead": true,
+        "recordedAt": "2026-10-13T11:35:07.436Z",
+        "nodeId": "page-index",
+        "htmlSrc": "pages/index.html"
+      }
+    ],
+    "intentProfile": {
+      "caseFamily": "library_bound",
+      "sourceType": "none",
+      "operatingMode": "library-bound",
+      "deviceConversion": "desktop-app-shell-to-mobile-window"
+    },
+    "dispatchPreflightManifest": [
+      {
+        "recorded_at": "2026-10-13T11:35:07.436Z",
+        "generatedBy": "build-page-dispatch-manifest.mjs",
+        "packetType": "LibraryBoundPagePacket",
+        "laneContract": {
+          "resolvedLane": "library_bound",
+          "packetType": "LibraryBoundPagePacket",
+          "pageRuntimeGuide": "intent-workflows/intent-page-library-bound/library-bound-page-runtime.md",
+          "dispatchContract": "intent-workflows/intent-page-library-bound/dispatch-contract.md"
+        },
+        "taskLinePresent": true,
+        "outputPathPresent": true,
+        "sharedTemplate": "intent-workflows/intent-page-library-bound/library-bound-page-runtime.md",
+        "nodeId": "page-index",
+        "htmlSrc": "pages/index.html",
+        "supplementaryReads": [],
+        "allowedWritePaths": [
+          "pages/index.html",
+          "assets/"
+        ],
+        "forbiddenWriteRoots": [
+          "*.design",
+          "runtime-orchestration-summary.json",
+          "validation-report.json",
+          "finish-readiness-report.json",
+          "restore-contract-report.json",
+          "page-generation-summary.json"
+        ],
+        "toolPolicy": {
+          "todoWriteAllowed": false,
+          "validationScriptsAllowed": false,
+          "previewAllowed": false,
+          "helperScriptsAllowed": false,
+          "designFileWriteAllowed": false,
+          "allowedWritePaths": [
+            "pages/index.html",
+            "assets/"
+          ]
+        },
+        "skillRuntime": {
+          "skillDir": "c:\\Users\\wanghao\\.trae-cn\\plugins\\trae-remote-official\\trae-design\\0.1.2\\skills\\solo-design",
+          "deterministicToolDir": "c:\\Users\\wanghao\\.trae-cn\\plugins\\trae-remote-official\\trae-design\\0.1.2\\skills\\solo-design\\shared-runtime\\deterministic-tooling",
+          "toolPaths": {
+            "applyHtmlHeadContract": "c:\\Users\\wanghao\\.trae-cn\\plugins\\trae-remote-official\\trae-design\\0.1.2\\skills\\solo-design\\shared-runtime\\deterministic-tooling\\apply-html-head-contract.mjs",
+            "recordDispatchCompletion": "c:\\Users\\wanghao\\.trae-cn\\plugins\\trae-remote-official\\trae-design\\0.1.2\\skills\\solo-design\\shared-runtime\\deterministic-tooling\\record-dispatch-completion.mjs",
+            "buildPageDispatchManifest": "c:\\Users\\wanghao\\.trae-cn\\plugins\\trae-remote-official\\trae-design\\0.1.2\\skills\\solo-design\\shared-runtime\\deterministic-tooling\\build-page-dispatch-manifest.mjs",
+            "validateDesignWorkspace": "c:\\Users\\wanghao\\.trae-cn\\plugins\\trae-remote-official\\trae-design\\0.1.2\\skills\\solo-design\\shared-runtime\\deterministic-tooling\\validate-design-workspace.mjs",
+            "validateFinishReadiness": "c:\\Users\\wanghao\\.trae-cn\\plugins\\trae-remote-official\\trae-design\\0.1.2\\skills\\solo-design\\shared-runtime\\deterministic-tooling\\validate-finish-readiness.mjs",
+            "validateRestoreContract": "c:\\Users\\wanghao\\.trae-cn\\plugins\\trae-remote-official\\trae-design\\0.1.2\\skills\\solo-design\\shared-runtime\\deterministic-tooling\\validate-restore-contract.mjs"
+          },
+          "requiredForPageSubAgent": [
+            "applyHtmlHeadContract",
+            "recordDispatchCompletion"
+          ],
+          "pathInjection": "absolute",
+          "pathContract": "Do not use {SKILL_DIR} placeholders inside Page Sub-Agent packets; use toolPaths.* absolute paths.",
+          "commandTemplates": {
+            "recordDispatchCompletion": "node \"c:\\Users\\wanghao\\.trae-cn\\plugins\\trae-remote-official\\trae-design\\0.1.2\\skills\\solo-design\\shared-runtime\\deterministic-tooling\\record-dispatch-completion.mjs\" \"d:\\开发\\oneTotp\\Design\\oneTotp\" --node-id=\"page-index\" --html-src=\"pages/index.html\" --status=completed --changed-files=<comma-separated-project-relative-files> --trace-digest=<main-agent-runtime-trace-digest> --tool-ledger-json=<tool-ledger-json-or-file>"
+          }
+        },
+        "cssFilePath": "d:\\开发\\oneTotp\\Design\\oneTotp\\colors_and_type.css",
+        "htmlFilePath": "d:\\开发\\oneTotp\\Design\\oneTotp\\pages\\index.html",
+        "brandPrefix": "yuanli",
+        "aestheticsMode": "library-bound",
+        "toolDisciplineBlockPresent": true,
+        "fillHtmlHeadCommand": "node \"c:\\Users\\wanghao\\.trae-cn\\plugins\\trae-remote-official\\trae-design\\0.1.2\\skills\\solo-design\\shared-runtime\\deterministic-tooling\\apply-html-head-contract.mjs\" \"d:\\开发\\oneTotp\\Design\\oneTotp\\colors_and_type.css\" \"d:\\开发\\oneTotp\\Design\\oneTotp\\pages\\index.html\" --title=\"验证码\" --lang=\"zh-CN\" --prefix=\"yuanli\" --replace-head",
+        "headFillMode": "replace-head-after-body",
+        "viewportMode": "document-scroll",
+        "completionSchemaExpected": "full",
+        "restoreFields": null,
+        "restoreContractStatus": null,
+        "restoreCompactPacket": null,
+        "deterministicCommands": null,
+        "sourceAuthorityLock": null,
+        "preDispatchFileHashes": {
+          "oneTotp.design": "5e2b9b4e74faf41ed8ec3aa2983ad1fb09c6fee5e206bc78dd87bdac1b224757"
+        },
+        "contextPreflight": {
+          "workflowPath": "intent-workflows/intent-page-library-bound/INTENT_WORKFLOW.md",
+          "requiredContextFiles": [
+            "shared-runtime/runtime-boundaries/lane-runtime-contracts.md",
+            "shared-runtime/agent-dispatch-runtime/lane-dispatch-index.md",
+            "delivery-quality/page-rendering-quality-gate.md",
+            "delivery-quality/design-artifact-validation.md",
+            "delivery-quality/delivery-evidence-contract.md"
+          ],
+          "optionalContextFiles": [
+            "visual-experience/visual-experience-guidelines.md"
+          ],
+          "passed": true
+        },
+        "pageSliceOnly": true,
+        "requiredFieldsPresent": true,
+        "missingFields": [],
+        "fillHtmlHeadCommandValid": true,
+        "mobileNavigation": {
+          "required": true,
+          "appliesToThisPage": true,
+          "activeKey": "codes",
+          "contractPresent": true,
+          "structurePresent": true,
+          "canonicalHtmlIncluded": true,
+          "canonicalHtmlSource": "sharedProjectShellContract.mobileNavigation.structure.canonicalHtmlByKey.codes",
+          "structureHash": "902948d725561cd0813f4212fcc31c3b3d1faf4dbe27b40b3ca5bace2abfd3f5",
+          "missingFields": []
+        },
+        "persistedToSummary": true,
+        "taskQueryAudited": false,
+        "proofSource": "summary-only",
+        "largeWorkflowFilesInTaskQuery": null
+      },
+      {
+        "recorded_at": "2026-10-13T11:35:07.436Z",
+        "generatedBy": "build-page-dispatch-manifest.mjs",
+        "packetType": "LibraryBoundPagePacket",
+        "laneContract": {
+          "resolvedLane": "library_bound",
+          "packetType": "LibraryBoundPagePacket",
+          "pageRuntimeGuide": "intent-workflows/intent-page-library-bound/library-bound-page-runtime.md",
+          "dispatchContract": "intent-workflows/intent-page-library-bound/dispatch-contract.md"
+        },
+        "taskLinePresent": true,
+        "outputPathPresent": true,
+        "sharedTemplate": "intent-workflows/intent-page-library-bound/library-bound-page-runtime.md",
+        "nodeId": "page-account-detail",
+        "htmlSrc": "pages/account-detail.html",
+        "supplementaryReads": [],
+        "allowedWritePaths": [
+          "pages/account-detail.html",
+          "assets/"
+        ],
+        "forbiddenWriteRoots": [
+          "*.design",
+          "runtime-orchestration-summary.json",
+          "validation-report.json",
+          "finish-readiness-report.json",
+          "restore-contract-report.json",
+          "page-generation-summary.json"
+        ],
+        "toolPolicy": {
+          "todoWriteAllowed": false,
+          "validationScriptsAllowed": false,
+          "previewAllowed": false,
+          "helperScriptsAllowed": false,
+          "designFileWriteAllowed": false,
+          "allowedWritePaths": [
+            "pages/account-detail.html",
+            "assets/"
+          ]
+        },
+        "skillRuntime": {
+          "skillDir": "c:\\Users\\wanghao\\.trae-cn\\plugins\\trae-remote-official\\trae-design\\0.1.2\\skills\\solo-design",
+          "deterministicToolDir": "c:\\Users\\wanghao\\.trae-cn\\plugins\\trae-remote-official\\trae-design\\0.1.2\\skills\\solo-design\\shared-runtime\\deterministic-tooling",
+          "toolPaths": {
+            "applyHtmlHeadContract": "c:\\Users\\wanghao\\.trae-cn\\plugins\\trae-remote-official\\trae-design\\0.1.2\\skills\\solo-design\\shared-runtime\\deterministic-tooling\\apply-html-head-contract.mjs",
+            "recordDispatchCompletion": "c:\\Users\\wanghao\\.trae-cn\\plugins\\trae-remote-official\\trae-design\\0.1.2\\skills\\solo-design\\shared-runtime\\deterministic-tooling\\record-dispatch-completion.mjs",
+            "buildPageDispatchManifest": "c:\\Users\\wanghao\\.trae-cn\\plugins\\trae-remote-official\\trae-design\\0.1.2\\skills\\solo-design\\shared-runtime\\deterministic-tooling\\build-page-dispatch-manifest.mjs",
+            "validateDesignWorkspace": "c:\\Users\\wanghao\\.trae-cn\\plugins\\trae-remote-official\\trae-design\\0.1.2\\skills\\solo-design\\shared-runtime\\deterministic-tooling\\validate-design-workspace.mjs",
+            "validateFinishReadiness": "c:\\Users\\wanghao\\.trae-cn\\plugins\\trae-remote-official\\trae-design\\0.1.2\\skills\\solo-design\\shared-runtime\\deterministic-tooling\\validate-finish-readiness.mjs",
+            "validateRestoreContract": "c:\\Users\\wanghao\\.trae-cn\\plugins\\trae-remote-official\\trae-design\\0.1.2\\skills\\solo-design\\shared-runtime\\deterministic-tooling\\validate-restore-contract.mjs"
+          },
+          "requiredForPageSubAgent": [
+            "applyHtmlHeadContract",
+            "recordDispatchCompletion"
+          ],
+          "pathInjection": "absolute",
+          "pathContract": "Do not use {SKILL_DIR} placeholders inside Page Sub-Agent packets; use toolPaths.* absolute paths.",
+          "commandTemplates": {
+            "recordDispatchCompletion": "node \"c:\\Users\\wanghao\\.trae-cn\\plugins\\trae-remote-official\\trae-design\\0.1.2\\skills\\solo-design\\shared-runtime\\deterministic-tooling\\record-dispatch-completion.mjs\" \"d:\\开发\\oneTotp\\Design\\oneTotp\" --node-id=\"page-account-detail\" --html-src=\"pages/account-detail.html\" --status=completed --changed-files=<comma-separated-project-relative-files> --trace-digest=<main-agent-runtime-trace-digest> --tool-ledger-json=<tool-ledger-json-or-file>"
+          }
+        },
+        "cssFilePath": "d:\\开发\\oneTotp\\Design\\oneTotp\\colors_and_type.css",
+        "htmlFilePath": "d:\\开发\\oneTotp\\Design\\oneTotp\\pages\\account-detail.html",
+        "brandPrefix": "yuanli",
+        "aestheticsMode": "library-bound",
+        "toolDisciplineBlockPresent": true,
+        "fillHtmlHeadCommand": "node \"c:\\Users\\wanghao\\.trae-cn\\plugins\\trae-remote-official\\trae-design\\0.1.2\\skills\\solo-design\\shared-runtime\\deterministic-tooling\\apply-html-head-contract.mjs\" \"d:\\开发\\oneTotp\\Design\\oneTotp\\colors_and_type.css\" \"d:\\开发\\oneTotp\\Design\\oneTotp\\pages\\account-detail.html\" --title=\"账户详情\" --lang=\"zh-CN\" --prefix=\"yuanli\" --replace-head",
+        "headFillMode": "replace-head-after-body",
+        "viewportMode": "document-scroll",
+        "completionSchemaExpected": "full",
+        "restoreFields": null,
+        "restoreContractStatus": null,
+        "restoreCompactPacket": null,
+        "deterministicCommands": null,
+        "sourceAuthorityLock": null,
+        "preDispatchFileHashes": {
+          "oneTotp.design": "5e2b9b4e74faf41ed8ec3aa2983ad1fb09c6fee5e206bc78dd87bdac1b224757"
+        },
+        "contextPreflight": {
+          "workflowPath": "intent-workflows/intent-page-library-bound/INTENT_WORKFLOW.md",
+          "requiredContextFiles": [
+            "shared-runtime/runtime-boundaries/lane-runtime-contracts.md",
+            "shared-runtime/agent-dispatch-runtime/lane-dispatch-index.md",
+            "delivery-quality/page-rendering-quality-gate.md",
+            "delivery-quality/design-artifact-validation.md",
+            "delivery-quality/delivery-evidence-contract.md"
+          ],
+          "optionalContextFiles": [
+            "visual-experience/visual-experience-guidelines.md"
+          ],
+          "passed": true
+        },
+        "pageSliceOnly": true,
+        "requiredFieldsPresent": true,
+        "missingFields": [],
+        "fillHtmlHeadCommandValid": true,
+        "mobileNavigation": {
+          "required": true,
+          "appliesToThisPage": true,
+          "activeKey": "codes",
+          "contractPresent": true,
+          "structurePresent": true,
+          "canonicalHtmlIncluded": true,
+          "canonicalHtmlSource": "sharedProjectShellContract.mobileNavigation.structure.canonicalHtmlByKey.codes",
+          "structureHash": "902948d725561cd0813f4212fcc31c3b3d1faf4dbe27b40b3ca5bace2abfd3f5",
+          "missingFields": []
+        },
+        "persistedToSummary": true,
+        "taskQueryAudited": false,
+        "proofSource": "summary-only",
+        "largeWorkflowFilesInTaskQuery": null
+      },
+      {
+        "recorded_at": "2026-10-13T11:35:07.436Z",
+        "generatedBy": "build-page-dispatch-manifest.mjs",
+        "packetType": "LibraryBoundPagePacket",
+        "laneContract": {
+          "resolvedLane": "library_bound",
+          "packetType": "LibraryBoundPagePacket",
+          "pageRuntimeGuide": "intent-workflows/intent-page-library-bound/library-bound-page-runtime.md",
+          "dispatchContract": "intent-workflows/intent-page-library-bound/dispatch-contract.md"
+        },
+        "taskLinePresent": true,
+        "outputPathPresent": true,
+        "sharedTemplate": "intent-workflows/intent-page-library-bound/library-bound-page-runtime.md",
+        "nodeId": "page-add-account",
+        "htmlSrc": "pages/add-account.html",
+        "supplementaryReads": [],
+        "allowedWritePaths": [
+          "pages/add-account.html",
+          "assets/"
+        ],
+        "forbiddenWriteRoots": [
+          "*.design",
+          "runtime-orchestration-summary.json",
+          "validation-report.json",
+          "finish-readiness-report.json",
+          "restore-contract-report.json",
+          "page-generation-summary.json"
+        ],
+        "toolPolicy": {
+          "todoWriteAllowed": false,
+          "validationScriptsAllowed": false,
+          "previewAllowed": false,
+          "helperScriptsAllowed": false,
+          "designFileWriteAllowed": false,
+          "allowedWritePaths": [
+            "pages/add-account.html",
+            "assets/"
+          ]
+        },
+        "skillRuntime": {
+          "skillDir": "c:\\Users\\wanghao\\.trae-cn\\plugins\\trae-remote-official\\trae-design\\0.1.2\\skills\\solo-design",
+          "deterministicToolDir": "c:\\Users\\wanghao\\.trae-cn\\plugins\\trae-remote-official\\trae-design\\0.1.2\\skills\\solo-design\\shared-runtime\\deterministic-tooling",
+          "toolPaths": {
+            "applyHtmlHeadContract": "c:\\Users\\wanghao\\.trae-cn\\plugins\\trae-remote-official\\trae-design\\0.1.2\\skills\\solo-design\\shared-runtime\\deterministic-tooling\\apply-html-head-contract.mjs",
+            "recordDispatchCompletion": "c:\\Users\\wanghao\\.trae-cn\\plugins\\trae-remote-official\\trae-design\\0.1.2\\skills\\solo-design\\shared-runtime\\deterministic-tooling\\record-dispatch-completion.mjs",
+            "buildPageDispatchManifest": "c:\\Users\\wanghao\\.trae-cn\\plugins\\trae-remote-official\\trae-design\\0.1.2\\skills\\solo-design\\shared-runtime\\deterministic-tooling\\build-page-dispatch-manifest.mjs",
+            "validateDesignWorkspace": "c:\\Users\\wanghao\\.trae-cn\\plugins\\trae-remote-official\\trae-design\\0.1.2\\skills\\solo-design\\shared-runtime\\deterministic-tooling\\validate-design-workspace.mjs",
+            "validateFinishReadiness": "c:\\Users\\wanghao\\.trae-cn\\plugins\\trae-remote-official\\trae-design\\0.1.2\\skills\\solo-design\\shared-runtime\\deterministic-tooling\\validate-finish-readiness.mjs",
+            "validateRestoreContract": "c:\\Users\\wanghao\\.trae-cn\\plugins\\trae-remote-official\\trae-design\\0.1.2\\skills\\solo-design\\shared-runtime\\deterministic-tooling\\validate-restore-contract.mjs"
+          },
+          "requiredForPageSubAgent": [
+            "applyHtmlHeadContract",
+            "recordDispatchCompletion"
+          ],
+          "pathInjection": "absolute",
+          "pathContract": "Do not use {SKILL_DIR} placeholders inside Page Sub-Agent packets; use toolPaths.* absolute paths.",
+          "commandTemplates": {
+            "recordDispatchCompletion": "node \"c:\\Users\\wanghao\\.trae-cn\\plugins\\trae-remote-official\\trae-design\\0.1.2\\skills\\solo-design\\shared-runtime\\deterministic-tooling\\record-dispatch-completion.mjs\" \"d:\\开发\\oneTotp\\Design\\oneTotp\" --node-id=\"page-add-account\" --html-src=\"pages/add-account.html\" --status=completed --changed-files=<comma-separated-project-relative-files> --trace-digest=<main-agent-runtime-trace-digest> --tool-ledger-json=<tool-ledger-json-or-file>"
+          }
+        },
+        "cssFilePath": "d:\\开发\\oneTotp\\Design\\oneTotp\\colors_and_type.css",
+        "htmlFilePath": "d:\\开发\\oneTotp\\Design\\oneTotp\\pages\\add-account.html",
+        "brandPrefix": "yuanli",
+        "aestheticsMode": "library-bound",
+        "toolDisciplineBlockPresent": true,
+        "fillHtmlHeadCommand": "node \"c:\\Users\\wanghao\\.trae-cn\\plugins\\trae-remote-official\\trae-design\\0.1.2\\skills\\solo-design\\shared-runtime\\deterministic-tooling\\apply-html-head-contract.mjs\" \"d:\\开发\\oneTotp\\Design\\oneTotp\\colors_and_type.css\" \"d:\\开发\\oneTotp\\Design\\oneTotp\\pages\\add-account.html\" --title=\"添加账户\" --lang=\"zh-CN\" --prefix=\"yuanli\" --replace-head",
+        "headFillMode": "replace-head-after-body",
+        "viewportMode": "document-scroll",
+        "completionSchemaExpected": "full",
+        "restoreFields": null,
+        "restoreContractStatus": null,
+        "restoreCompactPacket": null,
+        "deterministicCommands": null,
+        "sourceAuthorityLock": null,
+        "preDispatchFileHashes": {
+          "oneTotp.design": "5e2b9b4e74faf41ed8ec3aa2983ad1fb09c6fee5e206bc78dd87bdac1b224757"
+        },
+        "contextPreflight": {
+          "workflowPath": "intent-workflows/intent-page-library-bound/INTENT_WORKFLOW.md",
+          "requiredContextFiles": [
+            "shared-runtime/runtime-boundaries/lane-runtime-contracts.md",
+            "shared-runtime/agent-dispatch-runtime/lane-dispatch-index.md",
+            "delivery-quality/page-rendering-quality-gate.md",
+            "delivery-quality/design-artifact-validation.md",
+            "delivery-quality/delivery-evidence-contract.md"
+          ],
+          "optionalContextFiles": [
+            "visual-experience/visual-experience-guidelines.md"
+          ],
+          "passed": true
+        },
+        "pageSliceOnly": true,
+        "requiredFieldsPresent": true,
+        "missingFields": [],
+        "fillHtmlHeadCommandValid": true,
+        "mobileNavigation": {
+          "required": true,
+          "appliesToThisPage": true,
+          "activeKey": "codes",
+          "contractPresent": true,
+          "structurePresent": true,
+          "canonicalHtmlIncluded": true,
+          "canonicalHtmlSource": "sharedProjectShellContract.mobileNavigation.structure.canonicalHtmlByKey.codes",
+          "structureHash": "902948d725561cd0813f4212fcc31c3b3d1faf4dbe27b40b3ca5bace2abfd3f5",
+          "missingFields": []
+        },
+        "persistedToSummary": true,
+        "taskQueryAudited": false,
+        "proofSource": "summary-only",
+        "largeWorkflowFilesInTaskQuery": null
+      },
+      {
+        "recorded_at": "2026-10-13T11:35:07.436Z",
+        "generatedBy": "build-page-dispatch-manifest.mjs",
+        "packetType": "LibraryBoundPagePacket",
+        "laneContract": {
+          "resolvedLane": "library_bound",
+          "packetType": "LibraryBoundPagePacket",
+          "pageRuntimeGuide": "intent-workflows/intent-page-library-bound/library-bound-page-runtime.md",
+          "dispatchContract": "intent-workflows/intent-page-library-bound/dispatch-contract.md"
+        },
+        "taskLinePresent": true,
+        "outputPathPresent": true,
+        "sharedTemplate": "intent-workflows/intent-page-library-bound/library-bound-page-runtime.md",
+        "nodeId": "page-settings",
+        "htmlSrc": "pages/settings.html",
+        "supplementaryReads": [],
+        "allowedWritePaths": [
+          "pages/settings.html",
+          "assets/"
+        ],
+        "forbiddenWriteRoots": [
+          "*.design",
+          "runtime-orchestration-summary.json",
+          "validation-report.json",
+          "finish-readiness-report.json",
+          "restore-contract-report.json",
+          "page-generation-summary.json"
+        ],
+        "toolPolicy": {
+          "todoWriteAllowed": false,
+          "validationScriptsAllowed": false,
+          "previewAllowed": false,
+          "helperScriptsAllowed": false,
+          "designFileWriteAllowed": false,
+          "allowedWritePaths": [
+            "pages/settings.html",
+            "assets/"
+          ]
+        },
+        "skillRuntime": {
+          "skillDir": "c:\\Users\\wanghao\\.trae-cn\\plugins\\trae-remote-official\\trae-design\\0.1.2\\skills\\solo-design",
+          "deterministicToolDir": "c:\\Users\\wanghao\\.trae-cn\\plugins\\trae-remote-official\\trae-design\\0.1.2\\skills\\solo-design\\shared-runtime\\deterministic-tooling",
+          "toolPaths": {
+            "applyHtmlHeadContract": "c:\\Users\\wanghao\\.trae-cn\\plugins\\trae-remote-official\\trae-design\\0.1.2\\skills\\solo-design\\shared-runtime\\deterministic-tooling\\apply-html-head-contract.mjs",
+            "recordDispatchCompletion": "c:\\Users\\wanghao\\.trae-cn\\plugins\\trae-remote-official\\trae-design\\0.1.2\\skills\\solo-design\\shared-runtime\\deterministic-tooling\\record-dispatch-completion.mjs",
+            "buildPageDispatchManifest": "c:\\Users\\wanghao\\.trae-cn\\plugins\\trae-remote-official\\trae-design\\0.1.2\\skills\\solo-design\\shared-runtime\\deterministic-tooling\\build-page-dispatch-manifest.mjs",
+            "validateDesignWorkspace": "c:\\Users\\wanghao\\.trae-cn\\plugins\\trae-remote-official\\trae-design\\0.1.2\\skills\\solo-design\\shared-runtime\\deterministic-tooling\\validate-design-workspace.mjs",
+            "validateFinishReadiness": "c:\\Users\\wanghao\\.trae-cn\\plugins\\trae-remote-official\\trae-design\\0.1.2\\skills\\solo-design\\shared-runtime\\deterministic-tooling\\validate-finish-readiness.mjs",
+            "validateRestoreContract": "c:\\Users\\wanghao\\.trae-cn\\plugins\\trae-remote-official\\trae-design\\0.1.2\\skills\\solo-design\\shared-runtime\\deterministic-tooling\\validate-restore-contract.mjs"
+          },
+          "requiredForPageSubAgent": [
+            "applyHtmlHeadContract",
+            "recordDispatchCompletion"
+          ],
+          "pathInjection": "absolute",
+          "pathContract": "Do not use {SKILL_DIR} placeholders inside Page Sub-Agent packets; use toolPaths.* absolute paths.",
+          "commandTemplates": {
+            "recordDispatchCompletion": "node \"c:\\Users\\wanghao\\.trae-cn\\plugins\\trae-remote-official\\trae-design\\0.1.2\\skills\\solo-design\\shared-runtime\\deterministic-tooling\\record-dispatch-completion.mjs\" \"d:\\开发\\oneTotp\\Design\\oneTotp\" --node-id=\"page-settings\" --html-src=\"pages/settings.html\" --status=completed --changed-files=<comma-separated-project-relative-files> --trace-digest=<main-agent-runtime-trace-digest> --tool-ledger-json=<tool-ledger-json-or-file>"
+          }
+        },
+        "cssFilePath": "d:\\开发\\oneTotp\\Design\\oneTotp\\colors_and_type.css",
+        "htmlFilePath": "d:\\开发\\oneTotp\\Design\\oneTotp\\pages\\settings.html",
+        "brandPrefix": "yuanli",
+        "aestheticsMode": "library-bound",
+        "toolDisciplineBlockPresent": true,
+        "fillHtmlHeadCommand": "node \"c:\\Users\\wanghao\\.trae-cn\\plugins\\trae-remote-official\\trae-design\\0.1.2\\skills\\solo-design\\shared-runtime\\deterministic-tooling\\apply-html-head-contract.mjs\" \"d:\\开发\\oneTotp\\Design\\oneTotp\\colors_and_type.css\" \"d:\\开发\\oneTotp\\Design\\oneTotp\\pages\\settings.html\" --title=\"设置\" --lang=\"zh-CN\" --prefix=\"yuanli\" --replace-head",
+        "headFillMode": "replace-head-after-body",
+        "viewportMode": "document-scroll",
+        "completionSchemaExpected": "full",
+        "restoreFields": null,
+        "restoreContractStatus": null,
+        "restoreCompactPacket": null,
+        "deterministicCommands": null,
+        "sourceAuthorityLock": null,
+        "preDispatchFileHashes": {
+          "oneTotp.design": "5e2b9b4e74faf41ed8ec3aa2983ad1fb09c6fee5e206bc78dd87bdac1b224757"
+        },
+        "contextPreflight": {
+          "workflowPath": "intent-workflows/intent-page-library-bound/INTENT_WORKFLOW.md",
+          "requiredContextFiles": [
+            "shared-runtime/runtime-boundaries/lane-runtime-contracts.md",
+            "shared-runtime/agent-dispatch-runtime/lane-dispatch-index.md",
+            "delivery-quality/page-rendering-quality-gate.md",
+            "delivery-quality/design-artifact-validation.md",
+            "delivery-quality/delivery-evidence-contract.md"
+          ],
+          "optionalContextFiles": [
+            "visual-experience/visual-experience-guidelines.md"
+          ],
+          "passed": true
+        },
+        "pageSliceOnly": true,
+        "requiredFieldsPresent": true,
+        "missingFields": [],
+        "fillHtmlHeadCommandValid": true,
+        "mobileNavigation": {
+          "required": true,
+          "appliesToThisPage": true,
+          "activeKey": "settings",
+          "contractPresent": true,
+          "structurePresent": true,
+          "canonicalHtmlIncluded": true,
+          "canonicalHtmlSource": "sharedProjectShellContract.mobileNavigation.structure.canonicalHtmlByKey.settings",
+          "structureHash": "902948d725561cd0813f4212fcc31c3b3d1faf4dbe27b40b3ca5bace2abfd3f5",
+          "missingFields": []
+        },
+        "persistedToSummary": true,
+        "taskQueryAudited": false,
+        "proofSource": "summary-only",
+        "largeWorkflowFilesInTaskQuery": null
+      },
+      {
+        "recorded_at": "2026-10-13T11:35:07.436Z",
+        "generatedBy": "build-page-dispatch-manifest.mjs",
+        "packetType": "LibraryBoundPagePacket",
+        "laneContract": {
+          "resolvedLane": "library_bound",
+          "packetType": "LibraryBoundPagePacket",
+          "pageRuntimeGuide": "intent-workflows/intent-page-library-bound/library-bound-page-runtime.md",
+          "dispatchContract": "intent-workflows/intent-page-library-bound/dispatch-contract.md"
+        },
+        "taskLinePresent": true,
+        "outputPathPresent": true,
+        "sharedTemplate": "intent-workflows/intent-page-library-bound/library-bound-page-runtime.md",
+        "nodeId": "page-security",
+        "htmlSrc": "pages/security.html",
+        "supplementaryReads": [],
+        "allowedWritePaths": [
+          "pages/security.html",
+          "assets/"
+        ],
+        "forbiddenWriteRoots": [
+          "*.design",
+          "runtime-orchestration-summary.json",
+          "validation-report.json",
+          "finish-readiness-report.json",
+          "restore-contract-report.json",
+          "page-generation-summary.json"
+        ],
+        "toolPolicy": {
+          "todoWriteAllowed": false,
+          "validationScriptsAllowed": false,
+          "previewAllowed": false,
+          "helperScriptsAllowed": false,
+          "designFileWriteAllowed": false,
+          "allowedWritePaths": [
+            "pages/security.html",
+            "assets/"
+          ]
+        },
+        "skillRuntime": {
+          "skillDir": "c:\\Users\\wanghao\\.trae-cn\\plugins\\trae-remote-official\\trae-design\\0.1.2\\skills\\solo-design",
+          "deterministicToolDir": "c:\\Users\\wanghao\\.trae-cn\\plugins\\trae-remote-official\\trae-design\\0.1.2\\skills\\solo-design\\shared-runtime\\deterministic-tooling",
+          "toolPaths": {
+            "applyHtmlHeadContract": "c:\\Users\\wanghao\\.trae-cn\\plugins\\trae-remote-official\\trae-design\\0.1.2\\skills\\solo-design\\shared-runtime\\deterministic-tooling\\apply-html-head-contract.mjs",
+            "recordDispatchCompletion": "c:\\Users\\wanghao\\.trae-cn\\plugins\\trae-remote-official\\trae-design\\0.1.2\\skills\\solo-design\\shared-runtime\\deterministic-tooling\\record-dispatch-completion.mjs",
+            "buildPageDispatchManifest": "c:\\Users\\wanghao\\.trae-cn\\plugins\\trae-remote-official\\trae-design\\0.1.2\\skills\\solo-design\\shared-runtime\\deterministic-tooling\\build-page-dispatch-manifest.mjs",
+            "validateDesignWorkspace": "c:\\Users\\wanghao\\.trae-cn\\plugins\\trae-remote-official\\trae-design\\0.1.2\\skills\\solo-design\\shared-runtime\\deterministic-tooling\\validate-design-workspace.mjs",
+            "validateFinishReadiness": "c:\\Users\\wanghao\\.trae-cn\\plugins\\trae-remote-official\\trae-design\\0.1.2\\skills\\solo-design\\shared-runtime\\deterministic-tooling\\validate-finish-readiness.mjs",
+            "validateRestoreContract": "c:\\Users\\wanghao\\.trae-cn\\plugins\\trae-remote-official\\trae-design\\0.1.2\\skills\\solo-design\\shared-runtime\\deterministic-tooling\\validate-restore-contract.mjs"
+          },
+          "requiredForPageSubAgent": [
+            "applyHtmlHeadContract",
+            "recordDispatchCompletion"
+          ],
+          "pathInjection": "absolute",
+          "pathContract": "Do not use {SKILL_DIR} placeholders inside Page Sub-Agent packets; use toolPaths.* absolute paths.",
+          "commandTemplates": {
+            "recordDispatchCompletion": "node \"c:\\Users\\wanghao\\.trae-cn\\plugins\\trae-remote-official\\trae-design\\0.1.2\\skills\\solo-design\\shared-runtime\\deterministic-tooling\\record-dispatch-completion.mjs\" \"d:\\开发\\oneTotp\\Design\\oneTotp\" --node-id=\"page-security\" --html-src=\"pages/security.html\" --status=completed --changed-files=<comma-separated-project-relative-files> --trace-digest=<main-agent-runtime-trace-digest> --tool-ledger-json=<tool-ledger-json-or-file>"
+          }
+        },
+        "cssFilePath": "d:\\开发\\oneTotp\\Design\\oneTotp\\colors_and_type.css",
+        "htmlFilePath": "d:\\开发\\oneTotp\\Design\\oneTotp\\pages\\security.html",
+        "brandPrefix": "yuanli",
+        "aestheticsMode": "library-bound",
+        "toolDisciplineBlockPresent": true,
+        "fillHtmlHeadCommand": "node \"c:\\Users\\wanghao\\.trae-cn\\plugins\\trae-remote-official\\trae-design\\0.1.2\\skills\\solo-design\\shared-runtime\\deterministic-tooling\\apply-html-head-contract.mjs\" \"d:\\开发\\oneTotp\\Design\\oneTotp\\colors_and_type.css\" \"d:\\开发\\oneTotp\\Design\\oneTotp\\pages\\security.html\" --title=\"安全与锁定\" --lang=\"zh-CN\" --prefix=\"yuanli\" --replace-head",
+        "headFillMode": "replace-head-after-body",
+        "viewportMode": "document-scroll",
+        "completionSchemaExpected": "full",
+        "restoreFields": null,
+        "restoreContractStatus": null,
+        "restoreCompactPacket": null,
+        "deterministicCommands": null,
+        "sourceAuthorityLock": null,
+        "preDispatchFileHashes": {
+          "oneTotp.design": "5e2b9b4e74faf41ed8ec3aa2983ad1fb09c6fee5e206bc78dd87bdac1b224757"
+        },
+        "contextPreflight": {
+          "workflowPath": "intent-workflows/intent-page-library-bound/INTENT_WORKFLOW.md",
+          "requiredContextFiles": [
+            "shared-runtime/runtime-boundaries/lane-runtime-contracts.md",
+            "shared-runtime/agent-dispatch-runtime/lane-dispatch-index.md",
+            "delivery-quality/page-rendering-quality-gate.md",
+            "delivery-quality/design-artifact-validation.md",
+            "delivery-quality/delivery-evidence-contract.md"
+          ],
+          "optionalContextFiles": [
+            "visual-experience/visual-experience-guidelines.md"
+          ],
+          "passed": true
+        },
+        "pageSliceOnly": true,
+        "requiredFieldsPresent": true,
+        "missingFields": [],
+        "fillHtmlHeadCommandValid": true,
+        "mobileNavigation": {
+          "required": true,
+          "appliesToThisPage": true,
+          "activeKey": "settings",
+          "contractPresent": true,
+          "structurePresent": true,
+          "canonicalHtmlIncluded": true,
+          "canonicalHtmlSource": "sharedProjectShellContract.mobileNavigation.structure.canonicalHtmlByKey.settings",
+          "structureHash": "902948d725561cd0813f4212fcc31c3b3d1faf4dbe27b40b3ca5bace2abfd3f5",
+          "missingFields": []
+        },
+        "persistedToSummary": true,
+        "taskQueryAudited": false,
+        "proofSource": "summary-only",
+        "largeWorkflowFilesInTaskQuery": null
+      },
+      {
+        "recorded_at": "2026-10-13T11:35:07.436Z",
+        "generatedBy": "build-page-dispatch-manifest.mjs",
+        "packetType": "LibraryBoundPagePacket",
+        "laneContract": {
+          "resolvedLane": "library_bound",
+          "packetType": "LibraryBoundPagePacket",
+          "pageRuntimeGuide": "intent-workflows/intent-page-library-bound/library-bound-page-runtime.md",
+          "dispatchContract": "intent-workflows/intent-page-library-bound/dispatch-contract.md"
+        },
+        "taskLinePresent": true,
+        "outputPathPresent": true,
+        "sharedTemplate": "intent-workflows/intent-page-library-bound/library-bound-page-runtime.md",
+        "nodeId": "page-import-export",
+        "htmlSrc": "pages/import-export.html",
+        "supplementaryReads": [],
+        "allowedWritePaths": [
+          "pages/import-export.html",
+          "assets/"
+        ],
+        "forbiddenWriteRoots": [
+          "*.design",
+          "runtime-orchestration-summary.json",
+          "validation-report.json",
+          "finish-readiness-report.json",
+          "restore-contract-report.json",
+          "page-generation-summary.json"
+        ],
+        "toolPolicy": {
+          "todoWriteAllowed": false,
+          "validationScriptsAllowed": false,
+          "previewAllowed": false,
+          "helperScriptsAllowed": false,
+          "designFileWriteAllowed": false,
+          "allowedWritePaths": [
+            "pages/import-export.html",
+            "assets/"
+          ]
+        },
+        "skillRuntime": {
+          "skillDir": "c:\\Users\\wanghao\\.trae-cn\\plugins\\trae-remote-official\\trae-design\\0.1.2\\skills\\solo-design",
+          "deterministicToolDir": "c:\\Users\\wanghao\\.trae-cn\\plugins\\trae-remote-official\\trae-design\\0.1.2\\skills\\solo-design\\shared-runtime\\deterministic-tooling",
+          "toolPaths": {
+            "applyHtmlHeadContract": "c:\\Users\\wanghao\\.trae-cn\\plugins\\trae-remote-official\\trae-design\\0.1.2\\skills\\solo-design\\shared-runtime\\deterministic-tooling\\apply-html-head-contract.mjs",
+            "recordDispatchCompletion": "c:\\Users\\wanghao\\.trae-cn\\plugins\\trae-remote-official\\trae-design\\0.1.2\\skills\\solo-design\\shared-runtime\\deterministic-tooling\\record-dispatch-completion.mjs",
+            "buildPageDispatchManifest": "c:\\Users\\wanghao\\.trae-cn\\plugins\\trae-remote-official\\trae-design\\0.1.2\\skills\\solo-design\\shared-runtime\\deterministic-tooling\\build-page-dispatch-manifest.mjs",
+            "validateDesignWorkspace": "c:\\Users\\wanghao\\.trae-cn\\plugins\\trae-remote-official\\trae-design\\0.1.2\\skills\\solo-design\\shared-runtime\\deterministic-tooling\\validate-design-workspace.mjs",
+            "validateFinishReadiness": "c:\\Users\\wanghao\\.trae-cn\\plugins\\trae-remote-official\\trae-design\\0.1.2\\skills\\solo-design\\shared-runtime\\deterministic-tooling\\validate-finish-readiness.mjs",
+            "validateRestoreContract": "c:\\Users\\wanghao\\.trae-cn\\plugins\\trae-remote-official\\trae-design\\0.1.2\\skills\\solo-design\\shared-runtime\\deterministic-tooling\\validate-restore-contract.mjs"
+          },
+          "requiredForPageSubAgent": [
+            "applyHtmlHeadContract",
+            "recordDispatchCompletion"
+          ],
+          "pathInjection": "absolute",
+          "pathContract": "Do not use {SKILL_DIR} placeholders inside Page Sub-Agent packets; use toolPaths.* absolute paths.",
+          "commandTemplates": {
+            "recordDispatchCompletion": "node \"c:\\Users\\wanghao\\.trae-cn\\plugins\\trae-remote-official\\trae-design\\0.1.2\\skills\\solo-design\\shared-runtime\\deterministic-tooling\\record-dispatch-completion.mjs\" \"d:\\开发\\oneTotp\\Design\\oneTotp\" --node-id=\"page-import-export\" --html-src=\"pages/import-export.html\" --status=completed --changed-files=<comma-separated-project-relative-files> --trace-digest=<main-agent-runtime-trace-digest> --tool-ledger-json=<tool-ledger-json-or-file>"
+          }
+        },
+        "cssFilePath": "d:\\开发\\oneTotp\\Design\\oneTotp\\colors_and_type.css",
+        "htmlFilePath": "d:\\开发\\oneTotp\\Design\\oneTotp\\pages\\import-export.html",
+        "brandPrefix": "yuanli",
+        "aestheticsMode": "library-bound",
+        "toolDisciplineBlockPresent": true,
+        "fillHtmlHeadCommand": "node \"c:\\Users\\wanghao\\.trae-cn\\plugins\\trae-remote-official\\trae-design\\0.1.2\\skills\\solo-design\\shared-runtime\\deterministic-tooling\\apply-html-head-contract.mjs\" \"d:\\开发\\oneTotp\\Design\\oneTotp\\colors_and_type.css\" \"d:\\开发\\oneTotp\\Design\\oneTotp\\pages\\import-export.html\" --title=\"导入导出\" --lang=\"zh-CN\" --prefix=\"yuanli\" --replace-head",
+        "headFillMode": "replace-head-after-body",
+        "viewportMode": "document-scroll",
+        "completionSchemaExpected": "full",
+        "restoreFields": null,
+        "restoreContractStatus": null,
+        "restoreCompactPacket": null,
+        "deterministicCommands": null,
+        "sourceAuthorityLock": null,
+        "preDispatchFileHashes": {
+          "oneTotp.design": "5e2b9b4e74faf41ed8ec3aa2983ad1fb09c6fee5e206bc78dd87bdac1b224757"
+        },
+        "contextPreflight": {
+          "workflowPath": "intent-workflows/intent-page-library-bound/INTENT_WORKFLOW.md",
+          "requiredContextFiles": [
+            "shared-runtime/runtime-boundaries/lane-runtime-contracts.md",
+            "shared-runtime/agent-dispatch-runtime/lane-dispatch-index.md",
+            "delivery-quality/page-rendering-quality-gate.md",
+            "delivery-quality/design-artifact-validation.md",
+            "delivery-quality/delivery-evidence-contract.md"
+          ],
+          "optionalContextFiles": [
+            "visual-experience/visual-experience-guidelines.md"
+          ],
+          "passed": true
+        },
+        "pageSliceOnly": true,
+        "requiredFieldsPresent": true,
+        "missingFields": [],
+        "fillHtmlHeadCommandValid": true,
+        "mobileNavigation": {
+          "required": true,
+          "appliesToThisPage": true,
+          "activeKey": "settings",
+          "contractPresent": true,
+          "structurePresent": true,
+          "canonicalHtmlIncluded": true,
+          "canonicalHtmlSource": "sharedProjectShellContract.mobileNavigation.structure.canonicalHtmlByKey.settings",
+          "structureHash": "902948d725561cd0813f4212fcc31c3b3d1faf4dbe27b40b3ca5bace2abfd3f5",
+          "missingFields": []
+        },
+        "persistedToSummary": true,
+        "taskQueryAudited": false,
+        "proofSource": "summary-only",
+        "largeWorkflowFilesInTaskQuery": null
+      },
+      {
+        "recorded_at": "2026-10-13T11:35:07.436Z",
+        "generatedBy": "build-page-dispatch-manifest.mjs",
+        "packetType": "LibraryBoundPagePacket",
+        "laneContract": {
+          "resolvedLane": "library_bound",
+          "packetType": "LibraryBoundPagePacket",
+          "pageRuntimeGuide": "intent-workflows/intent-page-library-bound/library-bound-page-runtime.md",
+          "dispatchContract": "intent-workflows/intent-page-library-bound/dispatch-contract.md"
+        },
+        "taskLinePresent": true,
+        "outputPathPresent": true,
+        "sharedTemplate": "intent-workflows/intent-page-library-bound/library-bound-page-runtime.md",
+        "nodeId": "page-lock",
+        "htmlSrc": "pages/lock.html",
+        "supplementaryReads": [],
+        "allowedWritePaths": [
+          "pages/lock.html",
+          "assets/"
+        ],
+        "forbiddenWriteRoots": [
+          "*.design",
+          "runtime-orchestration-summary.json",
+          "validation-report.json",
+          "finish-readiness-report.json",
+          "restore-contract-report.json",
+          "page-generation-summary.json"
+        ],
+        "toolPolicy": {
+          "todoWriteAllowed": false,
+          "validationScriptsAllowed": false,
+          "previewAllowed": false,
+          "helperScriptsAllowed": false,
+          "designFileWriteAllowed": false,
+          "allowedWritePaths": [
+            "pages/lock.html",
+            "assets/"
+          ]
+        },
+        "skillRuntime": {
+          "skillDir": "c:\\Users\\wanghao\\.trae-cn\\plugins\\trae-remote-official\\trae-design\\0.1.2\\skills\\solo-design",
+          "deterministicToolDir": "c:\\Users\\wanghao\\.trae-cn\\plugins\\trae-remote-official\\trae-design\\0.1.2\\skills\\solo-design\\shared-runtime\\deterministic-tooling",
+          "toolPaths": {
+            "applyHtmlHeadContract": "c:\\Users\\wanghao\\.trae-cn\\plugins\\trae-remote-official\\trae-design\\0.1.2\\skills\\solo-design\\shared-runtime\\deterministic-tooling\\apply-html-head-contract.mjs",
+            "recordDispatchCompletion": "c:\\Users\\wanghao\\.trae-cn\\plugins\\trae-remote-official\\trae-design\\0.1.2\\skills\\solo-design\\shared-runtime\\deterministic-tooling\\record-dispatch-completion.mjs",
+            "buildPageDispatchManifest": "c:\\Users\\wanghao\\.trae-cn\\plugins\\trae-remote-official\\trae-design\\0.1.2\\skills\\solo-design\\shared-runtime\\deterministic-tooling\\build-page-dispatch-manifest.mjs",
+            "validateDesignWorkspace": "c:\\Users\\wanghao\\.trae-cn\\plugins\\trae-remote-official\\trae-design\\0.1.2\\skills\\solo-design\\shared-runtime\\deterministic-tooling\\validate-design-workspace.mjs",
+            "validateFinishReadiness": "c:\\Users\\wanghao\\.trae-cn\\plugins\\trae-remote-official\\trae-design\\0.1.2\\skills\\solo-design\\shared-runtime\\deterministic-tooling\\validate-finish-readiness.mjs",
+            "validateRestoreContract": "c:\\Users\\wanghao\\.trae-cn\\plugins\\trae-remote-official\\trae-design\\0.1.2\\skills\\solo-design\\shared-runtime\\deterministic-tooling\\validate-restore-contract.mjs"
+          },
+          "requiredForPageSubAgent": [
+            "applyHtmlHeadContract",
+            "recordDispatchCompletion"
+          ],
+          "pathInjection": "absolute",
+          "pathContract": "Do not use {SKILL_DIR} placeholders inside Page Sub-Agent packets; use toolPaths.* absolute paths.",
+          "commandTemplates": {
+            "recordDispatchCompletion": "node \"c:\\Users\\wanghao\\.trae-cn\\plugins\\trae-remote-official\\trae-design\\0.1.2\\skills\\solo-design\\shared-runtime\\deterministic-tooling\\record-dispatch-completion.mjs\" \"d:\\开发\\oneTotp\\Design\\oneTotp\" --node-id=\"page-lock\" --html-src=\"pages/lock.html\" --status=completed --changed-files=<comma-separated-project-relative-files> --trace-digest=<main-agent-runtime-trace-digest> --tool-ledger-json=<tool-ledger-json-or-file>"
+          }
+        },
+        "cssFilePath": "d:\\开发\\oneTotp\\Design\\oneTotp\\colors_and_type.css",
+        "htmlFilePath": "d:\\开发\\oneTotp\\Design\\oneTotp\\pages\\lock.html",
+        "brandPrefix": "yuanli",
+        "aestheticsMode": "library-bound",
+        "toolDisciplineBlockPresent": true,
+        "fillHtmlHeadCommand": "node \"c:\\Users\\wanghao\\.trae-cn\\plugins\\trae-remote-official\\trae-design\\0.1.2\\skills\\solo-design\\shared-runtime\\deterministic-tooling\\apply-html-head-contract.mjs\" \"d:\\开发\\oneTotp\\Design\\oneTotp\\colors_and_type.css\" \"d:\\开发\\oneTotp\\Design\\oneTotp\\pages\\lock.html\" --title=\"应用锁定\" --lang=\"zh-CN\" --prefix=\"yuanli\" --replace-head",
+        "headFillMode": "replace-head-after-body",
+        "viewportMode": "document-scroll",
+        "completionSchemaExpected": "full",
+        "restoreFields": null,
+        "restoreContractStatus": null,
+        "restoreCompactPacket": null,
+        "deterministicCommands": null,
+        "sourceAuthorityLock": null,
+        "preDispatchFileHashes": {
+          "oneTotp.design": "5e2b9b4e74faf41ed8ec3aa2983ad1fb09c6fee5e206bc78dd87bdac1b224757"
+        },
+        "contextPreflight": {
+          "workflowPath": "intent-workflows/intent-page-library-bound/INTENT_WORKFLOW.md",
+          "requiredContextFiles": [
+            "shared-runtime/runtime-boundaries/lane-runtime-contracts.md",
+            "shared-runtime/agent-dispatch-runtime/lane-dispatch-index.md",
+            "delivery-quality/page-rendering-quality-gate.md",
+            "delivery-quality/design-artifact-validation.md",
+            "delivery-quality/delivery-evidence-contract.md"
+          ],
+          "optionalContextFiles": [
+            "visual-experience/visual-experience-guidelines.md"
+          ],
+          "passed": true
+        },
+        "pageSliceOnly": true,
+        "requiredFieldsPresent": true,
+        "missingFields": [],
+        "fillHtmlHeadCommandValid": true,
+        "mobileNavigation": {
+          "required": false,
+          "appliesToThisPage": false,
+          "omitReason": "全屏解锁门页面，不展示底部全局标签导航",
+          "canonicalHtmlIncluded": false,
+          "missingFields": []
+        },
+        "persistedToSummary": true,
+        "taskQueryAudited": false,
+        "proofSource": "summary-only",
+        "largeWorkflowFilesInTaskQuery": null
+      }
+    ],
+    "validationRunDiscipline": {
+      "maxFullValidationRuns": 2,
+      "softWarningsTriggerRepair": false,
+      "blockingRepairMode": "targeted-once",
+      "forbiddenRepairTriggers": [
+        "soft-warning-only",
+        "provenance-warning-only",
+        "style-warning-only"
+      ]
+    },
+    "validationHistory": [],
+    "validationRepairLedger": [],
+    "validationSnapshot": {},
+    "artifactReadinessEvidence": {},
+    "lowValueCallWatchdog": {
+      "applies": true,
+      "noProgressSignals": [
+        "no_tool_call",
+        "no_artifact_diff",
+        "no_structured_decision"
+      ],
+      "noProgressNextAction": "enter_readiness_or_blocked_summary",
+      "recordedAt": "2026-10-13T00:00:00.000Z"
+    },
+    "sourceAuthorityLock": {
+      "visualAuthority": "design-library",
+      "contentSupplement": "none",
+      "browserObservationRole": "targeted-verification-only",
+      "mayOverrideVisualAuthority": false,
+      "lockedBeforeDispatch": true
+    },
+    "visualQualityCheckpoints": [
+      {
+        "checkpointId": "vq-anchor",
+        "dimension": "visual-anchor",
+        "expected": "窄窗口内验证码列表为唯一主内容轴，每个条目以大号验证码为主体",
+        "evidenceTarget": "pages/index.html#token-list"
+      },
+      {
+        "checkpointId": "vq-hierarchy",
+        "dimension": "information-hierarchy",
+        "expected": "服务名 > 账户名 > 验证码 > 倒计时 的纵向层级",
+        "evidenceTarget": "pages/index.html#content"
+      },
+      {
+        "checkpointId": "vq-structure",
+        "dimension": "composition-structure",
+        "expected": "顶部应用栏 + 单列滚动内容 + 底部四标签导航的移动骨架",
+        "evidenceTarget": "pages/index.html#layout"
+      },
+      {
+        "checkpointId": "vq-implementation",
+        "dimension": "implementation-strategy",
+        "expected": "源力组件类 + CSS 变量 + 内联 SVG；无第三方图标库",
+        "evidenceTarget": "pages/index.html#implementation"
+      }
+    ],
+    "sharedProjectShellContract": {
+      "shell": "mobile-window",
+      "window": {
+        "width": "400px",
+        "presentation": "small desktop window centered on brand stage",
+        "radius": "12px",
+        "shadow": "--shadow-4"
+      },
+      "appBar": {
+        "height": "52px",
+        "background": "--color-bg-1",
+        "content": "左侧标题 + 右侧操作（添加 / 锁定 / 更多）"
+      },
+      "content": {
+        "padding": "12px 14px 20px"
+      },
+      "primaryColorSystem": "--color-primary / --primary-6",
+      "radiusScale": "4/8/12px",
+      "mobileNavigation": {
+        "applies": true,
+        "heightPx": 56,
+        "items": [
+          {
+            "key": "codes",
+            "label": "验证码"
+          },
+          {
+            "key": "favorites",
+            "label": "收藏"
+          },
+          {
+            "key": "recent",
+            "label": "最近"
+          },
+          {
+            "key": "settings",
+            "label": "设置"
+          }
+        ],
+        "structure": {
+          "navClass": "w-full h-14 shrink-0 border-t border-[var(--color-border-light)] bg-[var(--color-bg-1)]",
+          "innerClass": "grid grid-cols-4 h-full",
+          "itemTag": "button",
+          "itemClass": "flex flex-col items-center justify-center gap-1 h-14 shrink-0",
+          "iconClass": "w-5 h-5",
+          "labelClass": "text-[11px] whitespace-nowrap",
+          "canonicalHtmlByKey": {
+            "codes": "<button class=\"flex flex-col items-center justify-center gap-1 h-14 shrink-0\" data-nav-key=\"codes\" data-dom-id=\"tab-codes\" aria-label=\"验证码\" style=\"color:var(--color-primary)\"><span class=\"w-5 h-5 flex items-center justify-center\"><svg viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\"><rect x=\"2\" y=\"2\" width=\"5\" height=\"5\" rx=\"1\"/><rect x=\"9\" y=\"2\" width=\"5\" height=\"5\" rx=\"1\"/><rect x=\"2\" y=\"9\" width=\"5\" height=\"5\" rx=\"1\"/><rect x=\"9\" y=\"9\" width=\"5\" height=\"5\" rx=\"1\"/></svg></span><span class=\"text-[11px] whitespace-nowrap\">验证码</span></button>",
+            "favorites": "<button class=\"flex flex-col items-center justify-center gap-1 h-14 shrink-0\" data-nav-key=\"favorites\" data-dom-id=\"tab-favorites\" aria-label=\"收藏\"><span class=\"w-5 h-5 flex items-center justify-center\"><svg viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\"><path d=\"M8 13.5S2.5 10.4 2.5 6.6A2.6 2.6 0 018 5.1a2.6 2.6 0 015.5 1.5c0 3.8-5.5 6.9-5.5 6.9z\" stroke-linejoin=\"round\"/></svg></span><span class=\"text-[11px] whitespace-nowrap\">收藏</span></button>",
+            "recent": "<button class=\"flex flex-col items-center justify-center gap-1 h-14 shrink-0\" data-nav-key=\"recent\" data-dom-id=\"tab-recent\" aria-label=\"最近\"><span class=\"w-5 h-5 flex items-center justify-center\"><svg viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\"><circle cx=\"8\" cy=\"8\" r=\"6\"/><path d=\"M8 4.5V8l2.5 1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg></span><span class=\"text-[11px] whitespace-nowrap\">最近</span></button>",
+            "settings": "<button class=\"flex flex-col items-center justify-center gap-1 h-14 shrink-0\" data-nav-key=\"settings\" data-dom-id=\"tab-settings\" aria-label=\"设置\" style=\"color:var(--color-primary)\"><span class=\"w-5 h-5 flex items-center justify-center\"><svg viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\"><circle cx=\"8\" cy=\"8\" r=\"2.2\"/><path d=\"M8 1.8v1.6M8 12.6v1.6M2.3 8h1.6M12.1 8h1.6M3.9 3.9l1.1 1.1M11 11l1.1 1.1M12.1 3.9L11 5M5 11l-1.1 1.1\" stroke-linecap=\"round\"/></svg></span><span class=\"text-[11px] whitespace-nowrap\">设置</span></button>"
+          }
+        }
+      },
+      "continuityAnchors": [
+        "所有页面共用同一底部四标签导航与其顺序",
+        "顶部应用栏高度、边框与主操作位置一致",
+        "卡片/面板圆角与边框语言一致",
+        "验证码等宽字体展示语言一致"
+      ]
+    },
+    "expectedDispatches": [
+      {
+        "nodeId": "page-index",
+        "pageId": "page-index",
+        "targetPageId": "page-index",
+        "htmlSrc": "pages/index.html",
+        "packetType": "LibraryBoundPagePacket",
+        "status": "completed",
+        "changedFiles": [
+          "pages/index.html"
+        ],
+        "toolCallLedger": {
+          "source": "main-agent-runtime-trace",
+          "traceDigest": "main-agent-run-oneTotp-index-v2",
+          "todoWriteCalls": 0,
+          "previewCalls": 0,
+          "validationScriptCalls": 0,
+          "helperScriptWrites": 0
+        },
+        "recordedAt": "2026-10-14T01:28:49.916Z",
+        "source": "record-dispatch-completion.mjs"
+      },
+      {
+        "nodeId": "page-account-detail",
+        "pageId": "page-account-detail",
+        "targetPageId": "page-account-detail",
+        "htmlSrc": "pages/account-detail.html",
+        "packetType": "LibraryBoundPagePacket",
+        "status": "completed",
+        "changedFiles": [
+          "pages/account-detail.html"
+        ],
+        "toolCallLedger": {
+          "source": "main-agent-runtime-trace",
+          "traceDigest": "main-agent-run-oneTotp-account-detail",
+          "todoWriteCalls": 0,
+          "previewCalls": 0,
+          "validationScriptCalls": 0,
+          "helperScriptWrites": 0
+        },
+        "recordedAt": "2026-10-13T11:35:15.437Z",
+        "source": "record-dispatch-completion.mjs"
+      },
+      {
+        "nodeId": "page-add-account",
+        "pageId": "page-add-account",
+        "targetPageId": "page-add-account",
+        "htmlSrc": "pages/add-account.html",
+        "packetType": "LibraryBoundPagePacket",
+        "status": "completed",
+        "changedFiles": [
+          "pages/add-account.html"
+        ],
+        "toolCallLedger": {
+          "source": "main-agent-runtime-trace",
+          "traceDigest": "main-agent-run-oneTotp-add-account",
+          "todoWriteCalls": 0,
+          "previewCalls": 0,
+          "validationScriptCalls": 0,
+          "helperScriptWrites": 0
+        },
+        "recordedAt": "2026-10-13T11:35:15.570Z",
+        "source": "record-dispatch-completion.mjs"
+      },
+      {
+        "nodeId": "page-settings",
+        "pageId": "page-settings",
+        "targetPageId": "page-settings",
+        "htmlSrc": "pages/settings.html",
+        "packetType": "LibraryBoundPagePacket",
+        "status": "completed",
+        "changedFiles": [
+          "pages/settings.html"
+        ],
+        "toolCallLedger": {
+          "source": "main-agent-runtime-trace",
+          "traceDigest": "main-agent-run-oneTotp-settings",
+          "todoWriteCalls": 0,
+          "previewCalls": 0,
+          "validationScriptCalls": 0,
+          "helperScriptWrites": 0
+        },
+        "recordedAt": "2026-10-13T11:35:15.700Z",
+        "source": "record-dispatch-completion.mjs"
+      },
+      {
+        "nodeId": "page-security",
+        "pageId": "page-security",
+        "targetPageId": "page-security",
+        "htmlSrc": "pages/security.html",
+        "packetType": "LibraryBoundPagePacket",
+        "status": "completed",
+        "changedFiles": [
+          "pages/security.html"
+        ],
+        "toolCallLedger": {
+          "source": "main-agent-runtime-trace",
+          "traceDigest": "main-agent-run-oneTotp-security",
+          "todoWriteCalls": 0,
+          "previewCalls": 0,
+          "validationScriptCalls": 0,
+          "helperScriptWrites": 0
+        },
+        "recordedAt": "2026-10-13T11:35:15.832Z",
+        "source": "record-dispatch-completion.mjs"
+      },
+      {
+        "nodeId": "page-import-export",
+        "pageId": "page-import-export",
+        "targetPageId": "page-import-export",
+        "htmlSrc": "pages/import-export.html",
+        "packetType": "LibraryBoundPagePacket",
+        "status": "completed",
+        "changedFiles": [
+          "pages/import-export.html"
+        ],
+        "toolCallLedger": {
+          "source": "main-agent-runtime-trace",
+          "traceDigest": "main-agent-run-oneTotp-import-export",
+          "todoWriteCalls": 0,
+          "previewCalls": 0,
+          "validationScriptCalls": 0,
+          "helperScriptWrites": 0
+        },
+        "recordedAt": "2026-10-13T11:35:15.969Z",
+        "source": "record-dispatch-completion.mjs"
+      },
+      {
+        "nodeId": "page-lock",
+        "pageId": "page-lock",
+        "targetPageId": "page-lock",
+        "htmlSrc": "pages/lock.html",
+        "packetType": "LibraryBoundPagePacket",
+        "status": "completed",
+        "changedFiles": [
+          "pages/lock.html"
+        ],
+        "toolCallLedger": {
+          "source": "main-agent-runtime-trace",
+          "traceDigest": "main-agent-run-oneTotp-lock",
+          "todoWriteCalls": 0,
+          "previewCalls": 0,
+          "validationScriptCalls": 0,
+          "helperScriptWrites": 0
+        },
+        "recordedAt": "2026-10-13T11:35:16.110Z",
+        "source": "record-dispatch-completion.mjs"
+      }
+    ],
+    "mainAgentPostDispatchMutations": [
+      {
+        "path": "oneTotp.design",
+        "reason": "main agent registered page interactions and node wiring after page generation",
+        "owner": "main-agent",
+        "recordedAt": "2026-10-13T11:35:15.306Z",
+        "source": "record-dispatch-completion.mjs"
+      },
+      {
+        "path": "pages/index.html",
+        "reason": "main agent unified the home verification code cards to the account detail card style",
+        "owner": "main-agent",
+        "recordedAt": "2026-10-14T01:28:49.916Z",
+        "source": "record-dispatch-completion.mjs"
+      }
+    ]
+  },
+  "pages": [
+    {
+      "nodeId": "page-index",
+      "htmlSrc": "pages/index.html",
+      "title": "验证码",
+      "deviceType": "mobile",
+      "viewportMode": "document-scroll",
+      "pageType": "task-driven",
+      "businessScenario": "一次性验证码列表",
+      "mobileNavigationActiveKey": "codes",
+      "componentPlan": [
+        "button",
+        "input",
+        "segmented-picker",
+        "status-tag",
+        "badge",
+        "progress"
+      ],
+      "supplementaryReads": [],
+      "allowedWritePaths": [
+        "pages/index.html"
+      ]
+    },
+    {
+      "nodeId": "page-account-detail",
+      "htmlSrc": "pages/account-detail.html",
+      "title": "账户详情",
+      "deviceType": "mobile",
+      "viewportMode": "document-scroll",
+      "pageType": "task-driven",
+      "businessScenario": "单个账户验证码详情",
+      "mobileNavigationActiveKey": "codes",
+      "componentPlan": [
+        "page-header",
+        "descriptions",
+        "button",
+        "progress",
+        "popconfirm",
+        "status-tag"
+      ],
+      "supplementaryReads": [],
+      "allowedWritePaths": [
+        "pages/account-detail.html"
+      ]
+    },
+    {
+      "nodeId": "page-add-account",
+      "htmlSrc": "pages/add-account.html",
+      "title": "添加账户",
+      "deviceType": "mobile",
+      "viewportMode": "document-scroll",
+      "pageType": "task-driven",
+      "businessScenario": "扫码或手动录入新账户",
+      "mobileNavigationActiveKey": "codes",
+      "componentPlan": [
+        "page-header",
+        "tabs",
+        "input",
+        "select",
+        "checkbox",
+        "form",
+        "button",
+        "steps"
+      ],
+      "supplementaryReads": [],
+      "allowedWritePaths": [
+        "pages/add-account.html"
+      ]
+    },
+    {
+      "nodeId": "page-settings",
+      "htmlSrc": "pages/settings.html",
+      "title": "设置",
+      "deviceType": "mobile",
+      "viewportMode": "document-scroll",
+      "pageType": "task-driven",
+      "businessScenario": "应用通用与数据设置",
+      "mobileNavigationActiveKey": "settings",
+      "componentPlan": [
+        "page-header",
+        "switch",
+        "avatar",
+        "button",
+        "status-tag"
+      ],
+      "supplementaryReads": [],
+      "allowedWritePaths": [
+        "pages/settings.html"
+      ]
+    },
+    {
+      "nodeId": "page-security",
+      "htmlSrc": "pages/security.html",
+      "title": "安全与锁定",
+      "deviceType": "mobile",
+      "viewportMode": "document-scroll",
+      "pageType": "task-driven",
+      "businessScenario": "锁定密码与自动锁定策略",
+      "mobileNavigationActiveKey": "settings",
+      "componentPlan": [
+        "page-header",
+        "switch",
+        "input",
+        "button",
+        "form",
+        "alert"
+      ],
+      "supplementaryReads": [],
+      "allowedWritePaths": [
+        "pages/security.html"
+      ]
+    },
+    {
+      "nodeId": "page-import-export",
+      "htmlSrc": "pages/import-export.html",
+      "title": "导入导出",
+      "deviceType": "mobile",
+      "viewportMode": "document-scroll",
+      "pageType": "task-driven",
+      "businessScenario": "加密备份的导入与导出",
+      "mobileNavigationActiveKey": "settings",
+      "componentPlan": [
+        "page-header",
+        "tabs",
+        "alert",
+        "button",
+        "input",
+        "checkbox",
+        "progress"
+      ],
+      "supplementaryReads": [],
+      "allowedWritePaths": [
+        "pages/import-export.html"
+      ]
+    },
+    {
+      "nodeId": "page-lock",
+      "htmlSrc": "pages/lock.html",
+      "title": "应用锁定",
+      "deviceType": "mobile",
+      "viewportMode": "document-scroll",
+      "pageType": "task-driven",
+      "businessScenario": "应用解锁验证",
+      "mobileNavigationApplies": false,
+      "mobileNavigationOmitReason": "全屏解锁门页面，不展示底部全局标签导航",
+      "componentPlan": [
+        "input",
+        "button",
+        "alert",
+        "avatar"
+      ],
+      "supplementaryReads": [],
+      "allowedWritePaths": [
+        "pages/lock.html"
+      ]
+    }
+  ]
+}

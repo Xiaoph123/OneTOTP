@@ -4,6 +4,7 @@ import { api, type BackupView } from "../lib/api";
 import { TabBar, type TabKey } from "../components/TabBar";
 import { Button, IconButton } from "../components/Button";
 import { Switch } from "../components/Controls";
+import { useToast } from "../components/Toast";
 import { AlertTriangle, ChevronLeft, Download, Info, Upload } from "../components/icons";
 import { copyText, formatBytes } from "../lib/utils";
 
@@ -11,6 +12,7 @@ type Mode = "export" | "import";
 
 export function ImportExportPage() {
   const { navigate, refreshAccounts, settings } = useApp();
+  const toast = useToast();
   const [mode, setMode] = useState<Mode>("export");
   const [exportPassword, setExportPassword] = useState("");
   const [importPassword, setImportPassword] = useState("");
@@ -37,9 +39,11 @@ export function ImportExportPage() {
       await copyText(content);
       setExportPassword("");
       setMessage({ type: "ok", text: "加密备份已复制到剪贴板，请妥善保存" });
+      toast.success("备份已生成并复制到剪贴板");
       loadBackups();
     } catch (e) {
       setMessage({ type: "err", text: String(e) });
+      toast.error(String(e));
     } finally {
       setBusy(false);
     }
@@ -78,9 +82,11 @@ export function ImportExportPage() {
       if (result.appliedSettings) parts.push("已覆盖应用配置");
       parts.push(`新增 ${result.addedAccounts} 个账户（备份共含 ${result.totalAccountsInBackup} 个）`);
       setMessage({ type: "ok", text: `导入完成：${parts.join("，")}` });
+      toast.success(`导入完成：${parts.join("，")}`);
       loadBackups();
     } catch (e) {
       setMessage({ type: "err", text: String(e) });
+      toast.error(String(e));
     } finally {
       setBusy(false);
     }
@@ -177,7 +183,7 @@ export function ImportExportPage() {
                 rows={5}
                 value={importContent}
                 onChange={(e) => setImportContent(e.target.value)}
-                placeholder="选择 JSON 文件，或直接粘贴由 oneTotp 导出的加密备份 JSON"
+                placeholder="选择 JSON 文件，或直接粘贴由 OneTotp 导出的加密备份 JSON"
               />
             </div>
             <Button

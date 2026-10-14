@@ -17,7 +17,7 @@ export function LockPage() {
         <div className="lock-card" style={{ textAlign: "center" }}>
           <ShieldCheck style={{ width: 40, height: 40, color: "var(--color-primary)" }} />
           <div style={{ fontSize: "var(--font-size-h3)", fontWeight: 500, marginTop: 12 }}>
-            正在打开 oneTotp
+            正在打开 OneTotp
           </div>
           <button
             onClick={boot}
@@ -64,7 +64,7 @@ export function LockPage() {
         <div className="lock-avatar">王</div>
         <div style={{ fontSize: "var(--font-size-h3)", fontWeight: 500 }}>应用已锁定</div>
         <div style={{ fontSize: "var(--font-size-lead)", color: "var(--color-text-3)", marginTop: 4 }}>
-          请输入密码以解锁 oneTotp
+          请输入密码以解锁 OneTotp
         </div>
 
         <form

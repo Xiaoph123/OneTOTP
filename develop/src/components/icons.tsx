@@ -228,6 +228,12 @@ export const Sun = (p: IconProps) => (
   </svg>
 );
 
+export const Close = (p: IconProps) => (
+  <svg {...base(p)} strokeWidth={1.8}>
+    <path d="M4.5 4.5l9 9M13.5 4.5l-9 9" />
+  </svg>
+);
+
 export const Moon = (p: IconProps) => (
   <svg {...base(p)} strokeWidth={1.5}>
     <path d="M14.5 10.6A6 6 0 0 1 7.4 3.5a6 6 0 1 0 7.1 7.1z" />

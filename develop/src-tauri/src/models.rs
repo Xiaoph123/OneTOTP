@@ -75,9 +75,12 @@ pub struct AppSettings {
     /// 点击即复制
     #[serde(default = "default_true")]
     pub click_to_copy: bool,
-    /// 隐藏验证码直到悬停
+    /// 验证码可见性：never（不隐藏）| always（始终隐藏）| hover（悬停显示）
+    #[serde(default = "default_code_visibility")]
+    pub code_visibility: String,
+    /// 截图时隐藏窗口内容（防截屏）
     #[serde(default)]
-    pub hide_code_until_hover: bool,
+    pub hide_on_screenshot: bool,
     /// 自动备份
     #[serde(default = "default_true")]
     pub auto_backup: bool,
@@ -90,8 +93,32 @@ pub struct AppSettings {
     /// 主题：light | dark | system
     #[serde(default = "default_theme")]
     pub theme: String,
+    /// 卡片密度：compact（紧凑）| standard（标准）
+    #[serde(default = "default_card_density")]
+    pub card_density: String,
+    /// 卡片细节程度：minimal（精简）| standard（标准）| detailed（复杂）
+    #[serde(default = "default_card_detail")]
+    pub card_detail: String,
+    /// 关闭按钮行为：quit（直接退出）| tray（最小化到托盘）
+    #[serde(default = "default_close_behavior")]
+    pub close_behavior: String,
+    /// 全局快捷键（唤起/隐藏），空字符串表示未设置
+    #[serde(default)]
+    pub shortcut_toggle: String,
 }
 
+fn default_card_density() -> String {
+    "standard".to_string()
+}
+fn default_card_detail() -> String {
+    "standard".to_string()
+}
+fn default_close_behavior() -> String {
+    "quit".to_string()
+}
+fn default_code_visibility() -> String {
+    "never".to_string()
+}
 fn default_theme() -> String {
     "light".to_string()
 }
@@ -116,11 +143,16 @@ impl Default for AppSettings {
             code_grouping: true,
             expiry_highlight: true,
             click_to_copy: true,
-            hide_code_until_hover: false,
+            code_visibility: "never".to_string(),
+            hide_on_screenshot: false,
             auto_backup: true,
             backup_keep: 10,
             password_hint: String::new(),
             theme: "light".to_string(),
+            card_density: "standard".to_string(),
+            card_detail: "standard".to_string(),
+            close_behavior: "quit".to_string(),
+            shortcut_toggle: String::new(),
         }
     }
 }

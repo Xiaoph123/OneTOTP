@@ -1,5 +1,7 @@
 import { AppProvider, useApp } from "./state/AppContext";
 import { useAutoLock } from "./state/useAutoLock";
+import { useScreenshotProtection } from "./state/useScreenshotProtection";
+import { ToastProvider } from "./components/Toast";
 import { TitleBar } from "./components/TitleBar";
 import { CodesPage } from "./pages/CodesPage";
 import { DetailPage } from "./pages/DetailPage";
@@ -11,8 +13,9 @@ import { ImportExportPage } from "./pages/ImportExportPage";
 import { LockPage } from "./pages/LockPage";
 
 function Router() {
-  const { phase, route, error, setError } = useApp();
+  const { phase, route, error, setError, settings } = useApp();
   useAutoLock();
+  useScreenshotProtection(settings?.hideOnScreenshot ?? false);
 
   if (phase === "booting") {
     return (
@@ -20,7 +23,7 @@ function Router() {
         <TitleBar />
         <div className="boot-screen">
           <div className="boot-spinner" />
-          <span style={{ fontSize: "var(--font-size-lead)" }}>正在启动 oneTotp…</span>
+          <span style={{ fontSize: "var(--font-size-lead)" }}>正在启动 OneTotp…</span>
         </div>
       </div>
     );
@@ -66,7 +69,9 @@ function Router() {
 export default function App() {
   return (
     <AppProvider>
-      <Router />
+      <ToastProvider>
+        <Router />
+      </ToastProvider>
     </AppProvider>
   );
 }

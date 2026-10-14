@@ -67,6 +67,12 @@ interface RawCodeResult {
   progress: number;
 }
 
+export type ThemeMode = "light" | "dark" | "system";
+export type CodeVisibility = "never" | "always" | "hover";
+export type CardDensity = "compact" | "standard";
+export type CardDetail = "minimal" | "standard" | "detailed";
+export type CloseBehavior = "quit" | "tray";
+
 export interface AppSettings {
   lockEnabled: boolean;
   lockOnBlur: boolean;
@@ -75,14 +81,17 @@ export interface AppSettings {
   codeGrouping: boolean;
   expiryHighlight: boolean;
   clickToCopy: boolean;
-  hideCodeUntilHover: boolean;
+  codeVisibility: CodeVisibility;
+  hideOnScreenshot: boolean;
   autoBackup: boolean;
   backupKeep: number;
   passwordHint: string;
   theme: ThemeMode;
+  cardDensity: CardDensity;
+  cardDetail: CardDetail;
+  closeBehavior: CloseBehavior;
+  shortcutToggle: string;
 }
-
-export type ThemeMode = "light" | "dark" | "system";
 
 interface RawSettings {
   lock_enabled: boolean;
@@ -92,11 +101,16 @@ interface RawSettings {
   code_grouping: boolean;
   expiry_highlight: boolean;
   click_to_copy: boolean;
-  hide_code_until_hover: boolean;
+  code_visibility: string;
+  hide_on_screenshot: boolean;
   auto_backup: boolean;
   backup_keep: number;
   password_hint: string;
   theme: string;
+  card_density: string;
+  card_detail: string;
+  close_behavior: string;
+  shortcut_toggle: string;
 }
 
 function mapSettings(raw: RawSettings): AppSettings {
@@ -108,11 +122,16 @@ function mapSettings(raw: RawSettings): AppSettings {
     codeGrouping: raw.code_grouping,
     expiryHighlight: raw.expiry_highlight,
     clickToCopy: raw.click_to_copy,
-    hideCodeUntilHover: raw.hide_code_until_hover,
+    codeVisibility: (raw.code_visibility as CodeVisibility) || "never",
+    hideOnScreenshot: raw.hide_on_screenshot,
     autoBackup: raw.auto_backup,
     backupKeep: raw.backup_keep,
     passwordHint: raw.password_hint,
     theme: (raw.theme as ThemeMode) || "light",
+    cardDensity: (raw.card_density as CardDensity) || "standard",
+    cardDetail: (raw.card_detail as CardDetail) || "standard",
+    closeBehavior: (raw.close_behavior as CloseBehavior) || "quit",
+    shortcutToggle: raw.shortcut_toggle || "",
   };
 }
 
@@ -125,11 +144,16 @@ function toRawSettings(s: AppSettings): RawSettings {
     code_grouping: s.codeGrouping,
     expiry_highlight: s.expiryHighlight,
     click_to_copy: s.clickToCopy,
-    hide_code_until_hover: s.hideCodeUntilHover,
+    code_visibility: s.codeVisibility,
+    hide_on_screenshot: s.hideOnScreenshot,
     auto_backup: s.autoBackup,
     backup_keep: s.backupKeep,
     password_hint: s.passwordHint,
     theme: s.theme,
+    card_density: s.cardDensity,
+    card_detail: s.cardDetail,
+    close_behavior: s.closeBehavior,
+    shortcut_toggle: s.shortcutToggle,
   };
 }
 

@@ -10,6 +10,13 @@
     "core:window:allow-close",
     "core:window:allow-hide",
     "core:window:allow-show",
+    "core:window:allow-set-content-protected",
+    "autostart:allow-enable",
+    "autostart:allow-disable",
+    "autostart:allow-is-enabled",
+    "global-shortcut:allow-register",
+    "global-shortcut:allow-unregister",
+    "global-shortcut:allow-is-registered",
     "opener:default",
     "clipboard-manager:allow-write-text",
     "clipboard-manager:allow-read-text"

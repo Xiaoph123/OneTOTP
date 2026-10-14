@@ -100,9 +100,14 @@ export function DetailPage({ accountId }: { accountId: string }) {
                   {account.account || "未设置账户标识"}
                 </div>
               </div>
-              <IconButton label="编辑" onClick={() => navigate({ name: "edit", accountId })}>
-                <Edit />
-              </IconButton>
+              <Button
+                variant="secondary"
+                size="sm"
+                icon={<Edit style={{ width: 13, height: 13 }} />}
+                onClick={() => navigate({ name: "edit", accountId })}
+              >
+                编辑
+              </Button>
             </div>
 
             <div className="panel" style={{ padding: 16 }}>

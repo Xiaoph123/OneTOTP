@@ -1,6 +1,7 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { api, type AccountView, type AppSettings, type CodeResult } from "../lib/api";
 import { applyTheme } from "../lib/theme";
+import { initToggleShortcut } from "../lib/shortcut";
 
 export type Route =
   | { name: "codes" }
@@ -161,6 +162,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     boot();
   }, [boot]);
+
+  // 应用已保存的全局快捷键（仅首次设置加载后注册一次）
+  const shortcutApplied = useRef(false);
+  useEffect(() => {
+    if (!settings || shortcutApplied.current) return;
+    shortcutApplied.current = true;
+    initToggleShortcut(settings.shortcutToggle).catch(() => {});
+  }, [settings]);
 
   // 主题应用：设置变化时切换，system 模式跟随系统
   useEffect(() => {

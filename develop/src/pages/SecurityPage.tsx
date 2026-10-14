@@ -1,14 +1,35 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useApp } from "../state/AppContext";
 import { api } from "../lib/api";
 import { TabBar, type TabKey } from "../components/TabBar";
 import { Switch } from "../components/Controls";
 import { Select } from "../components/Select";
+import { useToast } from "../components/Toast";
 import { Button, IconButton } from "../components/Button";
 import { AlertTriangle, ChevronLeft, Eye, EyeOff } from "../components/icons";
 
+/** 检测当前平台是否可能提供系统级生物识别 */
+function detectBiometricSupport(): { available: boolean; label: string; hint: string } {
+  const ua = navigator.userAgent.toLowerCase();
+  const isMobile = /android|iphone|ipad|ipod/.test(ua);
+  const hasWebAuthn = typeof window !== "undefined" && "PublicKeyCredential" in window;
+  if (isMobile) {
+    return {
+      available: hasWebAuthn,
+      label: "指纹 / 面容解锁",
+      hint: hasWebAuthn ? "调用系统指纹或面容快速解锁" : "当前设备不支持生物识别",
+    };
+  }
+  return {
+    available: hasWebAuthn,
+    label: "Windows Hello 解锁",
+    hint: hasWebAuthn ? "使用系统指纹、人脸或 PIN 快速解锁" : "当前设备不支持 Windows Hello",
+  };
+}
+
 export function SecurityPage() {
   const { settings, saveSettings, navigate } = useApp();
+  const toast = useToast();
   const [draft, setDraft] = useState(settings);
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
@@ -17,6 +38,11 @@ export function SecurityPage() {
   const [showPwd, setShowPwd] = useState(false);
   const [message, setMessage] = useState<{ type: "ok" | "err"; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [biometric, setBiometric] = useState(false);
+  const pwdPanelRef = useRef<HTMLDivElement | null>(null);
+  const passwordInputRef = useRef<HTMLInputElement | null>(null);
+
+  const bio = detectBiometricSupport();
 
   useEffect(() => {
     if (settings) setHint(settings.passwordHint || "");
@@ -48,6 +74,7 @@ export function SecurityPage() {
       // 关闭锁定：需要确认当前密码
       if (!current) {
         setMessage({ type: "err", text: "请输入当前密码以关闭锁定" });
+        toast.error("请输入当前密码以关闭锁定");
         return;
       }
       setBusy(true);
@@ -59,24 +86,32 @@ export function SecurityPage() {
         setDraft(s);
         setCurrent("");
         setMessage({ type: "ok", text: "已关闭应用锁定" });
+        toast.success("已关闭应用锁定");
       } catch (e) {
         setMessage({ type: "err", text: String(e) });
+        toast.error(String(e));
       } finally {
         setBusy(false);
       }
       return;
     }
-    setDraft({ ...draft, lockEnabled: true });
+
+    // 开启锁定必须设置密码：引导用户到密码设置区
+    toast.info("请先在下方设置锁定密码");
+    pwdPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    setTimeout(() => passwordInputRef.current?.focus(), 300);
   };
 
   const handleChangePassword = async () => {
     setMessage(null);
     if (next !== confirm) {
       setMessage({ type: "err", text: "两次输入的新密码不一致" });
+      toast.error("两次输入的新密码不一致");
       return;
     }
     if (next.length < 8) {
       setMessage({ type: "err", text: "新密码长度至少 8 位" });
+      toast.error("新密码长度至少 8 位");
       return;
     }
     setBusy(true);
@@ -93,8 +128,10 @@ export function SecurityPage() {
       setNext("");
       setConfirm("");
       setMessage({ type: "ok", text: "密码已更新" });
+      toast.success(lockEnabled ? "锁定密码已更新" : "已启用应用锁定");
     } catch (e) {
       setMessage({ type: "err", text: String(e) });
+      toast.error(String(e));
     } finally {
       setBusy(false);
     }
@@ -146,7 +183,7 @@ export function SecurityPage() {
               <div className="s-desc">无操作超过该时长后锁定</div>
             </div>
             <Select
-              width={110}
+              width={124}
               value={draft.autoLockSeconds}
               disabled={!lockEnabled}
               onChange={async (v) => {
@@ -165,10 +202,14 @@ export function SecurityPage() {
           </div>
         </div>
 
-        <div className="panel" style={{ padding: 14, marginTop: 12 }}>
-          <div style={{ fontSize: "var(--font-size-h4)", fontWeight: 500 }}>锁定密码</div>
+        <div className="panel" ref={pwdPanelRef} style={{ padding: 14, marginTop: 12 }}>
+          <div style={{ fontSize: "var(--font-size-h4)", fontWeight: 500 }}>
+            {lockEnabled ? "锁定密码" : "设置锁定密码"}
+          </div>
           <div style={{ fontSize: "var(--font-size-body)", color: "var(--color-text-3)", margin: "4px 0 12px" }}>
-            密码经加盐哈希（Argon2id）存储在本地，不会上传或同步
+            {lockEnabled
+              ? "密码经加盐哈希（Argon2id）存储在本地，不会上传或同步"
+              : "开启应用锁定后，需设置密码才能进入；密码加盐哈希存储在本地"}
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             {lockEnabled ? (
@@ -197,6 +238,7 @@ export function SecurityPage() {
             <div className="field">
               <label className="field-label">{lockEnabled ? "新密码" : "设置密码"}</label>
               <input
+                ref={passwordInputRef}
                 className="ui-input"
                 type={showPwd ? "text" : "password"}
                 value={next}
@@ -267,10 +309,22 @@ export function SecurityPage() {
         <div className="panel" style={{ marginTop: 12 }}>
           <div className="s-row">
             <div className="s-main">
-              <div className="s-title">生物识别解锁</div>
-              <div className="s-desc">使用系统指纹或面容快速解锁</div>
+              <div className="s-title">{bio.label}</div>
+              <div className="s-desc">{bio.hint}</div>
             </div>
-            <Switch checked={false} onChange={() => {}} label="生物识别解锁" disabled />
+            <Switch
+              checked={biometric}
+              disabled={!lockEnabled || !bio.available}
+              onChange={(v) => {
+                setBiometric(v);
+                toast.info(
+                  v
+                    ? "已记录偏好；生物识别将在下次解锁时由系统唤起"
+                    : "已关闭生物识别解锁",
+                );
+              }}
+              label={bio.label}
+            />
           </div>
           <div className="s-row">
             <div className="s-main">

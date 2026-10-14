@@ -68,7 +68,11 @@ export function CodesPage() {
               }}
             />
           </div>
-          <IconButton label="添加账户" onClick={() => navigate({ name: "add" })}>
+          <IconButton
+            label="添加账户"
+            className="icon-btn-solid"
+            onClick={() => navigate({ name: "add" })}
+          >
             <Plus />
           </IconButton>
         </div>
@@ -133,7 +137,9 @@ export function CodesPage() {
                 grouping={settings?.codeGrouping ?? true}
                 expiryHighlight={settings?.expiryHighlight ?? true}
                 clickToCopy={settings?.clickToCopy ?? true}
-                hideUntilHover={settings?.hideCodeUntilHover ?? false}
+                codeVisibility={settings?.codeVisibility ?? "never"}
+                density={settings?.cardDensity ?? "standard"}
+                detail={settings?.cardDetail ?? "standard"}
                 autoHideAfterCopy={settings?.autoHideAfterCopy ?? false}
                 onOpen={() => navigate({ name: "detail", accountId: account.id })}
               />

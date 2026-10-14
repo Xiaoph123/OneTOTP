@@ -96,10 +96,16 @@ export function Button({
 export function IconButton({
   children,
   label,
+  className,
   ...rest
 }: ButtonHTMLAttributes<HTMLButtonElement> & { label: string }) {
   return (
-    <button className="icon-btn" aria-label={label} title={label} {...rest}>
+    <button
+      className={`icon-btn${className ? ` ${className}` : ""}`}
+      aria-label={label}
+      title={label}
+      {...rest}
+    >
       {children}
     </button>
   );

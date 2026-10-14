@@ -13,6 +13,8 @@ pub struct AppState {
     pub key: Mutex<Option<[u8; 32]>>,
     /// 已解锁内存中的保险库载荷缓存
     pub payload: Mutex<Option<VaultPayload>>,
+    /// 关闭按钮行为缓存（quit | tray），供窗口事件同步读取
+    pub close_behavior: Mutex<String>,
 }
 
 impl AppState {
@@ -21,6 +23,22 @@ impl AppState {
             app_dir,
             key: Mutex::new(None),
             payload: Mutex::new(None),
+            close_behavior: Mutex::new("quit".to_string()),
+        }
+    }
+
+    /// 读取当前关闭行为（供窗口事件使用）
+    pub fn close_behavior(&self) -> String {
+        self.close_behavior
+            .lock()
+            .map(|v| v.clone())
+            .unwrap_or_else(|_| "quit".to_string())
+    }
+
+    /// 同步关闭行为缓存
+    fn sync_close_behavior(&self, payload: &VaultPayload) {
+        if let Ok(mut guard) = self.close_behavior.lock() {
+            *guard = payload.settings.close_behavior.clone();
         }
     }
 
@@ -116,6 +134,7 @@ pub fn initialize_vault(state: State<AppState>) -> Result<(), String> {
     let payload = crypto::decrypt_payload(&file, &key)?;
 
     *state.key.lock().map_err(|_| "状态锁异常".to_string())? = Some(key);
+    state.sync_close_behavior(&payload);
     *state.payload.lock().map_err(|_| "状态锁异常".to_string())? = Some(payload);
     let _ = real_salt;
     Ok(())
@@ -136,6 +155,7 @@ pub fn unlock(state: State<AppState>, password: String) -> Result<(), String> {
     let payload = crypto::decrypt_payload(&file, &key)?;
 
     *state.key.lock().map_err(|_| "状态锁异常".to_string())? = Some(key);
+    state.sync_close_behavior(&payload);
     *state.payload.lock().map_err(|_| "状态锁异常".to_string())? = Some(payload);
     Ok(())
 }
@@ -439,10 +459,16 @@ pub fn update_settings(state: State<AppState>, settings: AppSettings) -> Result<
         Ok(())
     })?;
     state.persist()?;
+    // 同步关闭行为缓存，供窗口事件即时生效
+    if let Ok(guard) = state.payload.lock() {
+        if let Some(p) = guard.as_ref() {
+            state.sync_close_behavior(p);
+        }
+    }
     Ok(())
 }
 
-/// 导出为加密备份字符串（oneTotp 格式）
+/// 导出为加密备份字符串（OneTotp 格式）
 /// `include_accounts` / `include_settings` 控制导出内容范围
 #[tauri::command]
 pub fn export_vault(

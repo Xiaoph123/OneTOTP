@@ -4,6 +4,7 @@ import { api, type AccountView } from "../lib/api";
 import { decodeQrFromImage } from "../lib/qr";
 import { Button, IconButton } from "../components/Button";
 import { Select } from "../components/Select";
+import { useToast } from "../components/Toast";
 import { AlertTriangle, Camera, ChevronLeft, Check, Copy, Info, Upload } from "../components/icons";
 import { copyText } from "../lib/utils";
 
@@ -52,6 +53,7 @@ interface Props {
 
 export function AddAccountPage({ editing }: Props) {
   const { navigate, refreshAccounts } = useApp();
+  const toast = useToast();
   const isEdit = Boolean(editing);
 
   const [mode, setMode] = useState<Mode>(isEdit ? "manual" : "scan");
@@ -133,13 +135,15 @@ export function AddAccountPage({ editing }: Props) {
           category: "",
         });
         await refreshAccounts();
+        toast.success("已扫码添加账户");
         navigate({ name: "codes" });
       } catch (e) {
         setScanNotice(`未能识别二维码内容：${String(e)}`);
+        toast.error("二维码识别失败");
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [refreshAccounts, navigate],
+    [refreshAccounts, navigate, toast],
   );
 
   const stopCamera = useCallback(() => {
@@ -251,8 +255,10 @@ export function AddAccountPage({ editing }: Props) {
       };
       if (isEdit && editing) {
         await api.updateAccount(editing.id, payload);
+        toast.success("账户已更新");
       } else {
         await api.addAccount(payload);
+        toast.success("账户已添加");
       }
       await refreshAccounts();
       if (keepGoing && !isEdit) {
@@ -270,7 +276,9 @@ export function AddAccountPage({ editing }: Props) {
         navigate({ name: "codes" });
       }
     } catch (e) {
-      setLocalError(String(e));
+      const msg = String(e);
+      setLocalError(msg);
+      toast.error(msg);
     } finally {
       setSaving(false);
     }
@@ -280,11 +288,14 @@ export function AddAccountPage({ editing }: Props) {
     setLocalError(null);
     try {
       if (!uriText.trim()) throw new Error("请粘贴 otpauth 链接");
-      await api.importOtpauthText(uriText);
+      const count = await api.importOtpauthText(uriText);
       await refreshAccounts();
+      toast.success(`已导入 ${count} 个账户`);
       navigate({ name: "codes" });
     } catch (e) {
-      setLocalError(String(e));
+      const msg = String(e);
+      setLocalError(msg);
+      toast.error(msg);
     }
   };
 

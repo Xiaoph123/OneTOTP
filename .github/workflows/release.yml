@@ -272,12 +272,16 @@ jobs:
           ver=$(node -p "require('./develop/package.json').version")
           UNSIGNED=$(find develop/src-tauri/gen/android/app/build/outputs/apk -name '*.apk' | head -n 1)
           APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner | sort | tail -n 1)
-          mkdir -p artifacts
+          rm -rf artifacts && mkdir -p artifacts
           "$APKSIGNER" sign \
             --ks develop/src-tauri/gen/android/onetotp-release.keystore \
             --ks-key-alias "$KEY_ALIAS" \
             --ks-pass "pass:$KEYSTORE_PASSWORD" \
             --key-pass "pass:$KEYSTORE_PASSWORD" \
+            --v1-signing-enabled true \
+            --v2-signing-enabled true \
+            --v3-signing-enabled true \
+            --v4-signing-enabled false \
             --out "artifacts/OneTotp_${ver}_android_${{ matrix.name }}.apk" \
             "$UNSIGNED"
           "$APKSIGNER" verify --verbose "artifacts/OneTotp_${ver}_android_${{ matrix.name }}.apk"
@@ -288,7 +292,7 @@ jobs:
         run: |
           ver=$(node -p "require('./develop/package.json').version")
           APK=$(find develop/src-tauri/gen/android/app/build/outputs/apk -name '*.apk' | head -n 1)
-          mkdir -p artifacts
+          rm -rf artifacts && mkdir -p artifacts
           cp "$APK" "artifacts/OneTotp_${ver}_android_${{ matrix.name }}-unsigned.apk"
 
       - uses: actions/upload-artifact@v4

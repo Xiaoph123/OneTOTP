@@ -3,6 +3,18 @@ name: Release
 # 触发方式：
 #   1. 推送版本 tag（如 v0.1.0）自动构建并发布 Release
 #   2. 在 GitHub Actions 页面手动运行（workflow_dispatch）
+#
+# 产物命名规范：OneTotp_{版本}_{系统}_{架构}-{类型}.{后缀}
+#   例：OneTotp_0.1.0_windows_x64-setup.exe
+#       OneTotp_0.1.0_windows_x64-portable.exe
+#       OneTotp_0.1.0_windows_arm64-setup.exe
+#       OneTotp_0.1.0_macos_x64.dmg / _arm64.dmg / _universal.dmg
+#       OneTotp_0.1.0_linux_x86_64.deb / .rpm / .AppImage
+#       OneTotp_0.1.0_linux_arm64.deb / .rpm / .AppImage
+#       OneTotp_0.1.0_android_arm64.apk / _armv7.apk / _x86.apk / _x86_64.apk
+#       OneTotp_0.1.0_ios.ipa
+#
+# 说明：Tauri 2 不支持 32 位 Windows（i686），故 Windows 仅出 x64 / arm64。
 on:
   push:
     tags:
@@ -13,9 +25,28 @@ env:
   NODE_VERSION: '22'
 
 jobs:
-  # ───────────────────────── Windows x64 ─────────────────────────
+  # ═══════════════════════ 前置探测 ═══════════════════════
+  # job 级 if 无法直接读取 secrets，需通过一个探测 job 把
+  # 「是否配置了 Apple 证书」转成 output 供 build-ios 判断。
+  detect:
+    name: Detect secrets
+    runs-on: ubuntu-latest
+    outputs:
+      has_apple_cert: ${{ steps.check.outputs.has_apple_cert }}
+    steps:
+      - id: check
+        run: echo "has_apple_cert=${{ secrets.APPLE_CERTIFICATE != '' }}" >> "$GITHUB_OUTPUT"
+
+  # ═══════════════════════ Windows (x64 / arm64) ═══════════════════════
   build-windows:
+    name: Windows ${{ matrix.arch }}
     runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { triple: x86_64-pc-windows-msvc, arch: x64 }
+          - { triple: aarch64-pc-windows-msvc, arch: arm64 }
     steps:
       - uses: actions/checkout@v4
 
@@ -26,34 +57,110 @@ jobs:
           cache-dependency-path: develop/package-lock.json
 
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.triple }}
 
       - uses: swatinem/rust-cache@v2
         with:
           workspaces: develop/src-tauri
+          key: ${{ matrix.triple }}
 
       - name: Install dependencies
         working-directory: develop
         run: npm ci
 
-      - name: Build Windows (NSIS)
+      - name: Build (NSIS)
         working-directory: develop
-        run: npm run tauri build -- --bundles nsis
+        run: npm run tauri build -- --target ${{ matrix.triple }} --bundles nsis
 
       - name: Collect artifacts
         shell: pwsh
         run: |
+          $ver = node -p "require('./develop/package.json').version"
+          $dir = "develop/src-tauri/target/${{ matrix.triple }}/release"
           New-Item -ItemType Directory -Force -Path artifacts | Out-Null
-          Copy-Item develop/src-tauri/target/release/bundle/nsis/*-setup.exe artifacts/
-          Copy-Item develop/src-tauri/target/release/onetotp.exe artifacts/OneTotp-windows-x64-portable.exe
+          Copy-Item "$dir/bundle/nsis/*-setup.exe" "artifacts/OneTotp_${ver}_windows_${{ matrix.arch }}-setup.exe"
+          Copy-Item "$dir/onetotp.exe"           "artifacts/OneTotp_${ver}_windows_${{ matrix.arch }}-portable.exe"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: windows-x64
+          name: windows-${{ matrix.arch }}
           path: artifacts/
 
-  # ───────────────────────── macOS (dmg) ─────────────────────────
+  # ═══════════════════════ Linux (x86_64 / arm64) ═══════════════════════
+  build-linux:
+    name: Linux ${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { runner: ubuntu-22.04,     triple: x86_64-unknown-linux-gnu,  arch: x86_64 }
+          - { runner: ubuntu-22.04-arm, triple: aarch64-unknown-linux-gnu, arch: arm64 }
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: develop/package-lock.json
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.triple }}
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: develop/src-tauri
+          key: ${{ matrix.triple }}
+
+      - name: Install Linux system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            build-essential \
+            file \
+            rpm
+
+      - name: Install dependencies
+        working-directory: develop
+        run: npm ci
+
+      - name: Build (deb, rpm, AppImage)
+        working-directory: develop
+        run: npm run tauri build -- --target ${{ matrix.triple }} --bundles deb,rpm,appimage
+
+      - name: Collect artifacts
+        shell: bash
+        run: |
+          ver=$(node -p "require('./develop/package.json').version")
+          dir="develop/src-tauri/target/${{ matrix.triple }}/release/bundle"
+          mkdir -p artifacts
+          cp "$dir"/deb/*.deb           "artifacts/OneTotp_${ver}_linux_${{ matrix.arch }}.deb"
+          cp "$dir"/rpm/*.rpm           "artifacts/OneTotp_${ver}_linux_${{ matrix.arch }}.rpm"
+          cp "$dir"/appimage/*.AppImage "artifacts/OneTotp_${ver}_linux_${{ matrix.arch }}.AppImage"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-${{ matrix.arch }}
+          path: artifacts/
+
+  # ═══════════════════════ macOS (x64 / arm64 / universal) ═══════════════════════
   build-macos:
+    name: macOS ${{ matrix.arch }}
     runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { triple: x86_64-apple-darwin,    arch: x64 }
+          - { triple: aarch64-apple-darwin,   arch: arm64 }
+          - { triple: universal-apple-darwin, arch: universal }
     steps:
       - uses: actions/checkout@v4
 
@@ -70,23 +177,41 @@ jobs:
       - uses: swatinem/rust-cache@v2
         with:
           workspaces: develop/src-tauri
+          key: ${{ matrix.triple }}
 
       - name: Install dependencies
         working-directory: develop
         run: npm ci
 
-      - name: Build macOS (Universal)
+      - name: Build (dmg)
         working-directory: develop
-        run: npm run tauri build -- --bundles dmg --target universal-apple-darwin
+        run: npm run tauri build -- --target ${{ matrix.triple }} --bundles dmg
+
+      - name: Collect artifacts
+        shell: bash
+        run: |
+          ver=$(node -p "require('./develop/package.json').version")
+          mkdir -p artifacts
+          cp develop/src-tauri/target/${{ matrix.triple }}/release/bundle/dmg/*.dmg \
+             "artifacts/OneTotp_${ver}_macos_${{ matrix.arch }}.dmg"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: macos-universal
-          path: develop/src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
+          name: macos-${{ matrix.arch }}
+          path: artifacts/
 
-  # ───────────────────────── Android (apk) ─────────────────────────
+  # ═══════════════════════ Android (arm64 / armv7 / x86 / x86_64) ═══════════════════════
   build-android:
+    name: Android ${{ matrix.name }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: aarch64, name: arm64 }
+          - { target: armv7,   name: armv7 }
+          - { target: x86_64,  name: x86_64 }
+          - { target: i686,    name: x86 }
     env:
       KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
       KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
@@ -121,29 +246,31 @@ jobs:
       - uses: swatinem/rust-cache@v2
         with:
           workspaces: develop/src-tauri
+          key: android-${{ matrix.target }}
 
       - name: Install dependencies
         working-directory: develop
         run: npm ci
 
-      # 配置了签名 secrets 时恢复正式 keystore；否则使用 debug 签名
+      # 配置了签名 secrets 时恢复正式 keystore；否则出未签名包
       - name: Restore release keystore
         if: env.KEYSTORE_BASE64 != ''
         shell: bash
         run: |
           echo "$KEYSTORE_BASE64" | base64 -d > develop/src-tauri/gen/android/onetotp-release.keystore
 
-      - name: Build Android APK (arm64)
+      - name: Build APK
         working-directory: develop
         env:
           NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
-        run: npm run tauri android build -- --apk --target aarch64
+        run: npm run tauri android build -- --apk --target ${{ matrix.target }}
 
-      - name: Sign APK with release keystore
+      - name: Sign APK
         if: env.KEYSTORE_BASE64 != ''
         shell: bash
         run: |
-          UNSIGNED=$(find develop/src-tauri/gen/android/app/build/outputs/apk -name '*unsigned.apk' | head -n 1)
+          ver=$(node -p "require('./develop/package.json').version")
+          UNSIGNED=$(find develop/src-tauri/gen/android/app/build/outputs/apk -name '*.apk' | head -n 1)
           APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner | sort | tail -n 1)
           mkdir -p artifacts
           "$APKSIGNER" sign \
@@ -151,42 +278,128 @@ jobs:
             --ks-key-alias "$KEY_ALIAS" \
             --ks-pass "pass:$KEYSTORE_PASSWORD" \
             --key-pass "pass:$KEYSTORE_PASSWORD" \
-            --out artifacts/OneTotp-android-arm64.apk \
+            --out "artifacts/OneTotp_${ver}_android_${{ matrix.name }}.apk" \
             "$UNSIGNED"
-          "$APKSIGNER" verify --verbose artifacts/OneTotp-android-arm64.apk
+          "$APKSIGNER" verify --verbose "artifacts/OneTotp_${ver}_android_${{ matrix.name }}.apk"
 
-      - name: Collect unsigned APK (fallback)
+      - name: Collect unsigned APK
         if: env.KEYSTORE_BASE64 == ''
         shell: bash
         run: |
+          ver=$(node -p "require('./develop/package.json').version")
+          APK=$(find develop/src-tauri/gen/android/app/build/outputs/apk -name '*.apk' | head -n 1)
           mkdir -p artifacts
-          find develop/src-tauri/gen/android/app/build/outputs/apk -name '*.apk' -exec cp {} artifacts/ \;
+          cp "$APK" "artifacts/OneTotp_${ver}_android_${{ matrix.name }}-unsigned.apk"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: android-arm64
+          name: android-${{ matrix.name }}
           path: artifacts/
 
-  # ───────────────────────── iOS（说明）─────────────────────────
-  # iOS .ipa 需要 Apple 开发者证书（$99/年）+ provisioning profile 才能签名安装。
-  # 未配置证书 secrets 时不出包。后续在仓库 Settings → Secrets 配置：
-  #   APPLE_CERTIFICATE / APPLE_CERTIFICATE_PASSWORD / APPLE_SIGNING_IDENTITY
-  #   APPLE_PROVISIONING_PROFILE / APPLE_TEAM_ID
-  # 再启用本 job 即可。
+  # ═══════════════════════ iOS ═══════════════════════
+  # 需要 Apple 开发者账号（$99/年）。在仓库 Settings → Secrets and variables → Actions 配置：
+  #   APPLE_CERTIFICATE          （.p12 证书的 base64）
+  #   APPLE_CERTIFICATE_PASSWORD （.p12 密码）
+  #   APPLE_SIGNING_IDENTITY     （如 "Apple Distribution: XXX (TEAMID)"）
+  #   APPLE_PROVISIONING_PROFILE （描述文件 base64）
+  #   APPLE_TEAM_ID              （10 位团队 ID）
+  #   KEYCHAIN_PASSWORD          （临时钥匙串密码，任意字符串）
+  # 未配置 APPLE_CERTIFICATE 时本 job 自动跳过（不会失败）。
+  build-ios:
+    name: iOS
+    needs: [detect]
+    if: needs.detect.outputs.has_apple_cert == 'true'
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
 
-  # ───────────────────────── 发布 Release ─────────────────────────
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: develop/package-lock.json
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: develop/src-tauri
+          key: ios
+
+      - name: Install dependencies
+        working-directory: develop
+        run: npm ci
+
+      - name: Init iOS project
+        working-directory: develop
+        run: npm run tauri ios init
+
+      - name: Import signing certificate
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+          APPLE_PROVISIONING_PROFILE: ${{ secrets.APPLE_PROVISIONING_PROFILE }}
+        run: |
+          set -euo pipefail
+          CERT_PATH=$RUNNER_TEMP/certificate.p12
+          PROFILE_PATH=$RUNNER_TEMP/profile.mobileprovision
+          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+
+          echo -n "$APPLE_CERTIFICATE" | base64 --decode > "$CERT_PATH"
+          echo -n "$APPLE_PROVISIONING_PROFILE" | base64 --decode > "$PROFILE_PATH"
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERT_PATH" -P "$APPLE_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security list-keychain -d user -s "$KEYCHAIN_PATH"
+
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          cp "$PROFILE_PATH" ~/Library/MobileDevice/Provisioning\ Profiles/
+
+      - name: Build iOS (ipa)
+        working-directory: develop
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: npm run tauri ios build -- --export-method app-store-connect
+
+      - name: Collect artifacts
+        shell: bash
+        run: |
+          ver=$(node -p "require('./develop/package.json').version")
+          mkdir -p artifacts
+          IPA=$(find develop/src-tauri/gen/apple -name '*.ipa' | head -n 1)
+          test -n "$IPA"
+          cp "$IPA" "artifacts/OneTotp_${ver}_ios.ipa"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ios
+          path: artifacts/
+
+  # ═══════════════════════ 发布 Release ═══════════════════════
   publish:
-    if: startsWith(github.ref, 'refs/tags/')
-    needs: [build-windows, build-macos, build-android]
+    # 只要还有成功产物就发布（某个架构失败不阻断其余产物）；仅 tag 触发时发布
+    if: ${{ always() && startsWith(github.ref, 'refs/tags/') }}
+    needs: [detect, build-windows, build-linux, build-macos, build-android, build-ios]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
+        continue-on-error: true
         with:
           path: release
           merge-multiple: true
+
+      - name: List collected artifacts
+        run: ls -R release || echo "no artifacts"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2

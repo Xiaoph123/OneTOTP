@@ -28,6 +28,18 @@ allprojects {
     }
 }
 
+// ── 统一插件库工程的 compileSdk ──
+// tauri-plugin-* 自带的 Android 库工程以其内置的较低 compileSdk 编译（如 biometry 为 34），
+// 而 :tauri-android 要求依赖方 compileSdk >= 36，否则 :tauri-plugin-*:checkReleaseAarMetadata
+// 会因 AAR 元数据校验失败中断整个构建。这里把插件库工程的 compileSdk 对齐到应用一致的值。
+subprojects {
+    afterEvaluate {
+        if (!plugins.hasPlugin("com.android.library")) return@afterEvaluate
+        val androidExt = extensions.findByName("android") as? groovy.lang.GroovyObject
+        androidExt?.setProperty("compileSdk", 37)
+    }
+}
+
 tasks.register("clean").configure {
     delete("build")
 }

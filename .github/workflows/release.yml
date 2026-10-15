@@ -105,7 +105,8 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - uses: android-actions/setup-android@v3
+      # ubuntu-latest 已预装 Android SDK（ANDROID_HOME=/usr/local/lib/android/sdk），
+      # 无需 android-actions/setup-android（其安装的旧 tools 包已废弃会报错）
 
       - uses: nttld/setup-ndk@v1
         id: setup-ndk

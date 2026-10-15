@@ -30,7 +30,7 @@ jobs:
   # 「是否配置了 Apple 证书」转成 output 供 build-ios 判断。
   detect:
     name: Detect secrets
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       has_apple_cert: ${{ steps.check.outputs.has_apple_cert }}
     steps:
@@ -203,7 +203,9 @@ jobs:
   # ═══════════════════════ Android (arm64 / armv7 / x86 / x86_64) ═══════════════════════
   build-android:
     name: Android ${{ matrix.name }}
-    runs-on: ubuntu-latest
+    # 固定 24.04：本 job 依赖 runner 预装的 Android SDK/NDK 环境，
+    # 而 ubuntu-latest 将于 2026-10-19 迁移到 Ubuntu 26，避免环境突变导致构建失败。
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:

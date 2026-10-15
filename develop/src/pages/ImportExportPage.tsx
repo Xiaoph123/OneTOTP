@@ -108,7 +108,7 @@ export function ImportExportPage() {
       </header>
 
       <section className="app-body">
-        <div className="segmented" style={{ width: "100%", marginBottom: 12 }} role="tablist">
+        <div className="segmented segmented-fill" style={{ width: "100%", marginBottom: 12 }} role="tablist">
           <button className={mode === "export" ? "active" : ""} style={{ flex: 1 }} onClick={() => setMode("export")}>
             {t("导出")}
           </button>

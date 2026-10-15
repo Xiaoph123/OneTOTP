@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { cacheClearClipboardOnFail } from "./utils";
 
 export interface AccountView {
   id: string;
@@ -129,6 +130,8 @@ export interface AppSettings {
   language: LangPref;
   windowSize: WindowSize;
   fontScale: FontScale;
+  /** 解锁连续失败 5 次后清空剪贴板 */
+  clearClipboardOnFail: boolean;
 }
 
 export type FontScale = "small" | "standard" | "large" | "xlarge";
@@ -157,6 +160,7 @@ interface RawSettings {
   language: string;
   window_size: string;
   font_scale: string;
+  clear_clipboard_on_fail: boolean;
 }
 
 function mapSettings(raw: RawSettings): AppSettings {
@@ -181,6 +185,7 @@ function mapSettings(raw: RawSettings): AppSettings {
     language: (raw.language as LangPref) || "auto",
     windowSize: (raw.window_size as WindowSize) || "standard",
     fontScale: (raw.font_scale as FontScale) || "standard",
+    clearClipboardOnFail: raw.clear_clipboard_on_fail ?? true,
   };
 }
 
@@ -206,6 +211,7 @@ function toRawSettings(s: AppSettings): RawSettings {
     language: s.language,
     window_size: s.windowSize,
     font_scale: s.fontScale,
+    clear_clipboard_on_fail: s.clearClipboardOnFail,
   };
 }
 
@@ -437,11 +443,15 @@ export const api = {
   },
 
   async getSettings(): Promise<AppSettings> {
-    return mapSettings(await invoke<RawSettings>("get_settings"));
+    const s = mapSettings(await invoke<RawSettings>("get_settings"));
+    // 同步本地镜像，供锁定状态下的解锁页读取
+    cacheClearClipboardOnFail(s.clearClipboardOnFail);
+    return s;
   },
 
-  updateSettings(settings: AppSettings): Promise<void> {
-    return invoke("update_settings", { settings: toRawSettings(settings) });
+  async updateSettings(settings: AppSettings): Promise<void> {
+    await invoke("update_settings", { settings: toRawSettings(settings) });
+    cacheClearClipboardOnFail(settings.clearClipboardOnFail);
   },
 
   exportVault(password: string, includeAccounts: boolean, includeSettings: boolean): Promise<string> {

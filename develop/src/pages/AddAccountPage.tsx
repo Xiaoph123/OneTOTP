@@ -161,6 +161,40 @@ export function AddAccountPage({ editing }: Props) {
 
   useEffect(() => stopCamera, [stopCamera]);
 
+  // <video> 挂载后再把摄像头流附加上去并启动逐帧解码。
+  // 必须放在 effect 里：startCamera 中 setScanning(true) 之后 DOM 尚未更新，
+  // 此时 videoRef.current 仍为 null，直接赋值会拿不到元素，表现为「开启摄像头后黑屏」。
+  useEffect(() => {
+    if (!scanning) return;
+    const video = videoRef.current;
+    const stream = streamRef.current;
+    if (!video || !stream) return;
+
+    video.srcObject = stream;
+    const played = video.play();
+    if (played && typeof played.catch === "function") played.catch(() => {});
+
+    const tick = () => {
+      const v = videoRef.current;
+      if (v && v.readyState === v.HAVE_ENOUGH_DATA) {
+        const text = decodeQrFromImage(v, v.videoWidth, v.videoHeight, true);
+        if (text) {
+          handleDecoded(text);
+          return;
+        }
+      }
+      rafRef.current = requestAnimationFrame(tick);
+    };
+    rafRef.current = requestAnimationFrame(tick);
+
+    return () => {
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+    };
+  }, [scanning, handleDecoded]);
+
   /** 解析「令牌」输入框中的 otpauth 链接并回填 */
   const handleParseToken = async () => {
     setTokenNotice(null);
@@ -213,24 +247,8 @@ export function AddAccountPage({ editing }: Props) {
         audio: false,
       });
       streamRef.current = stream;
+      // 仅置位状态，实际的流绑定与逐帧解码在 scanning 的 effect 中完成
       setScanning(true);
-      const video = videoRef.current;
-      if (!video) return;
-      video.srcObject = stream;
-      await video.play();
-
-      const tick = () => {
-        const v = videoRef.current;
-        if (v && v.readyState === v.HAVE_ENOUGH_DATA) {
-          const text = decodeQrFromImage(v, v.videoWidth, v.videoHeight, true);
-          if (text) {
-            handleDecoded(text);
-            return;
-          }
-        }
-        rafRef.current = requestAnimationFrame(tick);
-      };
-      rafRef.current = requestAnimationFrame(tick);
     } catch {
       setScanning(false);
       setScanNotice(t("无法访问摄像头，请改用「从图片选择」方式。"));
@@ -313,7 +331,7 @@ export function AddAccountPage({ editing }: Props) {
 
       <section className="app-body">
         {!isEdit ? (
-          <div className="segmented" style={{ width: "100%", marginBottom: 12 }} role="tablist">
+          <div className="segmented segmented-fill" style={{ width: "100%", marginBottom: 12 }} role="tablist">
             {(
               [
                 ["scan", t("扫码")],
@@ -369,17 +387,27 @@ export function AddAccountPage({ editing }: Props) {
                   {t("支持摄像头实时扫码，或从本地图片识别（完全离线）")}
                 </div>
               </div>
-              <div style={{ display: "flex", gap: 8 }}>
+              <div className="scan-actions">
                 {scanning ? (
-                  <Button variant="secondary" onClick={stopCamera}>
+                  <Button variant="secondary" block onClick={stopCamera}>
                     {t("停止扫描")}
                   </Button>
                 ) : (
-                  <Button variant="primary" icon={<Camera style={{ width: 14, height: 14 }} />} onClick={startCamera}>
+                  <Button
+                    variant="primary"
+                    block
+                    icon={<Camera style={{ width: 16, height: 16 }} />}
+                    onClick={startCamera}
+                  >
                     {t("开启摄像头")}
                   </Button>
                 )}
-                <Button variant="secondary" icon={<Upload style={{ width: 14, height: 14 }} />} onClick={handlePickImage}>
+                <Button
+                  variant="secondary"
+                  block
+                  icon={<Upload style={{ width: 16, height: 16 }} />}
+                  onClick={handlePickImage}
+                >
                   {t("从图片选择")}
                 </Button>
               </div>

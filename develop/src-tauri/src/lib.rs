@@ -32,6 +32,11 @@ pub fn run() {
         ))
         .plugin(tauri_plugin_global_shortcut::Builder::new().build());
 
+    // 生物识别解锁插件：Windows Hello / macOS Touch ID。
+    // 移动端（Android / iOS）同样支持，Linux 无统一生物识别接口故不注册。
+    #[cfg(any(target_os = "windows", target_os = "macos", target_os = "android", target_os = "ios"))]
+    let builder = builder.plugin(tauri_plugin_biometry::init());
+
     builder
         .setup(|app| {
             // 使用应用数据目录持久化本地保险库

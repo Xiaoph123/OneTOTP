@@ -332,10 +332,21 @@ export const en: Record<string, string> = {
   "使用系统指纹、人脸或 PIN 快速解锁": "Unlock quickly with system fingerprint, face or PIN",
   "当前设备不支持生物识别": "This device does not support biometrics",
   "当前设备不支持 Windows Hello": "This device does not support Windows Hello",
+  "当前平台不支持生物识别解锁": "Biometric unlock is not supported on this platform",
+  "当前设备未录入指纹或面容": "No fingerprint or face enrolled on this device",
+  "Touch ID 解锁": "Touch ID unlock",
+  "已启用生物识别解锁": "Biometric unlock enabled",
+  "已关闭生物识别解锁": "Biometric unlock disabled",
+  "生物识别启用失败，请重试": "Failed to enable biometric unlock, please retry",
+  "请先输入当前密码以启用生物识别": "Enter your current password first to enable biometrics",
+  "生物识别不可用，请使用密码解锁": "Biometrics unavailable, please unlock with password",
+  "需先在设置中启用": "Enable it in Settings first",
   "失败 5 次后清除剪贴板": "Clear clipboard after 5 failures",
   "防止暴力尝试，自动清空最近复制内容":
     "Prevent brute-force attempts by clearing recently copied content",
   "失败清除剪贴板": "Clear clipboard on failure",
+  "已连续失败 {n} 次，剪贴板已清空":
+    "Failed {n} times in a row, clipboard cleared",
   "忘记密码将无法恢复，只能通过事先导出的加密备份在新设备恢复账户。":
     "A forgotten password cannot be recovered; restore accounts on a new device via a previously exported encrypted backup.",
   "请输入当前密码以关闭锁定": "Enter the current password to disable the lock",
@@ -346,9 +357,6 @@ export const en: Record<string, string> = {
   "密码已更新": "Password updated",
   "锁定密码已更新": "Lock password updated",
   "已启用应用锁定": "App lock enabled",
-  "已记录偏好；生物识别将在下次解锁时由系统唤起":
-    "Preference saved; biometrics will be prompted by the system on next unlock",
-  "已关闭生物识别解锁": "Biometric unlock disabled",
 
   // ── 分类管理 ──
   "编辑分类": "Edit category",

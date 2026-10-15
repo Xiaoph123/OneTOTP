@@ -25,6 +25,7 @@ export function Button({
   children,
   style,
   disabled,
+  className,
   ...rest
 }: Props) {
   const base: React.CSSProperties = {
@@ -43,6 +44,10 @@ export function Button({
     width: block ? "100%" : undefined,
     transition: "background 150ms ease, box-shadow 150ms ease, opacity 150ms ease",
   };
+  // 统一类名：ui-btn 作为基础钩子，尺寸类供移动端按档位放大触控高度
+  const classes = ["ui-btn", `ui-btn-${size}`, block ? "btn-block" : "", className ?? ""]
+    .filter(Boolean)
+    .join(" ");
 
   const variants: Record<Variant, React.CSSProperties> = {
     primary: {
@@ -72,6 +77,7 @@ export function Button({
   return (
     <button
       {...rest}
+      className={classes || undefined}
       disabled={disabled}
       style={{ ...base, ...variants[variant], ...style }}
       onMouseEnter={(e) => {

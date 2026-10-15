@@ -1,7 +1,7 @@
 {
   "name": "onetotp",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -10,6 +10,7 @@
     "tauri": "tauri"
   },
   "dependencies": {
+    "@choochmeque/tauri-plugin-biometry-api": "^0.2.8",
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-autostart": "^2.7.0",
     "@tauri-apps/plugin-clipboard-manager": "^2.4.2",

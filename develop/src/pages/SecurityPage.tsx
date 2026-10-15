@@ -7,27 +7,23 @@ import { Select } from "../components/Select";
 import { useToast } from "../components/Toast";
 import { Button, IconButton } from "../components/Button";
 import { AlertTriangle, ChevronLeft, Eye, EyeOff } from "../components/icons";
+import {
+  clearBiometric,
+  enrollBiometric,
+  hasBiometricBridge,
+  isBiometricEnrolled,
+  isBiometricSupported,
+} from "../lib/biometric";
+import { isDesktop } from "../lib/platform";
 import { useI18n } from "../i18n";
 
-type Translate = (key: string, params?: Record<string, string | number>) => string;
-
-/** 检测当前平台是否可能提供系统级生物识别 */
-function detectBiometricSupport(t: Translate): { available: boolean; label: string; hint: string } {
-  const ua = navigator.userAgent.toLowerCase();
-  const isMobile = /android|iphone|ipad|ipod/.test(ua);
-  const hasWebAuthn = typeof window !== "undefined" && "PublicKeyCredential" in window;
-  if (isMobile) {
-    return {
-      available: hasWebAuthn,
-      label: t("指纹 / 面容解锁"),
-      hint: hasWebAuthn ? t("调用系统指纹或面容快速解锁") : t("当前设备不支持生物识别"),
-    };
-  }
-  return {
-    available: hasWebAuthn,
-    label: t("Windows Hello 解锁"),
-    hint: hasWebAuthn ? t("使用系统指纹、人脸或 PIN 快速解锁") : t("当前设备不支持 Windows Hello"),
-  };
+/** 各平台生物识别的展示名（Linux 等不支持平台回退为通用文案） */
+function biometricLabel(t: (k: string) => string): string {
+  if (typeof navigator === "undefined") return t("指纹 / 面容解锁");
+  const ua = navigator.userAgent;
+  if (isDesktop() && /Windows/i.test(ua)) return t("Windows Hello 解锁");
+  if (isDesktop() && /Macintosh|Mac OS X/i.test(ua)) return t("Touch ID 解锁");
+  return t("指纹 / 面容解锁");
 }
 
 export function SecurityPage() {
@@ -43,14 +39,74 @@ export function SecurityPage() {
   const [message, setMessage] = useState<{ type: "ok" | "err"; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [biometric, setBiometric] = useState(false);
+  const [bioBusy, setBioBusy] = useState(false);
+  // 生物识别能力：支持平台 + 是否已录入指纹/面容
+  const [bioAvailable, setBioAvailable] = useState(false);
+  const [bioEnrolled, setBioEnrolled] = useState(false);
   const pwdPanelRef = useRef<HTMLDivElement | null>(null);
   const passwordInputRef = useRef<HTMLInputElement | null>(null);
-
-  const bio = detectBiometricSupport(t);
 
   useEffect(() => {
     if (settings) setHint(settings.passwordHint || "");
   }, [settings]);
+
+  // 探测生物识别能力与已保存凭据（异步，依赖系统接口）
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      if (!hasBiometricBridge()) {
+        if (alive) setBioAvailable(false);
+        return;
+      }
+      const supported = await isBiometricSupported();
+      const enrolled = supported ? await isBiometricEnrolled() : false;
+      if (!alive) return;
+      setBioAvailable(supported);
+      setBioEnrolled(enrolled);
+      setBiometric(enrolled);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  /** 切换生物识别：开启时需先认证并加密保存当前口令；关闭时清除凭据 */
+  const handleBiometricChange = async (enabled: boolean) => {
+    if (bioBusy) return;
+    if (!enabled) {
+      await clearBiometric();
+      setBiometric(false);
+      setBioEnrolled(false);
+      toast.info(t("已关闭生物识别解锁"));
+      return;
+    }
+    // 开启：必须已有解锁口令（用于加密保存），未设置则引导去设置
+    if (!lockEnabled || !current) {
+      toast.warning(t("请先输入当前密码以启用生物识别"));
+      pwdPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      setTimeout(() => passwordInputRef.current?.focus(), 300);
+      return;
+    }
+    setBioBusy(true);
+    try {
+      // 先验证当前密码是否正确，避免保存错误口令
+      await api.unlock(current);
+      const result = await enrollBiometric(current);
+      if (result.ok) {
+        setBiometric(true);
+        setBioEnrolled(true);
+        toast.success(t("已启用生物识别解锁"));
+      } else if (result.reason === "cancelled") {
+        // 用户在系统弹窗中取消，不提示为失败
+      } else {
+        toast.error(t("生物识别启用失败，请重试"));
+      }
+    } catch (e) {
+      toast.error(String(e));
+    } finally {
+      setBioBusy(false);
+    }
+  };
 
   if (!draft) {
     return (
@@ -85,6 +141,10 @@ export function SecurityPage() {
       try {
         await api.unlock(current);
         await api.setLockPassword("", "", false);
+        // 关闭锁定后，生物识别凭据已无意义，一并清除避免残留
+        await clearBiometric();
+        setBiometric(false);
+        setBioEnrolled(false);
         const s = await api.getSettings();
         await saveSettings(s);
         setDraft(s);
@@ -125,6 +185,16 @@ export function SecurityPage() {
         await api.unlock(current);
       }
       await api.setLockPassword(next, hint, true);
+      // 密码变更后，生物识别中保存的旧口令会失效，需用新口令重新登记
+      if (bioEnrolled) {
+        const re = await enrollBiometric(next);
+        if (!re.ok) {
+          // 重新登记失败（多为用户取消）：清除失效凭据，避免下次解锁必然失败
+          await clearBiometric();
+          setBiometric(false);
+          setBioEnrolled(false);
+        }
+      }
       const s = await api.getSettings();
       await saveSettings(s);
       setDraft(s);
@@ -146,6 +216,13 @@ export function SecurityPage() {
   };
 
   const strength = passwordStrength(next);
+
+  // 生物识别状态提示文案
+  const bioHint = !bioAvailable
+    ? t("当前平台不支持生物识别解锁")
+    : bioEnrolled
+      ? t("调用系统指纹或面容快速解锁")
+      : t("当前设备未录入指纹或面容");
 
   return (
     <>
@@ -313,21 +390,14 @@ export function SecurityPage() {
         <div className="panel" style={{ marginTop: 12 }}>
           <div className="s-row">
             <div className="s-main">
-              <div className="s-title">{bio.label}</div>
-              <div className="s-desc">{bio.hint}</div>
+              <div className="s-title">{biometricLabel(t)}</div>
+              <div className="s-desc">{bioHint}</div>
             </div>
             <Switch
               checked={biometric}
-              disabled={!lockEnabled || !bio.available}
-              onChange={(v) => {
-                setBiometric(v);
-                toast.info(
-                  v
-                    ? t("已记录偏好；生物识别将在下次解锁时由系统唤起")
-                    : t("已关闭生物识别解锁"),
-                );
-              }}
-              label={bio.label}
+              disabled={!lockEnabled || !bioAvailable || bioBusy}
+              onChange={handleBiometricChange}
+              label={biometricLabel(t)}
             />
           </div>
           <div className="s-row">
@@ -335,7 +405,16 @@ export function SecurityPage() {
               <div className="s-title">{t("失败 5 次后清除剪贴板")}</div>
               <div className="s-desc">{t("防止暴力尝试，自动清空最近复制内容")}</div>
             </div>
-            <Switch checked onChange={() => {}} label={t("失败清除剪贴板")} />
+            <Switch
+              checked={draft.clearClipboardOnFail}
+              disabled={!lockEnabled}
+              onChange={async (v) => {
+                const nextDraft = { ...draft, clearClipboardOnFail: v };
+                setDraft(nextDraft);
+                await saveSettings(nextDraft);
+              }}
+              label={t("失败清除剪贴板")}
+            />
           </div>
         </div>
 

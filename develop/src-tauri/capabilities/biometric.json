@@ -1,0 +1,26 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "biometric",
+  "description": "生物识别解锁：Windows Hello / macOS Touch ID。Linux 无统一接口，故不在此列",
+  "platforms": ["macOS", "windows"],
+  "windows": ["main"],
+  "permissions": [
+    "biometry:default",
+    {
+      "identifier": "biometry:allow-has-data",
+      "allow": [{ "domain": "com.wanghao.onetotp" }]
+    },
+    {
+      "identifier": "biometry:allow-get-data",
+      "allow": [{ "domain": "com.wanghao.onetotp" }]
+    },
+    {
+      "identifier": "biometry:allow-set-data",
+      "allow": [{ "domain": "com.wanghao.onetotp" }]
+    },
+    {
+      "identifier": "biometry:allow-remove-data",
+      "allow": [{ "domain": "com.wanghao.onetotp" }]
+    }
+  ]
+}

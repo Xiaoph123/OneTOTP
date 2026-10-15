@@ -18,6 +18,33 @@ export async function copyText(text: string): Promise<void> {
   }
 }
 
+/** 清空系统剪贴板（解锁连续失败等安全场景使用） */
+export async function clearClipboard(): Promise<void> {
+  await copyText("");
+}
+
+/**
+ * 「失败清除剪贴板」开关的本地镜像：
+ * 锁定状态下保险库未解密、读不到设置，解锁页只能依赖此镜像判断是否执行清空。
+ */
+const CLEAR_ON_FAIL_KEY = "onetotp.clearClipboardOnFail";
+
+export function cacheClearClipboardOnFail(value: boolean): void {
+  try {
+    localStorage.setItem(CLEAR_ON_FAIL_KEY, value ? "1" : "0");
+  } catch {
+    // 本地存储不可用时忽略，仅在解锁页降级为默认开启
+  }
+}
+
+export function readClearClipboardOnFail(): boolean {
+  try {
+    return localStorage.getItem(CLEAR_ON_FAIL_KEY) !== "0";
+  } catch {
+    return true;
+  }
+}
+
 export function formatDateTime(ms: number): string {
   if (!ms) return "—";
   const d = new Date(ms);

@@ -1,13 +1,30 @@
 {
   "$schema": "../gen/schemas/mobile-schema.json",
   "identifier": "mobile",
-  "description": "移动端能力：核心 IPC 与剪贴板（无窗口控制、无自启、无全局快捷键）",
+  "description": "移动端能力：核心 IPC、剪贴板与生物识别（无窗口控制、无自启、无全局快捷键）",
   "platforms": ["android", "iOS"],
   "windows": ["main"],
   "permissions": [
     "core:default",
     "opener:default",
     "clipboard-manager:allow-write-text",
-    "clipboard-manager:allow-read-text"
+    "clipboard-manager:allow-read-text",
+    "biometry:default",
+    {
+      "identifier": "biometry:allow-has-data",
+      "allow": [{ "domain": "com.wanghao.onetotp" }]
+    },
+    {
+      "identifier": "biometry:allow-get-data",
+      "allow": [{ "domain": "com.wanghao.onetotp" }]
+    },
+    {
+      "identifier": "biometry:allow-set-data",
+      "allow": [{ "domain": "com.wanghao.onetotp" }]
+    },
+    {
+      "identifier": "biometry:allow-remove-data",
+      "allow": [{ "domain": "com.wanghao.onetotp" }]
+    }
   ]
 }

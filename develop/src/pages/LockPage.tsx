@@ -1,8 +1,13 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useApp } from "../state/AppContext";
 import { IconButton } from "../components/Button";
 import { Backspace, Eye, EyeOff, Fingerprint, Lock, OneTotpMark } from "../components/icons";
+import { authenticateBiometric, isBiometricEnrolled, isBiometricSupported } from "../lib/biometric";
+import { clearClipboard, readClearClipboardOnFail } from "../lib/utils";
 import { useI18n } from "../i18n";
+
+/** 连续失败达到该次数时清空剪贴板 */
+const CLEAR_ON_FAIL_THRESHOLD = 5;
 
 export function LockPage() {
   const { unlockWithPassword, passwordHint, hasLock, boot } = useApp();
@@ -11,6 +16,52 @@ export function LockPage() {
   const [show, setShow] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // 生物识别可用性：支持平台（Windows/macOS/Android/iOS）且已保存凭据时提供入口
+  const [bioAvailable, setBioAvailable] = useState(false);
+  const [bioBusy, setBioBusy] = useState(false);
+  const autoTriggered = useRef(false);
+  // 连续解锁失败次数：达阈值后清空剪贴板，成功解锁时归零
+  const failCount = useRef(0);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const supported = await isBiometricSupported();
+      const enrolled = supported && (await isBiometricEnrolled());
+      if (alive) setBioAvailable(enrolled);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  /** 走生物识别：认证通过后拿到口令，复用正常解锁流程 */
+  const unlockByBiometric = async () => {
+    if (bioBusy) return;
+    setBioBusy(true);
+    setError(null);
+    try {
+      const result = await authenticateBiometric();
+      if (result.ok && result.password) {
+        const ok = await unlockWithPassword(result.password);
+        if (!ok) setError(t("密码错误，请重试"));
+      } else if (result.reason === "cancelled") {
+        // 用户主动取消，不提示错误
+      } else {
+        setError(t("生物识别不可用，请使用密码解锁"));
+      }
+    } finally {
+      setBioBusy(false);
+    }
+  };
+
+  // 进入锁定页时自动唤起一次生物识别（用户已启用时才触发）
+  useEffect(() => {
+    if (!hasLock || !bioAvailable || autoTriggered.current) return;
+    autoTriggered.current = true;
+    unlockByBiometric();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasLock, bioAvailable]);
 
   if (!hasLock) {
     // 无锁定密码时的兜底：直接尝试进入
@@ -47,8 +98,17 @@ export function LockPage() {
     setError(null);
     const ok = await unlockWithPassword(password);
     if (!ok) {
-      setError(t("密码错误，请重试"));
       setPassword("");
+      failCount.current += 1;
+      setError(t("密码错误，请重试"));
+      // 连续失败达阈值且开启保护时清空剪贴板，避免暴力尝试期间取走已复制的验证码
+      if (failCount.current >= CLEAR_ON_FAIL_THRESHOLD && readClearClipboardOnFail()) {
+        failCount.current = 0;
+        await clearClipboard();
+        setError(t("已连续失败 {n} 次，剪贴板已清空", { n: CLEAR_ON_FAIL_THRESHOLD }));
+      }
+    } else {
+      failCount.current = 0;
     }
     setBusy(false);
   };
@@ -162,7 +222,14 @@ export function LockPage() {
               {d}
             </button>
           ))}
-          <button className="key-btn ghost" type="button" aria-label={t("生物识别")} disabled title={t("需系统支持")}>
+          <button
+            className="key-btn ghost"
+            type="button"
+            aria-label={t("生物识别")}
+            disabled={!bioAvailable || bioBusy}
+            title={bioAvailable ? t("指纹 / 面容解锁") : t("需先在设置中启用")}
+            onClick={unlockByBiometric}
+          >
             <Fingerprint style={{ width: 22, height: 22 }} />
           </button>
           <button className="key-btn" type="button" onClick={() => press("0")}>

@@ -1,6 +1,6 @@
 [package]
 name = "onetotp"
-version = "0.1.0"
+version = "0.2.0"
 description = "OneTotp - 纯离线身份验证器"
 authors = ["wanghao"]
 edition = "2021"
@@ -44,6 +44,11 @@ url = "2"
 tauri-plugin-single-instance = "2"
 tauri-plugin-autostart = "2.7.0"
 tauri-plugin-global-shortcut = "2.4.1"
+
+# 生物识别解锁：Windows Hello / macOS Touch ID / Android / iOS。
+# Linux 无统一生物识别接口（仅 fprintd，需用户自行安装并录入），故不引入，UI 会显示不支持。
+[target.'cfg(any(target_os = "windows", target_os = "macos", target_os = "android", target_os = "ios"))'.dependencies]
+tauri-plugin-biometry = "0.2.8"
 
 [profile.release]
 codegen-units = 1

@@ -137,6 +137,9 @@ pub struct AppSettings {
     /// 字体大小：small | standard | large | xlarge
     #[serde(default = "default_font_scale")]
     pub font_scale: String,
+    /// 解锁连续失败 5 次后自动清空剪贴板（防止暴力尝试期间泄露已复制验证码）
+    #[serde(default = "default_true")]
+    pub clear_clipboard_on_fail: bool,
 }
 
 fn default_font_scale() -> String {
@@ -200,6 +203,7 @@ impl Default for AppSettings {
             language: "auto".to_string(),
             window_size: "standard".to_string(),
             font_scale: "standard".to_string(),
+            clear_clipboard_on_fail: true,
         }
     }
 }

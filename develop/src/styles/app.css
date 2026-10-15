@@ -721,6 +721,12 @@ select {
   padding: 48px 24px;
   text-align: center;
 }
+/* 在纵向 flex 内容区中，空状态撑满剩余高度并整体垂直居中 */
+.app-body.is-column > .empty-state {
+  flex: 1 1 auto;
+  justify-content: center;
+  padding-bottom: 72px;
+}
 .empty-state .empty-icon {
   width: 56px;
   height: 56px;
@@ -1217,6 +1223,18 @@ select {
   background: var(--color-bg-4);
   border-radius: var(--radius-md);
 }
+/* 扫码操作按钮：桌面并排等宽，移动端纵向堆叠更易点按 */
+.scan-actions {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+}
+.scan-actions .ui-btn {
+  flex: 1 1 0;
+}
+html[data-platform="mobile"] .scan-actions {
+  flex-direction: column;
+}
 .qr-placeholder {
   display: inline-flex;
 }
@@ -1390,10 +1408,26 @@ html[data-platform="mobile"] .tab-item svg {
   height: 22px;
 }
 
-/* 顶部提示条下移，避开原生顶部内边距 */
+/* 顶部提示条下移，避开原生顶部内边距；并保留下方间距，避免被压扁 */
 html[data-platform="mobile"] .message {
   top: 8px;
-  padding: 0 16px;
+  padding: 12px 16px;
+  gap: 8px;
+  border-radius: var(--radius-lg);
+  font-size: calc(var(--font-scale, 1) * 15px);
+  line-height: 1.4;
+}
+html[data-platform="mobile"] .message-icon {
+  width: 22px;
+  height: 22px;
+}
+html[data-platform="mobile"] .message-close {
+  width: 20px;
+  height: 20px;
+}
+html[data-platform="mobile"] .message-close svg {
+  width: 20px;
+  height: 20px;
 }
 
 /* 触控目标：图标按钮与输入/选择控件统一为 44px，符合移动端最小触控尺寸 */
@@ -1425,19 +1459,88 @@ html[data-platform="mobile"] .btn-primary-inline {
   height: 44px !important;
 }
 
-/* 分段控件加高 */
+/* ── 移动端按钮尺寸体系 ──
+   桌面端按钮内联了 px 高度，移动端统一覆盖为触控友好的高度：
+   最小的 sm 档也保证 40px，常规 44px，整宽主操作 48px。 */
+html[data-platform="mobile"] .ui-btn {
+  padding-inline: 18px;
+  font-size: calc(var(--font-scale, 1) * 15px);
+}
+html[data-platform="mobile"] .ui-btn-sm {
+  height: 40px !important;
+}
+html[data-platform="mobile"] .ui-btn-md,
+html[data-platform="mobile"] .ui-btn-lg {
+  height: 44px !important;
+}
+html[data-platform="mobile"] .btn-block {
+  height: 48px !important;
+  font-size: calc(var(--font-scale, 1) * 16px);
+}
+/* block 按钮处于 flex 行容器时，确保真正撑满而不被内容挤窄 */
+.ui-btn.btn-block {
+  flex: 1 1 auto;
+}
+
+/* 分段控件：默认宽度与桌面端一致（仅包裹按钮，不被 app-body 的通配宽度拉伸），
+   高度加大以适配触控；带 .segmented-fill 的「撑满型」（添加账户 / 导入导出）保持撑满。 */
+html[data-platform="mobile"] .segmented {
+  padding: 5px;
+  border-radius: var(--radius-lg);
+}
+html[data-platform="mobile"] .segmented:not(.segmented-fill) {
+  width: fit-content !important;
+  max-width: 100%;
+  align-self: flex-start;
+}
 html[data-platform="mobile"] .segmented button {
-  padding: 9px 14px;
+  height: 40px;
+  padding: 0 18px;
+  font-size: calc(var(--font-scale, 1) * 15px);
+  border-radius: var(--radius-md);
+}
+/* 撑满型：各段等宽 */
+html[data-platform="mobile"] .segmented-fill button {
+  flex: 1 1 0;
+  padding: 0 8px;
 }
 
 /* 弹窗在移动端留出安全边距 */
 html[data-platform="mobile"] .modal-dialog {
   max-width: min(400px, calc(100vw - 32px));
+  padding: 22px;
+}
+/* 弹窗内操作按钮：垂直排布并加大高度，避免并排后过窄 */
+html[data-platform="mobile"] .modal-actions {
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 20px;
+}
+html[data-platform="mobile"] .modal-actions > * {
+  width: 100%;
 }
 
 /* 锁定页卡片横向留白 */
 html[data-platform="mobile"] .lock-card {
-  max-width: min(340px, calc(100vw - 40px));
+  max-width: min(360px, calc(100vw - 32px));
+  padding: 30px 22px;
+}
+/* 锁定页主操作按钮：统一放大到 48px */
+html[data-platform="mobile"] .lock-card form > button[type="submit"] {
+  height: 48px !important;
+  font-size: calc(var(--font-scale, 1) * 16px);
+}
+/* 锁定页数字键盘：加大按键高度与间距，便于触控 */
+html[data-platform="mobile"] .keypad {
+  gap: 12px;
+}
+html[data-platform="mobile"] .key-btn {
+  height: 56px;
+  font-size: calc(var(--font-scale, 1) * 22px);
+}
+html[data-platform="mobile"] .key-btn svg {
+  width: 26px;
+  height: 26px;
 }
 
 /* 移动端禁用文本长按选中与点击高亮，提升原生化观感 */

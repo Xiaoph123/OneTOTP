@@ -213,7 +213,8 @@ export function CodesPage() {
           <div className="otp-list">{visible.map(renderCard)}</div>
         )}
 
-        <div className="body-spacer" />
+        {/* 空状态自身撑满剩余空间并垂直居中，无需占位元素；非空时用占位把提示条顶到底部 */}
+        {!isEmpty ? <div className="body-spacer" /> : null}
         <div
           className="notice"
           style={{ marginTop: 14, marginBottom: -6, background: "var(--color-bg-4)", color: "var(--color-text-2)" }}

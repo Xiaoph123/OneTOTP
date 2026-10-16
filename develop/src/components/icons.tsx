@@ -39,6 +39,19 @@ export const Plus = (p: IconProps) => (
   </svg>
 );
 
+/** 加载转圈：底环 + 一段高亮弧，配合 .ui-spinner 旋转 */
+export const Spinner = (p: IconProps) => (
+  <svg viewBox="0 0 18 18" fill="none" {...p}>
+    <circle cx="9" cy="9" r="7" stroke="currentColor" strokeWidth="1.8" opacity="0.2" />
+    <path
+      d="M16 9a7 7 0 0 0-7-7"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+    />
+  </svg>
+);
+
 /** 盾牌轮廓路径，供品牌图标与启动扫光复用 */
 const SHIELD_PATH =
   "M12 2.2 3.8 5.9v6.2c0 4.9 3.5 8.6 8.2 10 4.7-1.4 8.2-5.1 8.2-10V5.9L12 2.2z";
@@ -219,9 +232,9 @@ export const Clock = (p: IconProps) => (
 );
 
 export const Settings = (p: IconProps) => (
-  <svg {...base(p)} strokeWidth={1.5}>
-    <circle cx="9" cy="9" r="2.3" />
-    <path d="M9 2.2v1.7M9 14.1v1.7M2.6 9h1.7M13.7 9h1.7M4.5 4.5l1.2 1.2M12.3 12.3l1.2 1.2M13.5 4.5l-1.2 1.2M5.7 12.3l-1.2 1.2" />
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" {...p}>
+    <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+    <circle cx="12" cy="12" r="3" />
   </svg>
 );
 

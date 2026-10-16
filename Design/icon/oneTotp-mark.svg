@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" fill="none">
+  <defs>
+    <title>OneTotp</title>
+
+  </defs>
+  <circle cx="512" cy="512" r="322" fill="none" stroke="#1664FF" stroke-opacity="0.18" stroke-width="56"/>
+  <path d="M 826.96 445.05 A 322 322 0 1 1 578.95 197.04" fill="none" stroke="#1664FF" stroke-width="56" stroke-linecap="round"/>
+  <path d="M 375.56 440.94 L 512 357.5 L 512 666.5 M 396 666.5 L 628 666.5" fill="none" stroke="#1664FF" stroke-width="106" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

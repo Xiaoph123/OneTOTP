@@ -1,0 +1,65 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>OneTotp 柔光渐变盾 · 颜色规范</title><style>
+  body{margin:0;padding:22px 26px;background:#fafbfc;font:12px/1.6 "PingFang SC","Microsoft YaHei","Segoe UI",sans-serif;color:#111}
+  h2{margin:0 0 10px;font-size:14px;font-weight:600}
+  h2 small{font-weight:400;color:#888;font-size:11px;margin-left:8px}
+  h4{margin:0 0 8px;font-size:12px;font-weight:600}
+  .tone{margin:0 0 20px;padding-bottom:14px;border-bottom:1px solid #e8eaed}
+  .pair{display:flex;gap:14px;flex-wrap:wrap}
+  .strip{display:flex;align-items:flex-end;gap:16px;padding:14px 18px;border-radius:10px}
+  .onLight{background:#fff;border:1px solid #e8eaed}.onDark{background:#141619}
+  .strip img{display:block}
+  .spec{margin-top:8px;display:flex;gap:18px;flex-wrap:wrap}
+  .spec code{font:11px/1.6 "Consolas",monospace;color:#555;background:#f2f4f7;padding:2px 8px;border-radius:4px}
+  .ramp{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0 26px}
+  .sw{width:96px}
+  .sw i{display:block;height:44px;border-radius:8px;border:1px solid rgba(0,0,0,.06)}
+  .sw b{display:block;font:11px/1.6 "Consolas",monospace;margin-top:4px}
+  .sw span{display:block;font-size:10px;color:#999}
+  .apps{display:flex;gap:16px;align-items:flex-end}
+  .apps img{display:block}
+  .darkcard{background:#141619;padding:14px 18px;border-radius:10px;display:flex;align-items:flex-end;gap:16px}
+  .lightcard{background:#fff;border:1px solid #e8eaed;padding:14px 18px;border-radius:10px;display:flex;align-items:flex-end;gap:16px}
+</style></head><body>
+
+  <h2>① 主推：a1-standard<small>渐变中点严格落在品牌主色 #1664FF</small></h2>
+  <div class="pair">
+    <div class="lightcard"><img src="preview/oneTotp-shield-a1-standard-light-256.png" style="width:256px"><img src="preview/oneTotp-shield-a1-standard-light-128.png" style="width:128px"><img src="preview/oneTotp-shield-a1-standard-light-64.png" style="width:64px"><img src="preview/oneTotp-shield-a1-standard-light-32.png" style="width:32px"><img src="preview/oneTotp-shield-a1-standard-light-16.png" style="width:16px"></div>
+    <div class="darkcard"><img src="preview/oneTotp-shield-a1-standard-dark-256.png" style="width:256px"><img src="preview/oneTotp-shield-a1-standard-dark-128.png" style="width:128px"><img src="preview/oneTotp-shield-a1-standard-dark-64.png" style="width:64px"><img src="preview/oneTotp-shield-a1-standard-dark-32.png" style="width:32px"><img src="preview/oneTotp-shield-a1-standard-dark-16.png" style="width:16px"></div>
+  </div>
+
+  <h2>② 另两档色调<small>同一套渐变逻辑，只是取色阶上不同的三段</small></h2>
+  
+  <div class="tone">
+    <h4>a2-deep · 深邃（深调）</h4>
+    <div class="pair">
+      <div class="strip onLight"><img src="preview/oneTotp-shield-a2-deep-light-256.png" style="width:256px"><img src="preview/oneTotp-shield-a2-deep-light-128.png" style="width:128px"><img src="preview/oneTotp-shield-a2-deep-light-64.png" style="width:64px"><img src="preview/oneTotp-shield-a2-deep-light-32.png" style="width:32px"><img src="preview/oneTotp-shield-a2-deep-light-16.png" style="width:16px"></div>
+      <div class="strip onDark"><img src="preview/oneTotp-shield-a2-deep-dark-256.png" style="width:256px"><img src="preview/oneTotp-shield-a2-deep-dark-128.png" style="width:128px"><img src="preview/oneTotp-shield-a2-deep-dark-64.png" style="width:64px"><img src="preview/oneTotp-shield-a2-deep-dark-32.png" style="width:32px"><img src="preview/oneTotp-shield-a2-deep-dark-16.png" style="width:16px"></div>
+    </div>
+    <div class="spec">
+      <code>亮 #387BFF → #1759DD → #114AB9</code>
+      <code>暗 #6F9DFF → #387BFF → #1759DD</code>
+    </div>
+  </div>
+  
+  <div class="tone">
+    <h4>a3-light · 轻盈（浅调）</h4>
+    <div class="pair">
+      <div class="strip onLight"><img src="preview/oneTotp-shield-a3-light-light-256.png" style="width:256px"><img src="preview/oneTotp-shield-a3-light-light-128.png" style="width:128px"><img src="preview/oneTotp-shield-a3-light-light-64.png" style="width:64px"><img src="preview/oneTotp-shield-a3-light-light-32.png" style="width:32px"><img src="preview/oneTotp-shield-a3-light-light-16.png" style="width:16px"></div>
+      <div class="strip onDark"><img src="preview/oneTotp-shield-a3-light-dark-256.png" style="width:256px"><img src="preview/oneTotp-shield-a3-light-dark-128.png" style="width:128px"><img src="preview/oneTotp-shield-a3-light-dark-64.png" style="width:64px"><img src="preview/oneTotp-shield-a3-light-dark-32.png" style="width:32px"><img src="preview/oneTotp-shield-a3-light-dark-16.png" style="width:16px"></div>
+    </div>
+    <div class="spec">
+      <code>亮 #97BCFF → #387BFF → #1664FF</code>
+      <code>暗 #EBF1FF → #97BCFF → #6F9DFF</code>
+    </div>
+  </div>
+
+  <h2>③ 用到的色阶<small>全部来自 tokens.css，无自造色值</small></h2>
+  <div class="ramp"><div class="sw"><i style="background:#F3F7FF"></i><b>#F3F7FF</b><span>--primary-1</span></div><div class="sw"><i style="background:#EBF1FF"></i><b>#EBF1FF</b><span>--primary-2</span></div><div class="sw"><i style="background:#97BCFF"></i><b>#97BCFF</b><span>--primary-3</span></div><div class="sw"><i style="background:#6E9FFF"></i><b>#6E9FFF</b><span>--primary-4</span></div><div class="sw"><i style="background:#387BFF"></i><b>#387BFF</b><span>--primary-5</span></div><div class="sw"><i style="background:#1664FF"></i><b>#1664FF</b><span>--primary-6</span></div><div class="sw"><i style="background:#1759DD"></i><b>#1759DD</b><span>--primary-7</span></div><div class="sw"><i style="background:#114AB9"></i><b>#114AB9</b><span>--primary-8</span></div></div>
+
+  <h2>④ 应用图标版<small>标识放大到画布约 60% 宽，用于 .ico / .icns</small></h2>
+  <div class="pair">
+    <div class="lightcard"><img src="preview/oneTotp-icon-light-256.png" style="width:256px"><img src="preview/oneTotp-icon-light-128.png" style="width:128px"><img src="preview/oneTotp-icon-light-64.png" style="width:64px"><img src="preview/oneTotp-icon-light-32.png" style="width:32px"><img src="preview/oneTotp-icon-light-16.png" style="width:16px"></div>
+    <div class="darkcard"><img src="preview/oneTotp-icon-dark-256.png" style="width:256px"><img src="preview/oneTotp-icon-dark-128.png" style="width:128px"><img src="preview/oneTotp-icon-dark-64.png" style="width:64px"><img src="preview/oneTotp-icon-dark-32.png" style="width:32px"><img src="preview/oneTotp-icon-dark-16.png" style="width:16px"></div>
+  </div>
+
+</body></html>

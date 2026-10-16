@@ -426,8 +426,9 @@ export const api = {
     };
   },
 
-  importOtpauthText(text: string): Promise<number> {
-    return invoke("import_otpauth_text", { text });
+  async importOtpauthText(text: string): Promise<{ added: number; skipped: number }> {
+    const [added, skipped] = await invoke<[number, number]>("import_otpauth_text", { text });
+    return { added, skipped };
   },
 
   deleteAccount(id: string): Promise<void> {

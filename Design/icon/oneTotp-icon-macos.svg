@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" fill="none">
+  <defs>
+    <title>OneTotp</title>
+    <linearGradient id="mbg" x1="0.1" y1="0" x2="0.75" y2="1">
+      <stop offset="0" stop-color="#4A86FF"/>
+      <stop offset="0.5" stop-color="#1664FF"/>
+      <stop offset="1" stop-color="#0E4CD4"/>
+    </linearGradient>
+    <linearGradient id="mbg-glow" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.14"/>
+      <stop offset="0.45" stop-color="#FFFFFF" stop-opacity="0.03"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <rect x="100" y="100" width="824" height="824" rx="184" fill="url(#mbg)"/>
+  <rect x="100" y="100" width="824" height="824" rx="184" fill="url(#mbg-glow)"/>
+  <circle cx="512" cy="512" r="296" fill="none" stroke="#FFFFFF" stroke-opacity="0.18" stroke-width="52"/>
+  <path d="M 801.53 450.46 A 296 296 0 1 1 573.54 222.47" fill="none" stroke="#FFFFFF" stroke-width="52" stroke-linecap="round"/>
+  <path d="M 386.63 446.37 L 512 370 L 512 654 M 406 654 L 618 654" fill="none" stroke="undefined" stroke-width="98" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

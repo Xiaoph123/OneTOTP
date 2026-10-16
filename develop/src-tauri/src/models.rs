@@ -177,7 +177,7 @@ fn default_auto_lock() -> u32 {
     60
 }
 fn default_backup_count() -> u32 {
-    10
+    3
 }
 
 impl Default for AppSettings {
@@ -193,7 +193,7 @@ impl Default for AppSettings {
             code_visibility: "never".to_string(),
             hide_on_screenshot: false,
             auto_backup: true,
-            backup_keep: 10,
+            backup_keep: 3,
             password_hint: String::new(),
             theme: "light".to_string(),
             card_density: "standard".to_string(),

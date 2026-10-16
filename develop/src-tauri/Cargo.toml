@@ -47,8 +47,17 @@ tauri-plugin-global-shortcut = "2.4.1"
 
 # 生物识别解锁：Windows Hello / macOS Touch ID / Android / iOS。
 # Linux 无统一生物识别接口（仅 fprintd，需用户自行安装并录入），故不引入，UI 会显示不支持。
+# Android 端已 vendor 到 plugins/ 并改用 Keystore AES-256-GCM（原版用 RSA-4096，
+# 密钥生成需 1~3 秒导致「启用」明显卡顿；AES 密钥由系统瞬时生成，参见 Aegis 的实现）。
 [target.'cfg(any(target_os = "windows", target_os = "macos", target_os = "android", target_os = "ios"))'.dependencies]
-tauri-plugin-biometry = "0.2.8"
+tauri-plugin-biometry = { path = "plugins/tauri-plugin-biometry" }
+
+# 原生扫码（Android / iOS）：用系统原生相机解码，绕开 WebView 的 getUserMedia
+# 视频管线（该管线在部分 Android 设备上出帧帧率极低，导致预览卡顿不可用）。
+# Android 侧使用 vendored 插件（CameraX + ZXing，零 GMS 依赖，完全离线）；
+# iOS 侧沿用系统 Vision 框架。桌面端不使用该插件，扫码仍走 getUserMedia + jsQR。
+[target.'cfg(any(target_os = "android", target_os = "ios"))'.dependencies]
+tauri-plugin-barcode-scanner = { path = "plugins/tauri-plugin-qr-scanner" }
 
 [profile.release]
 codegen-units = 1

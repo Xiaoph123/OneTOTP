@@ -24,6 +24,22 @@ export async function clearClipboard(): Promise<void> {
 }
 
 /**
+ * 解析「重复账户」错误。
+ * 后端在检测到密钥已存在时，返回 `duplicate:{issuer}|{account}` 格式的错误串。
+ * 命中则返回已存在的账户信息，供 UI 给出明确提示；否则返回 null。
+ */
+export function parseDuplicateError(e: unknown): { issuer: string; account: string } | null {
+  const raw = typeof e === "string" ? e : e instanceof Error ? e.message : String(e ?? "");
+  const marker = "duplicate:";
+  const idx = raw.indexOf(marker);
+  if (idx < 0) return null;
+  const payload = raw.slice(idx + marker.length);
+  const sep = payload.indexOf("|");
+  if (sep < 0) return { issuer: payload.trim(), account: "" };
+  return { issuer: payload.slice(0, sep).trim(), account: payload.slice(sep + 1).trim() };
+}
+
+/**
  * 「失败清除剪贴板」开关的本地镜像：
  * 锁定状态下保险库未解密、读不到设置，解锁页只能依赖此镜像判断是否执行清空。
  */

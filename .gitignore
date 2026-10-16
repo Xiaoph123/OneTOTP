@@ -1,2 +1,32 @@
-# 构建产物：安装包与分发包（不入版本库）
+# ═══════════════════════════════════════════════════════════════
+# OneTotp 忽略规则
+# ═══════════════════════════════════════════════════════════════
+
+# ── 保险库与应用数据（含账号密钥，严禁入库）──
+# 匹配仓库内任意层级的保险库、锁定凭证与备份目录
+*.vault.json
+onetotp.vault.json
+onetotp.lock.json
+backups/
+
+# ── 构建产物：安装包与分发包（不入版本库）──
 /dist
+/dist-android/
+/桌面版beta/
+*.apk
+*.idsig
+_icon_backup/
+
+# ── 密钥与凭证（严禁入库）──
+*.keystore
+*.jks
+key.properties
+keystore.properties
+*.p12
+*.pfx
+
+# ── 环境与本地配置 ──
+.env
+.env.*
+!.env.example
+*.local

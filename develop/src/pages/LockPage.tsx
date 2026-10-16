@@ -41,7 +41,10 @@ export function LockPage() {
     setBioBusy(true);
     setError(null);
     try {
-      const result = await authenticateBiometric();
+      const result = await authenticateBiometric(
+        t("验证身份以解锁 OneTotp"),
+        t("取消"),
+      );
       if (result.ok && result.password) {
         const ok = await unlockWithPassword(result.password);
         if (!ok) setError(t("密码错误，请重试"));

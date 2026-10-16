@@ -159,6 +159,12 @@ export const en: Record<string, string> = {
   "账户已添加": "Account added",
   "已扫码添加账户": "Account added by scan",
   "二维码识别失败": "Failed to recognize QR code",
+  "解码：": "Decoder: ",
+  "未授予相机权限，请在系统设置中开启后重试":
+    "Camera permission not granted. Please enable it in system settings and retry.",
+  "已取消扫码": "Scan cancelled",
+  "未检测到可用的摄像头": "No usable camera detected",
+  "扫码失败：{msg}": "Scan failed: {msg}",
   "已识别二维码，正在添加…": "QR code recognized, adding…",
   "未能识别二维码内容：{msg}": "Could not recognize the QR code: {msg}",
   "未在图片中识别到二维码，请尝试更清晰、完整包含二维码的图片":
@@ -169,6 +175,13 @@ export const en: Record<string, string> = {
   "已从令牌解析账户信息": "Parsed account info from token",
   "令牌解析失败：{msg}": "Failed to parse token: {msg}",
   "已导入 {n} 个账户": "Imported {n} account(s)",
+  "该验证码已添加过：{name}，不能重复添加":
+    "This code has already been added: {name}. Duplicates are not allowed.",
+  "该验证码已存在于「{name}」，不能重复": "This code already exists as \"{name}\" and cannot be duplicated.",
+  "这 {n} 个账户都已存在，未新增任何账户":
+    "All {n} account(s) already exist; nothing was added.",
+  "已导入 {added} 个账户，跳过 {skipped} 个重复项":
+    "Imported {added} account(s), skipped {skipped} duplicate(s).",
 
   // ── 导入导出 ──
   "导入导出": "Import & Export",
@@ -327,6 +340,7 @@ export const en: Record<string, string> = {
   "修改密码": "Change password",
   "启用锁定": "Enable lock",
   "指纹 / 面容解锁": "Fingerprint / Face unlock",
+  "验证身份以解锁 OneTotp": "Verify your identity to unlock OneTotp",
   "Windows Hello 解锁": "Windows Hello unlock",
   "调用系统指纹或面容快速解锁": "Use system fingerprint or face to unlock quickly",
   "使用系统指纹、人脸或 PIN 快速解锁": "Unlock quickly with system fingerprint, face or PIN",
@@ -352,11 +366,32 @@ export const en: Record<string, string> = {
   "请输入当前密码以关闭锁定": "Enter the current password to disable the lock",
   "已关闭应用锁定": "App lock disabled",
   "请先在下方设置锁定密码": "Set a lock password below first",
+  "关闭应用锁定": "Disable app lock",
+  "设置一个锁定密码，打开应用时需输入才能查看验证码":
+    "Set a lock password; you'll need it to view codes when opening the app.",
+  "请输入当前密码以确认关闭锁定": "Enter your current password to confirm disabling the lock.",
+  "设置密码（至少 8 位）": "Set password (at least 8 characters)",
+  "请输入当前密码": "Please enter your current password",
+  "启用": "Enable",
+  "关闭锁定": "Disable lock",
   "两次输入的新密码不一致": "The two new passwords do not match",
   "新密码长度至少 8 位": "New password must be at least 8 characters",
   "密码已更新": "Password updated",
   "锁定密码已更新": "Lock password updated",
   "已启用应用锁定": "App lock enabled",
+  "请先启用应用锁定": "Enable app lock first",
+  "点击开启后可绑定本机指纹或面容": "Tap to bind your device fingerprint or face",
+  "启用生物识别解锁": "Enable biometric unlock",
+  "输入当前锁定密码，验证通过后将绑定本机指纹或面容用于快速解锁":
+    "Enter your lock password; after verification your device fingerprint or face will be bound for quick unlock.",
+  "当前设备未录入指纹或面容，请先在系统设置中录入":
+    "No fingerprint or face enrolled on this device. Please enroll one in system settings first.",
+  "请先启用应用锁定，再开启生物识别":
+    "Enable app lock first, then turn on biometrics.",
+  "处理中…": "Processing…",
+  "处理中，请稍候…": "Processing, please wait…",
+  "正在绑定生物识别凭据，请稍候…":
+    "Binding biometric credential, please wait…",
 
   // ── 分类管理 ──
   "编辑分类": "Edit category",

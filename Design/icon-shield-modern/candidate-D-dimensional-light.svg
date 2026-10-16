@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" fill="none">
+  <defs>
+
+    <linearGradient id="tN4light" x1="0.1" y1="0" x2="0.85" y2="1">
+      <stop offset="0" stop-color="#5E96FF"/><stop offset="1" stop-color="#0E4FD6"/>
+    </linearGradient>
+    <linearGradient id="sN4light" x1="0.2" y1="0" x2="0.8" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#DCE8FF"/>
+    </linearGradient>
+    <filter id="fN4light" x="-30%" y="-30%" width="160%" height="170%">
+      <feGaussianBlur stdDeviation="20"/>
+    </filter>
+  </defs>
+  <rect x="64" y="64" width="896" height="896" rx="212" fill="url(#tN4light)"/>
+  <g transform="translate(512,512) scale(0.74) translate(-512,-512)">
+    <g filter="url(#fN4light)"><path d="M 364 198 H 660 A 108 108 0 0 1 768 306 V 502 C 768 636 680 766 512 854 C 344 766 256 636 256 502 V 306 A 108 108 0 0 1 364 198 Z" fill="#0A2E7A" fill-opacity="0.42" transform="translate(0,24)"/></g>
+    <path d="M 364 198 H 660 A 108 108 0 0 1 768 306 V 502 C 768 636 680 766 512 854 C 344 766 256 636 256 502 V 306 A 108 108 0 0 1 364 198 Z" fill="url(#sN4light)"/>
+    <path d="M 395.22 441.78 L 512 364 L 512 608 M 390 608 L 634 608" fill="none" stroke="#1664FF" stroke-width="78" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>

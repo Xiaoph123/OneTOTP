@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" fill="none">
+  <defs>
+    <title>OneTotp shield light app</title>
+    <linearGradient id="bdlightR1" gradientUnits="userSpaceOnUse" x1="320" y1="220" x2="730" y2="840">
+      <stop offset="0" stop-color="#6FA5FF"/><stop offset="0.5" stop-color="#1664FF"/><stop offset="1" stop-color="#0B41B8"/>
+    </linearGradient>
+    <linearGradient id="rmlightR1" gradientUnits="userSpaceOnUse" x1="330" y1="250" x2="690" y2="790">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.95"/>
+      <stop offset="0.32" stop-color="#FFFFFF" stop-opacity="0.4"/>
+      <stop offset="0.66" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="gllightR1" gradientUnits="userSpaceOnUse" x1="512" y1="324" x2="512" y2="684">
+      <stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#DCEAFF"/>
+    </linearGradient>
+    <clipPath id="cllightR1"><path d="M 358 208 H 666 A 96 96 0 0 1 762 304 V 516 C 762 648 676 760 512 846 C 348 760 262 648 262 516 V 304 A 96 96 0 0 1 358 208 Z"/></clipPath>
+  </defs>
+  <rect x="64" y="64" width="896" height="896" rx="200" fill="#FFFFFF"/>
+  <g transform="translate(512,512) scale(0.82) translate(-512,-512)">
+  <path d="M 358 208 H 666 A 96 96 0 0 1 762 304 V 516 C 762 648 676 760 512 846 C 348 760 262 648 262 516 V 304 A 96 96 0 0 1 358 208 Z" fill="url(#bdlightR1)"/>
+  <g clip-path="url(#cllightR1)">
+    <path d="M 358 208 H 666 A 96 96 0 0 1 762 304 V 516 C 762 648 676 760 512 846 C 348 760 262 648 262 516 V 304 A 96 96 0 0 1 358 208 Z M 358 208 H 666 A 96 96 0 0 1 762 304 V 516 C 762 648 676 760 512 846 C 348 760 262 648 262 516 V 304 A 96 96 0 0 1 358 208 Z" fill="#052B7D" fill-opacity="0.92" fill-rule="evenodd" transform="translate(512,512) scale(0.885) translate(-512,-512) translate(-26,-26)"/>
+  </g>
+  <g clip-path="url(#cllightR1)">
+    <path d="M 358 208 H 666 A 96 96 0 0 1 762 304 V 516 C 762 648 676 760 512 846 C 348 760 262 648 262 516 V 304 A 96 96 0 0 1 358 208 Z" fill="none" stroke="url(#rmlightR1)" stroke-width="46" transform="translate(512,512) scale(0.955) translate(-512,-512)"/>
+  </g>
+  <path d="M 358 208 H 666 A 96 96 0 0 1 762 304 V 516 C 762 648 676 760 512 846 C 348 760 262 648 262 516 V 304 A 96 96 0 0 1 358 208 Z" fill="none" stroke="#0A38A8" stroke-width="40" stroke-linejoin="round"/>
+  <path d="M 397.63 438.37 L 512 362 L 512 606 M 392 606 L 632 606" fill="none" stroke-width="76" stroke-linecap="round" stroke-linejoin="round" stroke="#04205E" stroke-opacity="0.8" transform="translate(0,10)"/>
+  <path d="M 397.63 438.37 L 512 362 L 512 606 M 392 606 L 632 606" fill="none" stroke-width="76" stroke-linecap="round" stroke-linejoin="round" stroke="url(#gllightR1)"/>
+  </g>
+</svg>

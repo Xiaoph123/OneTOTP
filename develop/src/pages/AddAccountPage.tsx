@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useApp } from "../state/AppContext";
 import { api, type AccountView } from "../lib/api";
-import { decodeQrFromImage } from "../lib/qr";
+import { decodeQrFromImage, detectNativeQr, isNativeQrSupported } from "../lib/qr";
 import { Button, IconButton } from "../components/Button";
 import { Select } from "../components/Select";
 import { useToast } from "../components/Toast";
 import { AlertTriangle, Camera, ChevronLeft, Check, Copy, Info, Upload } from "../components/icons";
-import { copyText } from "../lib/utils";
+import { copyText, parseDuplicateError } from "../lib/utils";
+import { isMobile } from "../lib/platform";
 import { useI18n } from "../i18n";
 
 type Mode = "scan" | "manual" | "file";
@@ -51,6 +52,24 @@ interface Props {
   editing?: AccountView;
 }
 
+/**
+ * 把插件/系统抛出的各类错误转成可读文案。
+ * 原生插件常抛出对象或 "cancelled" 字符串，直接 String() 会得到 [object Object]。
+ */
+function describeError(t: (k: string, p?: Record<string, string>) => string, e: unknown): string {
+  const raw =
+    typeof e === "string"
+      ? e
+      : e && typeof e === "object" && "message" in e
+        ? String((e as { message: unknown }).message)
+        : String(e);
+  const lower = raw.toLowerCase();
+  if (lower.includes("cancel")) return t("已取消扫码");
+  if (lower.includes("permission")) return t("未授予相机权限，请在系统设置中开启后重试");
+  if (lower.includes("no camera")) return t("未检测到可用的摄像头");
+  return t("扫码失败：{msg}", { msg: raw });
+}
+
 export function AddAccountPage({ editing }: Props) {
   const { navigate, goBack, refreshAccounts, categories } = useApp();
   const toast = useToast();
@@ -89,10 +108,17 @@ export function AddAccountPage({ editing }: Props) {
   const [tokenNotice, setTokenNotice] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
   const [scanNotice, setScanNotice] = useState<string | null>(null);
+  // 诊断信息：当前解码路径与视频帧尺寸（用于排查移动端卡顿）
+  const [scanDiag, setScanDiag] = useState("");
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const rafRef = useRef<number | null>(null);
+  const timerRef = useRef<number | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  // 本次扫码是否走原生 BarcodeDetector 路径
+  const nativeRef = useRef(false);
+  // 诊断用：解码累计次数与总耗时
+  const statRef = useRef({ frames: 0, decodeMs: 0 });
 
   /** 将解析出的账户信息填入表单 */
   const applyParsed = useCallback(
@@ -139,6 +165,15 @@ export function AddAccountPage({ editing }: Props) {
         toast.success(t("已扫码添加账户"));
         navigate({ name: "codes" });
       } catch (e) {
+        // 重复账户：明确提示已存在，并给出可读文案
+        const dup = parseDuplicateError(e);
+        if (dup) {
+          const label = dup.account ? `${dup.issuer}（${dup.account}）` : dup.issuer;
+          const msg = t("该验证码已添加过：{name}，不能重复添加", { name: label });
+          setScanNotice(msg);
+          toast.warning(msg);
+          return;
+        }
         setScanNotice(t("未能识别二维码内容：{msg}", { msg: String(e) }));
         toast.error(t("二维码识别失败"));
       }
@@ -152,6 +187,21 @@ export function AddAccountPage({ editing }: Props) {
       cancelAnimationFrame(rafRef.current);
       rafRef.current = null;
     }
+    if (timerRef.current !== null) {
+      window.clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+    // 先断开 video 与流的绑定再停轨道：部分 WebView 版本下仅 stop track
+    // 不会释放底层视频解码资源，反复开关会叠加占用。
+    const video = videoRef.current;
+    if (video) {
+      try {
+        video.pause();
+      } catch {
+        // 忽略
+      }
+      video.srcObject = null;
+    }
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
@@ -161,7 +211,7 @@ export function AddAccountPage({ editing }: Props) {
 
   useEffect(() => stopCamera, [stopCamera]);
 
-  // <video> 挂载后再把摄像头流附加上去并启动逐帧解码。
+  // <video> 挂载后再把摄像头流附加上去并启动解码循环。
   // 必须放在 effect 里：startCamera 中 setScanning(true) 之后 DOM 尚未更新，
   // 此时 videoRef.current 仍为 null，直接赋值会拿不到元素，表现为「开启摄像头后黑屏」。
   useEffect(() => {
@@ -174,23 +224,138 @@ export function AddAccountPage({ editing }: Props) {
     const played = video.play();
     if (played && typeof played.catch === "function") played.catch(() => {});
 
-    const tick = () => {
+    let stopped = false;
+
+    // 实时指标采样：每 2 秒刷新一次诊断行，暴露 解码耗时/相机实际尺寸/
+    // 丢帧数/JS 堆/实测帧率 等客观数据，用于区分「解码过载」与「渲染层瓶颈」。
+    const track = stream.getVideoTracks()[0];
+    // 实测帧率计数器：相机出帧（rVFC）与 UI 渲染（rAF）分开统计
+    let camFrames = 0;
+    let uiFrames = 0;
+    let rvfcId: number | null = null;
+    const countCamFrame = () => {
+      camFrames += 1;
       const v = videoRef.current;
-      if (v && v.readyState === v.HAVE_ENOUGH_DATA) {
-        const text = decodeQrFromImage(v, v.videoWidth, v.videoHeight, true);
+      if (v && typeof v.requestVideoFrameCallback === "function") {
+        rvfcId = v.requestVideoFrameCallback(countCamFrame);
+      }
+    };
+    if (typeof video.requestVideoFrameCallback === "function") {
+      rvfcId = video.requestVideoFrameCallback(countCamFrame);
+    }
+    let uiRafId: number | null = null;
+    const countUiFrame = () => {
+      uiFrames += 1;
+      uiRafId = requestAnimationFrame(countUiFrame);
+    };
+    uiRafId = requestAnimationFrame(countUiFrame);
+
+    const sampleTimer = window.setInterval(() => {
+      const v = videoRef.current;
+      if (!v) return;
+      const settings = track?.getSettings?.() ?? {};
+      const camSize =
+        settings.width && settings.height ? `${settings.width}×${settings.height}` : "?";
+      const camFpsSetting = settings.frameRate ? settings.frameRate.toFixed(0) : "?";
+      const camFps = (camFrames / 2).toFixed(1);
+      const uiFps = (uiFrames / 2).toFixed(0);
+      camFrames = 0;
+      uiFrames = 0;
+      const q = v.getVideoPlaybackQuality?.();
+      const dropped = q ? q.droppedVideoFrames : -1;
+      const heap = (performance as unknown as { memory?: { usedJSHeapSize: number } }).memory;
+      const heapMb = heap ? (heap.usedJSHeapSize / 1048576).toFixed(1) : "?";
+      const s = statRef.current;
+      const avgMs = s.frames > 0 ? (s.decodeMs / s.frames).toFixed(0) : "-";
+      const mode = nativeRef.current ? "native" : "jsQR";
+      setScanDiag(
+        `${mode} | 相机实${camFps}fps 设${camFpsSetting} UI${uiFps}fps 丢帧${dropped} | 帧${v.videoWidth}×${v.videoHeight} 采集${camSize} | 解码均${avgMs}ms(${s.frames}) | 堆${heapMb}MB`,
+      );
+    }, 2000);
+
+    // 两条解码路径：
+    //  1) 原生 BarcodeDetector：detect(video) 在原生侧完成，不做 GPU→CPU 回读。
+    //  2) jsQR 降级：drawImage + getImageData 回读，移动端按固定帧率节流。
+    const startLoop = () => {
+      const mobile = isMobile();
+      const decodeMaxEdge = mobile ? 480 : 640;
+      // 移动端统一 5fps（每 200ms 解码一次），桌面逐帧
+      const intervalMs = mobile ? 200 : 0;
+
+      const decodeOnce = async (): Promise<boolean> => {
+        const v = videoRef.current;
+        if (!v || v.readyState !== v.HAVE_ENOUGH_DATA) return false;
+        const t0 = performance.now();
+        if (nativeRef.current) {
+          const text = await detectNativeQr(v);
+          statRef.current.frames += 1;
+          statRef.current.decodeMs += performance.now() - t0;
+          if (text) {
+            handleDecoded(text);
+            return true;
+          }
+          return false;
+        }
+        const text = decodeQrFromImage(v, v.videoWidth, v.videoHeight, true, decodeMaxEdge);
+        statRef.current.frames += 1;
+        statRef.current.decodeMs += performance.now() - t0;
         if (text) {
           handleDecoded(text);
-          return;
+          return true;
         }
+        return false;
+      };
+
+      // 节流循环：每轮解码完成后再排下一轮（而非固定帧率堆叠），
+      // 避免解码慢于帧率时任务越积越多。
+      const loop = () => {
+        if (stopped) return;
+        decodeOnce().then((done) => {
+          if (stopped || done) return;
+          if (intervalMs > 0) {
+            timerRef.current = window.setTimeout(loop, intervalMs);
+          } else {
+            rafRef.current = requestAnimationFrame(loop);
+          }
+        });
+      };
+      if (intervalMs > 0) {
+        timerRef.current = window.setTimeout(loop, intervalMs);
+      } else {
+        rafRef.current = requestAnimationFrame(loop);
       }
-      rafRef.current = requestAnimationFrame(tick);
     };
-    rafRef.current = requestAnimationFrame(tick);
+
+    // 先探测原生能力，再决定走哪条路径
+    isNativeQrSupported().then((native) => {
+      if (stopped) return;
+      nativeRef.current = native;
+      startLoop();
+    });
 
     return () => {
+      stopped = true;
+      window.clearInterval(sampleTimer);
+      if (rvfcId !== null) {
+        try {
+          video.cancelVideoFrameCallback?.(rvfcId);
+        } catch {
+          // 忽略
+        }
+      }
+      if (uiRafId !== null) cancelAnimationFrame(uiRafId);
       if (rafRef.current !== null) {
         cancelAnimationFrame(rafRef.current);
         rafRef.current = null;
+      }
+      if (timerRef.current !== null) {
+        window.clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+      // 停止相机轨道，避免重复进入扫码页时残留占用
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((t) => t.stop());
+        streamRef.current = null;
       }
     };
   }, [scanning, handleDecoded]);
@@ -238,12 +403,77 @@ export function AddAccountPage({ editing }: Props) {
     input.click();
   };
 
-  /** 使用摄像头实时扫码（完全离线） */
+  /**
+   * 发起扫码。
+   * 移动端（Android / iOS）走原生相机插件：WebView 的 getUserMedia 视频管线
+   * 在部分 Android 设备上出帧帧率极低（实测约 1~2fps），预览严重卡顿不可用，
+   * 原生相机完全绕开该管线。桌面端仍用 WebView 摄像头 + jsQR。
+   */
   const startCamera = async () => {
     setScanNotice(null);
+    setScanDiag("");
+    statRef.current = { frames: 0, decodeMs: 0 };
+
+    if (isMobile()) {
+      setScanning(true);
+      let cancelScan: (() => Promise<void>) | null = null;
+      try {
+        const { scan, cancel, Format, requestPermissions, checkPermissions } = await import(
+          "@tauri-apps/plugin-barcode-scanner"
+        );
+        // 插件不会自动申请相机权限，必须先显式请求，否则 scan 会直接抛异常
+        let state = await checkPermissions();
+        if (state !== "granted") {
+          state = await requestPermissions();
+        }
+        if (state !== "granted") {
+          setScanNotice(t("未授予相机权限，请在系统设置中开启后重试"));
+          return;
+        }
+        // 原生相机是全屏覆盖层，会盖住应用 UI（没有可见的返回按钮）。
+        // 注册取消钩子，让系统返回键能关闭扫描页而不是退出应用。
+        cancelScan = async () => {
+          try {
+            await cancel();
+          } catch {
+            // 忽略：扫描可能已结束
+          }
+        };
+        (window as unknown as { __cancelActiveScan?: () => Promise<void> }).__cancelActiveScan =
+          cancelScan;
+
+        // windowed=false：原生相机全屏覆盖（windowed=true 是让 WebView 透明、
+        // 相机置于其后，会被本页背景遮住，不适合当前全屏扫码体验）
+        const result = await scan({ windowed: false, formats: [Format.QRCode] });
+        const text = result?.content;
+        if (text) {
+          await handleDecoded(text);
+        }
+      } catch (e) {
+        // 用户取消或权限被拒：给出可读提示
+        setScanNotice(describeError(t, e));
+      } finally {
+        delete (window as unknown as { __cancelActiveScan?: () => Promise<void> })
+          .__cancelActiveScan;
+        setScanning(false);
+      }
+      return;
+    }
+
     try {
+      // 采集分辨率压到 640x480：相机启动初期给的是低分辨率预览帧，
+      // 约 2 秒对焦稳定后会切到请求的高分辨率，每帧数据量骤增、
+      // 合成与缩放开销翻倍——这正是「2 秒后开始卡」的诱因。
+      // 扫码只需 640 级别即可识别，用 ideal 让浏览器在不支持时回退。
+      // frameRate 显式要求 30fps：低光照下相机为提升曝光会自动降帧，
+      // 这里给出期望值，尽量让相机维持较高帧率。
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "environment" },
+        video: {
+          facingMode: "environment",
+          width: { ideal: 640 },
+          height: { ideal: 480 },
+          frameRate: { ideal: 30, min: 15 },
+        },
         audio: false,
       });
       streamRef.current = stream;
@@ -295,6 +525,19 @@ export function AddAccountPage({ editing }: Props) {
         navigate({ name: "codes" });
       }
     } catch (e) {
+      // 重复账户：后端返回 duplicate:{issuer}|{account}，给出明确提示
+      const dup = parseDuplicateError(e);
+      if (dup) {
+        const label = dup.account ? `${dup.issuer}（${dup.account}）` : dup.issuer;
+        const msg =
+          isEdit && editing
+            ? t("该验证码已存在于「{name}」，不能重复", { name: label })
+            : t("该验证码已添加过：{name}，不能重复添加", { name: label });
+        setLocalError(msg);
+        toast.warning(msg);
+        // 进入编辑模式时无「继续添加」诉求，直接结束
+        return;
+      }
       const msg = String(e);
       setLocalError(msg);
       toast.error(msg);
@@ -307,9 +550,20 @@ export function AddAccountPage({ editing }: Props) {
     setLocalError(null);
     try {
       if (!uriText.trim()) throw new Error(t("请粘贴 otpauth 链接"));
-      const count = await api.importOtpauthText(uriText);
+      const { added, skipped } = await api.importOtpauthText(uriText);
       await refreshAccounts();
-      toast.success(t("已导入 {n} 个账户", { n: count }));
+      if (added === 0 && skipped > 0) {
+        // 全部重复：明确告知，不跳转
+        const msg = t("这 {n} 个账户都已存在，未新增任何账户", { n: skipped });
+        setLocalError(msg);
+        toast.warning(msg);
+        return;
+      }
+      if (skipped > 0) {
+        toast.success(t("已导入 {added} 个账户，跳过 {skipped} 个重复项", { added, skipped }));
+      } else {
+        toast.success(t("已导入 {n} 个账户", { n: added }));
+      }
       navigate({ name: "codes" });
     } catch (e) {
       const msg = String(e);
@@ -357,7 +611,8 @@ export function AddAccountPage({ editing }: Props) {
         {mode === "scan" && !isEdit ? (
           <div className="panel" style={{ padding: 14 }}>
             <div className="scan-box">
-              {scanning ? (
+              {/* 移动端走原生相机（全屏原生取景），此处只显示图标占位 */}
+              {scanning && !isMobile() ? (
                 <video
                   ref={videoRef}
                   playsInline
@@ -386,13 +641,20 @@ export function AddAccountPage({ editing }: Props) {
                 <div style={{ fontSize: "var(--font-size-body)", color: "var(--color-text-3)", marginTop: 3 }}>
                   {t("支持摄像头实时扫码，或从本地图片识别（完全离线）")}
                 </div>
+                {/* 诊断行仅在桌面端（WebView 路径）显示 */}
+                {scanDiag && !isMobile() ? (
+                  <div style={{ fontSize: "var(--font-size-caption, 12px)", color: "var(--color-text-4, #999)", marginTop: 3 }}>
+                    {t("解码：")}{scanDiag}
+                  </div>
+                ) : null}
               </div>
               <div className="scan-actions">
-                {scanning ? (
+                {/* 移动端原生扫描期间由系统取景页自行管理，不显示停止按钮 */}
+                {scanning && !isMobile() ? (
                   <Button variant="secondary" block onClick={stopCamera}>
                     {t("停止扫描")}
                   </Button>
-                ) : (
+                ) : scanning ? null : (
                   <Button
                     variant="primary"
                     block

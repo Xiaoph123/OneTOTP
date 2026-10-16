@@ -100,14 +100,18 @@ export async function enrollBiometric(password: string): Promise<BiometricResult
 /**
  * 生物识别解锁：系统先弹认证，通过后返回解密出的口令。
  * 调用方拿到口令后走正常解锁流程。
+ *
+ * @param reason    系统弹窗中显示的验证原因文案
+ * @param cancelTitle 系统弹窗「取消」按钮文案（缺省时由原生侧回退为「取消」）
  */
-export async function authenticateBiometric(): Promise<BiometricResult> {
+export async function authenticateBiometric(reason?: string, cancelTitle?: string): Promise<BiometricResult> {
   if (!hasBiometricBridge()) return FAIL_UNSUPPORTED;
   try {
     const res = await getData({
       domain: DATA_DOMAIN,
       name: DATA_NAME,
-      reason: "验证身份以解锁 OneTotp",
+      reason: reason || "验证身份以解锁 OneTotp",
+      cancelTitle,
     });
     return { ok: true, reason: null, password: res.data };
   } catch (e) {

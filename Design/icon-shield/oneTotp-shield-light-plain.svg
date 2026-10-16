@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" fill="none">
+  <defs>
+    <title>OneTotp shield light plain</title>
+    <clipPath id="pllightP"><path d="M 358 208 H 666 A 96 96 0 0 1 762 304 V 516 C 762 648 676 760 512 846 C 348 760 262 648 262 516 V 304 A 96 96 0 0 1 358 208 Z"/></clipPath>
+  </defs>
+  <path d="M 358 208 H 666 A 96 96 0 0 1 762 304 V 516 C 762 648 676 760 512 846 C 348 760 262 648 262 516 V 304 A 96 96 0 0 1 358 208 Z" fill="#1664FF12"/>
+  <g clip-path="url(#pllightP)">
+    <path d="M 358 208 H 666 A 96 96 0 0 1 762 304 V 516 C 762 648 676 760 512 846 C 348 760 262 648 262 516 V 304 A 96 96 0 0 1 358 208 Z" fill="#1664FF29" transform="translate(74,-14)"/>
+  </g>
+  <path d="M 358 208 H 666 A 96 96 0 0 1 762 304 V 516 C 762 648 676 760 512 846 C 348 760 262 648 262 516 V 304 A 96 96 0 0 1 358 208 Z" fill="none" stroke="#1664FF" stroke-width="40" stroke-linejoin="round"/>
+  <path d="M 406.46 433.54 L 512 360 L 512 608 M 396 608 L 628 608" fill="none" stroke="#1664FF" stroke-width="64" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

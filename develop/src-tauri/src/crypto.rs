@@ -114,9 +114,3 @@ pub fn validate_password(password: &str) -> Result<(), String> {
     }
     Ok(())
 }
-
-/// 对密码做一次性校验哈希（用于本地校验，独立于保险库密钥）
-pub fn hash_password(password: &str, salt: &[u8]) -> Result<String, String> {
-    let key = derive_key(password, salt)?;
-    Ok(B64.encode(key))
-}

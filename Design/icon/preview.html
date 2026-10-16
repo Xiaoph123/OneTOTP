@@ -1,0 +1,44 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>OneTotp 图标预览</title><style>
+  body{margin:0;padding:20px 24px;background:#fff;font:12px/1.5 "PingFang SC","Microsoft YaHei","Segoe UI",sans-serif;color:#111}
+  h2{margin:0 0 4px;font-size:14px;font-weight:600}
+  h2 small{font-weight:400;color:#999;font-size:11px;margin-left:8px}
+  .row{display:flex;align-items:flex-end;gap:16px;margin:10px 0 22px;padding-bottom:14px;border-bottom:1px solid #eee}
+  .row img{display:block}
+  .d512{width:512px;height:512px;image-rendering:auto}
+  .d128{width:128px;height:128px}.d64{width:64px;height:64px}.d48{width:48px;height:48px}
+  .d32{width:32px;height:32px}.d16{width:16px;height:16px}
+  .pix{image-rendering:pixelated}
+  .dark{background:#101828;border-radius:8px;padding:10px;display:flex;align-items:flex-end;gap:12px}
+  .bar{display:flex;align-items:center;gap:8px;padding:4px 10px;border-radius:6px;font-size:11px}
+  .bar.light{background:#f3f3f3;color:#333}.bar.dark{background:#1c1c1c;color:#eee}
+  .bar img{width:20px;height:20px}
+  .cap{color:#999;font-size:11px;margin-top:2px}
+</style></head><body>
+  <h2>主图标 oneTotp-icon.svg<small>512 · 128 · 64 · 48 · 32 · 16</small></h2>
+  <div class="row">
+    <img class="d512 pix" src="preview/oneTotp-icon.png">
+    <img class="d128 pix" src="preview/oneTotp-icon-128.png">
+    <img class="d64 pix" src="preview/oneTotp-icon-64.png">
+    <img class="d48 pix" src="preview/oneTotp-icon-48.png">
+    <img class="d32 pix" src="preview/oneTotp-icon-32.png">
+    <img class="d16 pix" src="preview/oneTotp-icon-16.png">
+  </div>
+  <h2>任务栏实景模拟<small>20px，浅色 / 深色任务栏</small></h2>
+  <div class="row">
+    <div class="bar light"><img src="preview/oneTotp-icon-32.png">OneTotp</div>
+    <div class="bar dark"><img src="preview/oneTotp-icon-32.png">OneTotp</div>
+  </div>
+  <h2>小尺寸简化版 oneTotp-icon-small.svg<small>仅建议 ≤24px 使用，用于托盘 / 通知区</small></h2>
+  <div class="row">
+    <img class="d32 pix" src="preview/oneTotp-icon-small-32.png">
+    <img class="d16 pix" src="preview/oneTotp-icon-small-16.png">
+    <div class="dark"><img class="d32 pix" src="preview/oneTotp-icon-small-32.png"><img class="d16 pix" src="preview/oneTotp-icon-small-16.png"></div>
+  </div>
+  <h2>纯 token 扁平版 oneTotp-icon-flat.svg<small>#1664FF 实底，无渐变无高光</small></h2>
+  <div class="row"><img class="d128 pix" src="preview/oneTotp-icon-flat-128.png"></div>
+  <h2>透明底标识<small>浅色背景用蓝版 / 深色背景用白版</small></h2>
+  <div class="row">
+    <img class="d128" src="preview/oneTotp-mark-512.png">
+    <div class="dark"><img class="d128" src="preview/oneTotp-mark-white-512.png"></div>
+  </div>
+</body></html>

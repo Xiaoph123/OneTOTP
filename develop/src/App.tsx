@@ -39,6 +39,14 @@ function Router() {
   // 移动端系统返回键桥接：Android 原生侧调用，返回 true 表示已处理（返回上一级）
   useEffect(() => {
     (window as unknown as { __handleAndroidBack?: () => boolean }).__handleAndroidBack = () => {
+      // 优先关闭正在进行的原生扫码（全屏相机覆盖层，应用 UI 不可见）
+      const cancelScan = (
+        window as unknown as { __cancelActiveScan?: () => Promise<void> }
+      ).__cancelActiveScan;
+      if (cancelScan) {
+        cancelScan();
+        return true;
+      }
       // 有内层路由可返回时返回上一级
       return goBack();
     };

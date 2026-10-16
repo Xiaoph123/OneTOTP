@@ -1,0 +1,58 @@
+<!doctype html><html><head><meta charset="utf-8"><title>ONETOTP · 几何重建</title><style>
+body{margin:0;padding:22px 26px;background:#fafbfc;font:12px/1.7 "PingFang SC","Microsoft YaHei","Segoe UI",sans-serif;color:#111}
+h1{margin:0 0 4px;font-size:17px}h1 small{font-weight:400;color:#888;font-size:12px;margin-left:8px}
+h2{margin:24px 0 10px;font-size:14px}
+.card{border-radius:10px;padding:18px 22px;margin-bottom:12px}
+.onLight{background:#fff;border:1px solid #e8eaed}.onDark{background:#141619}
+.cap{font-size:11px;color:#888;margin-top:8px}.onDark .cap{color:#9aa0ab}
+img{display:block}
+table{border-collapse:collapse;font-size:12px;margin-top:8px}
+th,td{border:1px solid #e8eaed;padding:5px 12px;text-align:left}th{background:#f7f8fa}
+.sw{display:flex;gap:12px;flex-wrap:wrap;margin-top:8px}
+.sw div{width:120px}.sw i{display:block;height:44px;border-radius:8px;border:1px solid rgba(0,0,0,.06)}
+.sw b{display:block;font:11px/1.6 Consolas,monospace;margin-top:3px}
+code{font:11px/1.6 Consolas,monospace;background:#f2f4f7;padding:2px 6px;border-radius:4px}
+.note{background:#e8f6ee;border:1px solid #a8ddc0;border-radius:8px;padding:10px 14px;font-size:12px;color:#1a5c38;margin-top:10px}
+</style></head><body>
+<h1>ONETOTP 字标 · 几何重建<small>按直线与圆弧重画，非自动描摹</small></h1>
+
+<h2>原图（含水印） vs 几何重建</h2>
+<div class="card onLight">
+  <img src="preview/_reference.png" width="887" height="148">
+  <img src="oneTotp-ONETOTP.svg" width="888" height="148" style="margin-top:10px">
+  <div class="cap">上＝原图 1:1　下＝几何重建 1:1</div>
+</div>
+
+<h2>缩放到 3 倍看边缘</h2>
+<div class="card onLight">
+  <div style="width:888px;overflow:hidden"><img src="oneTotp-ONETOTP.svg" width="2664" height="444"></div>
+  <div class="cap">3 倍放大：直线是真正的直线，圆弧曲率均匀，没有任何锯齿</div>
+</div>
+
+<h2>缩放表现</h2>
+<div class="card onLight">
+  <img src="oneTotp-ONETOTP.svg" width="444" height="74">
+  <img src="oneTotp-ONETOTP.svg" width="222" height="37" style="margin-top:10px">
+  <img src="oneTotp-ONETOTP.svg" width="111" height="19" style="margin-top:10px">
+</div>
+<div class="card onDark"><img src="oneTotp-ONETOTP.svg" width="666" height="111"><div class="cap">深色底</div></div>
+
+<h2>配色（5 色）</h2>
+<div class="sw">
+  <div><i style="background:#E88733"></i><b>#E88733</b>橙</div>
+  <div><i style="background:#70B0BE"></i><b>#70B0BE</b>蓝灰</div>
+  <div><i style="background:#D7305B"></i><b>#D7305B</b>玫红</div>
+  <div><i style="background:#7D5F92"></i><b>#7D5F92</b>紫</div>
+  <div><i style="background:#00ADA8"></i><b>#00ADA8</b>青绿</div>
+</div>
+
+<h2>文件</h2>
+<div class="card onLight">
+  <table>
+    <tr><th>文件</th><th>大小</th><th>说明</th></tr>
+    <tr><td>oneTotp-ONETOTP.svg</td><td>2.5 KB</td><td>888×148，18 条描边路径，全部是线段或圆弧</td></tr>
+    <tr><td>（旧的自动描摹版）</td><td>14.8 KB</td><td>已废弃：边缘锯齿、曲线不平滑</td></tr>
+  </table>
+  <div class="note">笔画宽度恒定 34px，所有笔画 = 直线段或标准圆弧。改粗细只改 <code>stroke-width</code>，改色只改 <code>stroke</code>。</div>
+</div>
+</body></html>

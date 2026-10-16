@@ -172,7 +172,7 @@ export function CategoriesPage() {
               </label>
             </div>
           </div>
-          <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+          <div className="btn-row" style={{ marginTop: 16 }}>
             {editingId ? (
               <Button block onClick={resetForm} disabled={busy}>
                 {t("取消")}

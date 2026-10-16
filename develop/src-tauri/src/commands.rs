@@ -6,6 +6,10 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 use tauri::State;
 
+/// 重复账户错误前缀：格式 `duplicate:{issuer}|{account}`，
+/// 供前端识别并给出「该验证码已存在」的明确提示。
+pub const DUPLICATE_MARKER: &str = "duplicate:";
+
 /// 运行期状态：解锁后密钥只保存在内存中
 pub struct AppState {
     pub app_dir: PathBuf,
@@ -149,8 +153,10 @@ pub fn initialize_vault(state: State<AppState>) -> Result<(), String> {
 pub fn unlock(state: State<AppState>, password: String) -> Result<(), String> {
     let lock = store::read_lock(&state.app_dir).ok_or_else(|| "未设置锁定密码".to_string())?;
     let salt = base64_decode(&lock.salt)?;
+    // 只派生一次 Argon2id：derive_key 与 hash_password 等价（后者就是前者再 base64），
+    // 原先调用两次会把最耗时的密钥派生做两遍，明显拖慢解锁。
     let key = crypto::derive_key(&password, &salt)?;
-    let verifier = crypto::hash_password(&password, &salt)?;
+    let verifier = base64_encode(&key);
     if verifier != lock.verifier {
         return Err("密码错误".to_string());
     }
@@ -198,8 +204,9 @@ pub fn set_lock_password(
 
     if enable {
         let salt = crypto::new_salt();
+        // 同 unlock：Argon2id 只派生一次，verifier 即该密钥的 base64
         let key = crypto::derive_key(&password, &salt)?;
-        let verifier = crypto::hash_password(&password, &salt)?;
+        let verifier = base64_encode(&key);
 
         let file = crypto::encrypt_payload(&payload, &key, &salt, false)?;
         store::write_vault(&state.app_dir, &file)?;
@@ -247,8 +254,22 @@ pub fn update_account(
         return Err("服务名称不能为空".to_string());
     }
     totp::validate_account_input(&input.otp_type, &input.algorithm, input.digits, input.period)?;
+    let secret = totp::normalize_secret(&input.secret);
     let mut view: Option<AccountView> = None;
     state.with_payload(|p| {
+        // 重复校验：改后的密钥若与其他账户（排除自身）相同，则视为重复
+        if let Some(dup) = p
+            .accounts
+            .iter()
+            .find(|a| a.id != id && a.secret == secret)
+        {
+            return Err(format!(
+                "{}|{}|{}",
+                DUPLICATE_MARKER,
+                dup.issuer,
+                dup.account
+            ));
+        }
         let categories = p.categories.clone();
         let acc = p
             .accounts
@@ -257,7 +278,7 @@ pub fn update_account(
             .ok_or_else(|| "账户不存在".to_string())?;
         acc.issuer = input.issuer.trim().to_string();
         acc.account = input.account.trim().to_string();
-        acc.secret = totp::normalize_secret(&input.secret);
+        acc.secret = secret;
         acc.otp_type = normalize_otp_type(&input.otp_type);
         acc.algorithm = totp::normalize_algorithm(&input.algorithm);
         acc.digits = input.digits;
@@ -367,11 +388,29 @@ pub fn add_account(state: State<AppState>, input: AccountInput) -> Result<Accoun
         return Err("服务名称不能为空".to_string());
     }
     totp::validate_account_input(&input.otp_type, &input.algorithm, input.digits, input.period)?;
+    let secret = totp::normalize_secret(&input.secret);
+    let issuer = input.issuer.trim().to_string();
+    let account_name = input.account.trim().to_string();
+
+    // 重复校验：密钥相同即视为同一个验证码（密钥决定生成的动态码）。
+    // 错误信息带固定前缀，供前端识别并给出明确提示。
+    state.with_payload(|p| {
+        if let Some(existing) = p.accounts.iter().find(|a| a.secret == secret) {
+            return Err(format!(
+                "{}|{}|{}",
+                DUPLICATE_MARKER,
+                existing.issuer,
+                existing.account
+            ));
+        }
+        Ok(())
+    })?;
+
     let account = Account {
         id: uuid::Uuid::new_v4().to_string(),
-        issuer: input.issuer.trim().to_string(),
-        account: input.account.trim().to_string(),
-        secret: totp::normalize_secret(&input.secret),
+        issuer,
+        account: account_name,
+        secret,
         otp_type: normalize_otp_type(&input.otp_type),
         algorithm: totp::normalize_algorithm(&input.algorithm),
         digits: input.digits,
@@ -393,9 +432,10 @@ pub fn add_account(state: State<AppState>, input: AccountInput) -> Result<Accoun
     view.ok_or_else(|| "账户创建失败".to_string())
 }
 
-/// 追加导入一批 otpauth 链接文本
+/// 追加导入一批 otpauth 链接文本。
+/// 返回 (新增数, 跳过数)：密钥已存在的账户会被跳过，避免重复添加。
 #[tauri::command]
-pub fn import_otpauth_text(state: State<AppState>, text: String) -> Result<u32, String> {
+pub fn import_otpauth_text(state: State<AppState>, text: String) -> Result<(u32, u32), String> {
     let mut parsed: Vec<Account> = Vec::new();
     for line in text.lines() {
         let line = line.trim();
@@ -410,13 +450,24 @@ pub fn import_otpauth_text(state: State<AppState>, text: String) -> Result<u32, 
     if parsed.is_empty() {
         return Err("未解析到有效账户".to_string());
     }
-    let count = parsed.len() as u32;
+    let mut added = 0u32;
+    let mut skipped = 0u32;
     state.with_payload(|p| {
-        p.accounts.extend(parsed);
+        for acc in parsed {
+            // 密钥相同即视为重复，跳过而不入库
+            if p.accounts.iter().any(|a| a.secret == acc.secret) {
+                skipped += 1;
+                continue;
+            }
+            p.accounts.push(acc);
+            added += 1;
+        }
         Ok(())
     })?;
-    state.persist()?;
-    Ok(count)
+    if added > 0 {
+        state.persist()?;
+    }
+    Ok((added, skipped))
 }
 
 #[tauri::command]

@@ -1,0 +1,31 @@
+[package]
+# 包名刻意保持与官方一致：插件标识符、权限前缀（barcode-scanner:*）与前端
+# JS 绑定（@tauri-apps/plugin-barcode-scanner）都依赖此名称。
+# 本 fork 与官方的唯一区别是 Android 解码器改用 ZXing（见 android/src/main/java），
+# 目录名 tauri-plugin-qr-scanner 仅用于标示这是离线 fork。
+name = "tauri-plugin-barcode-scanner"
+version = "2.5.3"
+description = "离线二维码扫描（Android 用 CameraX + ZXing，iOS 用系统 Vision），无 Google Play 服务依赖"
+authors = ["Tauri Programme within The Commons Conservancy"]
+edition = "2021"
+rust-version = "1.77.2"
+license = "Apache-2.0 OR MIT"
+build = "build.rs"
+links = "tauri-plugin-barcode-scanner"
+
+[lib]
+name = "tauri_plugin_barcode_scanner"
+path = "src/lib.rs"
+
+[dependencies]
+log = "0.4"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tauri = { version = "2", default-features = false }
+thiserror = "2"
+
+[build-dependencies]
+tauri-plugin = { version = "2", features = ["build"] }
+
+[target.'cfg(target_os = "ios")'.dependencies]
+tauri = { version = "2", features = ["wry"], default-features = false }

@@ -37,6 +37,13 @@ pub fn run() {
     #[cfg(any(target_os = "windows", target_os = "macos", target_os = "android", target_os = "ios"))]
     let builder = builder.plugin(tauri_plugin_biometry::init());
 
+    // 原生扫码插件（仅移动端）：用系统原生相机解码，绕开 WebView 的
+    // getUserMedia 视频管线（部分 Android 设备该管线出帧帧率极低导致卡顿）。
+    // Android 为 vendored fork（CameraX + ZXing，零 GMS 依赖，完全离线），
+    // 包名与官方一致以复用既有权限标识与前端 JS 绑定。
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    let builder = builder.plugin(tauri_plugin_barcode_scanner::init());
+
     builder
         .setup(|app| {
             // 使用应用数据目录持久化本地保险库

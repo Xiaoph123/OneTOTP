@@ -13,8 +13,8 @@ interface Props<T extends string | number> {
   onChange: (value: T) => void;
   placeholder?: string;
   disabled?: boolean;
-  /** 宽度，默认 100% */
-  width?: number | string;
+  /** 额外类名，用于指定固定宽度（如 w-124 / w-140），默认撑满父容器 */
+  className?: string;
   size?: "large" | "default" | "small" | "mini";
 }
 
@@ -25,7 +25,7 @@ export function Select<T extends string | number>({
   onChange,
   placeholder,
   disabled,
-  width = "100%",
+  className,
   size = "default",
 }: Props<T>) {
   const { t } = useI18n();
@@ -55,8 +55,7 @@ export function Select<T extends string | number>({
   return (
     <div
       ref={ref}
-      className={`select${sizeClass}${open ? " focus" : ""}${disabled ? " disabled" : ""}`}
-      style={{ width }}
+      className={`select${sizeClass}${open ? " focus" : ""}${disabled ? " disabled" : ""}${className ? ` ${className}` : ""}`}
     >
       <div
         className="select-trigger"

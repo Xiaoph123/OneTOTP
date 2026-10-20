@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useMemo, useRef, useState } from "react";
+import { useI18n } from "../i18n";
 
 export type ToastType = "success" | "warning" | "error" | "info" | "loading";
 
@@ -41,12 +42,13 @@ const ICONS: Record<ToastType, string> = {
 };
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
+  const { t } = useI18n();
   const [items, setItems] = useState<ToastItem[]>([]);
   const seq = useRef(0);
   const timers = useRef<Map<number, number>>(new Map());
 
   const dismiss = useCallback((id: number) => {
-    setItems((prev) => prev.filter((t) => t.id !== id));
+    setItems((prev) => prev.filter((item) => item.id !== id));
     const timer = timers.current.get(id);
     if (timer) {
       window.clearTimeout(timer);
@@ -57,7 +59,10 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   const show = useCallback<ToastContextValue["show"]>(
     (type, content, options) => {
       const closable = options?.closable ?? true;
-      const duration = options?.duration ?? (type === "loading" ? 0 : 2200);
+      // loading 默认不自动消失（需调用方显式 dismiss），但为防止调用方遗漏
+      // 导致提示永久残留，设置 30 秒兜底上限。
+      const duration =
+        options?.duration ?? (type === "loading" ? 30000 : 2200);
       seq.current += 1;
       const id = seq.current;
       setItems((prev) => [...prev, { id, type, content, closable }]);
@@ -86,14 +91,14 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     <ToastContext.Provider value={value}>
       {children}
       <div className="message-container" role="status" aria-live="polite">
-        {items.map((t) => (
-          <div key={t.id} className={`message message-${t.type}`} data-component="message" data-type={t.type}>
+        {items.map((item) => (
+          <div key={item.id} className={`message message-${item.type}`} data-component="message" data-type={item.type}>
             <svg className="message-icon" viewBox="0 0 20 20">
-              <path d={ICONS[t.type]} />
+              <path d={ICONS[item.type]} />
             </svg>
-            <span className="message-content">{t.content}</span>
-            {t.closable ? (
-              <button className="message-close" aria-label="关闭" onClick={() => dismiss(t.id)}>
+            <span className="message-content">{item.content}</span>
+            {item.closable ? (
+              <button className="message-close" aria-label={t("关闭")} onClick={() => dismiss(item.id)}>
                 <svg viewBox="0 0 16 16">
                   <path d="M8 6.94L11.47 3.47a.75.75 0 1 1 1.06 1.06L9.06 8l3.47 3.47a.75.75 0 1 1-1.06 1.06L8 9.06l-3.47 3.47a.75.75 0 0 1-1.06-1.06L6.94 8 3.47 4.53a.75.75 0 0 1 1.06-1.06L8 6.94z" />
                 </svg>

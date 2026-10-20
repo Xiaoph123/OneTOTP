@@ -28,7 +28,7 @@ function biometricLabel(t: (k: string) => string): string {
 
 export function SecurityPage() {
   const { t } = useI18n();
-  const { settings, saveSettings, navigate, goBack } = useApp();
+  const { settings, saveSettings, navigate, goBack, refreshLockState } = useApp();
   const toast = useToast();
   const [draft, setDraft] = useState(settings);
   const [current, setCurrent] = useState("");
@@ -143,7 +143,7 @@ export function SecurityPage() {
           <IconButton label={t("返回")} onClick={() => goBack()}>
             <ChevronLeft />
           </IconButton>
-          <span style={{ fontSize: "var(--font-size-h4)", fontWeight: 500 }}>{t("安全与锁定")}</span>
+          <span className="app-bar-title">{t("安全与锁定")}</span>
         </header>
         <section className="app-body">
           <div className="empty-state">
@@ -184,6 +184,9 @@ export function SecurityPage() {
       await saveSettings(s);
       setDraft(s);
       setHint(dlgHint);
+      // 关键：同步 hasLock。hasLock 是自动锁定的总闸门（见 useAutoLock），
+      // 运行时新开启的锁定若不刷新，本次会话内不会触发自动/失焦锁定。
+      await refreshLockState();
       setPwdDialog(null);
       setMessage({ type: "ok", text: t("已启用应用锁定") });
       toast.success(t("已启用应用锁定"));
@@ -213,6 +216,9 @@ export function SecurityPage() {
       await saveSettings(s);
       setDraft(s);
       setCurrent("");
+      // 同步 hasLock：关闭锁定后必须刷新，否则自动锁定仍会按旧的 hasLock=true
+      // 触发 lockApp，而此时后端锁记录已删除，会导致「要求输密码却无法解锁」的死路。
+      await refreshLockState();
       setPwdDialog(null);
       setMessage({ type: "ok", text: t("已关闭应用锁定") });
       toast.success(t("已关闭应用锁定"));
@@ -287,7 +293,7 @@ export function SecurityPage() {
         <IconButton label={t("返回")} onClick={() => goBack()}>
           <ChevronLeft />
         </IconButton>
-        <span style={{ fontSize: "var(--font-size-h4)", fontWeight: 500 }}>{t("安全与锁定")}</span>
+        <span className="app-bar-title">{t("安全与锁定")}</span>
       </header>
 
       <section className="app-body">
@@ -321,7 +327,7 @@ export function SecurityPage() {
               <div className="s-desc">{t("无操作超过该时长后锁定")}</div>
             </div>
             <Select
-              width={124}
+              className="w-124"
               value={draft.autoLockSeconds}
               disabled={!lockEnabled}
               onChange={async (v) => {
@@ -359,29 +365,28 @@ export function SecurityPage() {
         {/* 密码管理面板：仅在已启用锁定时显示（用于修改密码）。
             启用锁定本身通过上方开关的弹窗完成，避免两处入口重复。 */}
         {lockEnabled ? (
-        <div className="panel" ref={pwdPanelRef} style={{ padding: 14, marginTop: 12 }}>
-          <div style={{ fontSize: "var(--font-size-h4)", fontWeight: 500 }}>
+        <div className="panel panel-pad mt-12" ref={pwdPanelRef}>
+          <div className="block-title">
             {t("锁定密码")}
           </div>
-          <div style={{ fontSize: "var(--font-size-body)", color: "var(--color-text-3)", margin: "4px 0 12px" }}>
+          <div className="block-desc pwd-panel-desc">
             {t("密码经加盐哈希（Argon2id）存储在本地，不会上传或同步")}
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <div className="col-gap-14">
             <div className="field">
               <label className="field-label">{t("当前密码")}</label>
-              <div style={{ position: "relative" }}>
+              <div className="lock-input-wrap">
                 <input
-                  className="ui-input"
+                  className="ui-input pwd-input"
                   type={showPwd ? "text" : "password"}
                   value={current}
                   onChange={(e) => setCurrent(e.target.value)}
                   placeholder={t("输入当前锁定密码")}
-                  style={{ paddingRight: 40 }}
                   autoComplete="current-password"
                 />
                 <IconButton
                   label={showPwd ? t("隐藏密码") : t("显示密码")}
-                  style={{ position: "absolute", right: 4, top: 0 }}
+                  className="pwd-eye"
                   onClick={() => setShowPwd((s) => !s)}
                 >
                   {showPwd ? <EyeOff /> : <Eye />}
@@ -399,16 +404,11 @@ export function SecurityPage() {
                 placeholder={t("至少 8 位")}
                 autoComplete="new-password"
               />
-              <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
+              <div className="pwd-strength">
                 {[1, 2, 3, 4].map((i) => (
                   <span
                     key={i}
-                    style={{
-                      flex: 1,
-                      height: 4,
-                      borderRadius: 2,
-                      background: i <= strength ? "var(--color-success)" : "var(--color-bg-5)",
-                    }}
+                    className={`pwd-strength-bar${i <= strength ? " is-on" : ""}`}
                   />
                 ))}
               </div>
@@ -436,23 +436,12 @@ export function SecurityPage() {
           </div>
 
           {message ? (
-            <div
-              className="notice"
-              style={{
-                marginTop: 12,
-                background:
-                  message.type === "ok" ? "var(--status-yuanliSuccess-2)" : "var(--status-yuanliDanger-2)",
-                color:
-                  message.type === "ok"
-                    ? "var(--status-yuanliSuccess-7)"
-                    : "var(--status-yuanliDanger-6)",
-              }}
-            >
+            <div className={`notice mt-12 ${message.type === "ok" ? "notice-ok" : "notice-err"}`}>
               {message.text}
             </div>
           ) : null}
 
-          <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+          <div className="btn-row mt-14">
             <Button variant="primary" block disabled={busy} onClick={handleChangePassword}>
               {t("修改密码")}
             </Button>
@@ -460,7 +449,7 @@ export function SecurityPage() {
         </div>
         ) : null}
 
-        <div className="panel" style={{ marginTop: 12 }}>
+        <div className="panel mt-12">
           <div className="s-row">
             <div className="s-main">
               <div className="s-title">{t("失败 5 次后清除剪贴板")}</div>
@@ -479,11 +468,8 @@ export function SecurityPage() {
           </div>
         </div>
 
-        <div
-          className="notice"
-          style={{ marginTop: 12, background: "var(--status-yuanliWarning-2)", color: "var(--status-yuanliWarning-6)" }}
-        >
-          <AlertTriangle style={{ color: "var(--status-yuanliWarning-6)" }} />
+        <div className="notice notice-warn mt-12">
+          <AlertTriangle />
           {t("忘记密码将无法恢复，只能通过事先导出的加密备份在新设备恢复账户。")}
         </div>
       </section>
@@ -500,12 +486,12 @@ export function SecurityPage() {
             <div className="modal-title">
               {pwdDialog === "enable" ? t("启用应用锁定") : t("关闭应用锁定")}
             </div>
-            <div className="modal-desc" style={{ marginTop: 6 }}>
+            <div className="modal-desc mt-6">
               {pwdDialog === "enable"
                 ? t("设置一个锁定密码，打开应用时需输入才能查看验证码")
                 : t("请输入当前密码以确认关闭锁定")}
             </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 16 }}>
+            <div className="col-gap-12 mt-16">
               <input
                 className="ui-input"
                 type="password"
@@ -535,24 +521,17 @@ export function SecurityPage() {
               ) : null}
             </div>
             {dlgError ? (
-              <div
-                className="notice"
-                style={{
-                  marginTop: 12,
-                  background: "var(--status-yuanliDanger-2)",
-                  color: "var(--status-yuanliDanger-6)",
-                }}
-              >
+              <div className="notice notice-err mt-12">
                 {dlgError}
               </div>
             ) : null}
             {dlgBusy ? (
-              <div className="notice notice-busy" style={{ marginTop: 12 }}>
+              <div className="notice notice-busy mt-12">
                 <Spinner className="ui-spinner" />
                 {t("处理中，请稍候…")}
               </div>
             ) : null}
-            <div className="modal-actions" style={{ marginTop: 18 }}>
+            <div className="modal-actions modal-actions-tight">
               <Button block onClick={() => setPwdDialog(null)} disabled={dlgBusy}>
                 {t("取消")}
               </Button>
@@ -562,8 +541,7 @@ export function SecurityPage() {
                 disabled={dlgBusy}
                 onClick={pwdDialog === "enable" ? confirmEnable : confirmDisable}
               >
-                {dlgBusy ? <Spinner className="ui-spinner" /> : null}
-                {dlgBusy ? t("处理中…") : pwdDialog === "enable" ? t("启用") : t("关闭锁定")}
+                {pwdDialog === "enable" ? t("启用") : t("关闭锁定")}
               </Button>
             </div>
           </div>
@@ -580,10 +558,10 @@ export function SecurityPage() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="modal-title">{t("启用生物识别解锁")}</div>
-            <div className="modal-desc" style={{ marginTop: 6 }}>
+            <div className="modal-desc mt-6">
               {t("输入当前锁定密码，验证通过后将绑定本机指纹或面容用于快速解锁")}
             </div>
-            <div style={{ marginTop: 16 }}>
+            <div className="mt-16">
               <input
                 className="ui-input"
                 type="password"
@@ -595,30 +573,22 @@ export function SecurityPage() {
               />
             </div>
             {bioError ? (
-              <div
-                className="notice"
-                style={{
-                  marginTop: 12,
-                  background: "var(--status-yuanliDanger-2)",
-                  color: "var(--status-yuanliDanger-6)",
-                }}
-              >
+              <div className="notice notice-err mt-12">
                 {bioError}
               </div>
             ) : null}
             {bioBusy ? (
-              <div className="notice notice-busy" style={{ marginTop: 12 }}>
+              <div className="notice notice-busy mt-12">
                 <Spinner className="ui-spinner" />
                 {t("正在绑定生物识别凭据，请稍候…")}
               </div>
             ) : null}
-            <div className="modal-actions" style={{ marginTop: 18 }}>
+            <div className="modal-actions modal-actions-tight">
               <Button block onClick={() => setBioDialog(false)} disabled={bioBusy}>
                 {t("取消")}
               </Button>
               <Button variant="primary" block disabled={bioBusy} onClick={confirmEnableBiometric}>
-                {bioBusy ? <Spinner className="ui-spinner" /> : null}
-                {bioBusy ? t("处理中…") : t("启用")}
+                {t("启用")}
               </Button>
             </div>
           </div>

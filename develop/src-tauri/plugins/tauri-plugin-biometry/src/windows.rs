@@ -10,14 +10,15 @@ use windows::{
         UserConsentVerificationResult, UserConsentVerifier, UserConsentVerifierAvailability,
     },
     Security::Credentials::{
-        KeyCredentialCreationOption, KeyCredentialManager, KeyCredentialRetrievalResult,
-        KeyCredentialStatus, PasswordCredential, PasswordVault,
+        KeyCredential, KeyCredentialCreationOption, KeyCredentialManager,
+        KeyCredentialRetrievalResult, KeyCredentialStatus, PasswordCredential, PasswordVault,
     },
     Security::Cryptography::Core::{
-        CryptographicEngine, HashAlgorithmNames, HashAlgorithmProvider, SymmetricAlgorithmNames,
-        SymmetricKeyAlgorithmProvider,
+        CryptographicEngine, CryptographicPublicKeyBlobType, HashAlgorithmNames,
+        HashAlgorithmProvider, SymmetricAlgorithmNames, SymmetricKeyAlgorithmProvider,
     },
     Security::Cryptography::{BinaryStringEncoding, CryptographicBuffer},
+    Storage::Streams::IBuffer,
     Win32::UI::WindowsAndMessaging::{
         BringWindowToTop, FindWindowW, IsIconic, SetForegroundWindow, ShowWindow, SW_RESTORE,
     },
@@ -63,13 +64,15 @@ fn try_focus_hello_dialog_once() -> bool {
 /// Focus the Hello dialog by retrying a few times in a helper thread.
 fn nudge_hello_dialog_focus_async(retries: u32, delay_ms: u64) {
     std::thread::spawn(move || {
-        // Small initial delay gives the dialog time to appear
-        std::thread::sleep(std::time::Duration::from_millis(delay_ms));
-        for _ in 0..retries {
+        // 首次尽快尝试，缩短 Hello 弹窗获得焦点的延迟；
+        // 后续按 delay_ms 重试，覆盖弹窗尚未创建完成的场景。
+        for i in 0..retries {
             if try_focus_hello_dialog_once() {
                 break;
             }
-            std::thread::sleep(std::time::Duration::from_millis(delay_ms));
+            // 首次重试间隔更短，让弹窗一出现就被拉到前台
+            let wait = if i == 0 { delay_ms / 2 } else { delay_ms };
+            std::thread::sleep(std::time::Duration::from_millis(wait));
         }
     });
 }
@@ -92,7 +95,70 @@ fn get_credential(domain: &str, create_if_missing: bool) -> Result<KeyCredential
     }
 }
 
-/// Encrypt data using Windows Hello credential
+/// 用凭证的**公钥**派生确定性的 AES 密钥材料（SHA-256 哈希）。
+///
+/// 关键：不能用 `RequestSignAsync` 的签名结果派生密钥。Windows Hello 凭证是
+/// RSA-2048，签名算法为 PKCS#1 RSA-PSS(SHA256)，而 PSS 是**随机化签名**——
+/// 同一消息每次签名都不同，会导致「写入」与「读取」派生出不同密钥、解密必然失败
+/// （表现为「生物识别不可用，请使用密码解锁」）。公钥对同一凭证恒定不变，
+/// 是可靠的确定性派生来源。
+fn derive_key_hash(credential: &KeyCredential) -> Result<IBuffer> {
+    let public_key = credential
+        .RetrievePublicKeyWithBlobType(CryptographicPublicKeyBlobType::X509SubjectPublicKeyInfo)?;
+    let hash_provider = HashAlgorithmProvider::OpenAlgorithm(&HashAlgorithmNames::Sha256()?)?;
+    hash_provider.HashData(&public_key)
+}
+
+/// 构造一个带明确错误码的插件错误（供前端按 code 区分取消/锁定/失败）
+fn auth_error(code: &str, message: &str) -> crate::Error {
+    crate::Error::PluginInvoke(PluginInvokeError::InvokeRejected(ErrorResponse {
+        code: Some(code.to_string()),
+        message: Some(message.to_string()),
+        data: (),
+    }))
+}
+
+/// 触发一次 Windows Hello 用户验证（PIN / 指纹 / 面容）。
+///
+/// 必须区分「用户主动取消」与「真正的认证失败/凭据失效」：
+/// 前者应静默返回（用户只是不想用，不应清除凭据或禁用入口），
+/// 后者才需要前端提示。此前把所有非成功状态一律当作失败，
+/// 导致用户在弹窗点「取消」就被判定为凭据不可用、按钮被永久禁用。
+fn verify_user(domain: &str, credential: &KeyCredential) -> crate::Result<()> {
+    let challenge_buffer = CryptographicBuffer::ConvertStringToBinary(
+        &HSTRING::from(domain),
+        BinaryStringEncoding::Utf8,
+    )
+    .map_err(|e| auth_error("internalError", &format!("challenge failed: {e:?}")))?;
+    let signature = credential
+        .RequestSignAsync(&challenge_buffer)
+        .and_then(|op| op.get())
+        // get() 失败通常也源于用户取消/超时/窗口关闭；归为 userCancel，
+        // 让前端静默处理（不误清除凭据）。真正的凭据失效会在上方
+        // OpenAsync/Credential() 阶段以 credentialNotFound 暴露。
+        .map_err(|e| auth_error("userCancel", &format!("sign request aborted: {e:?}")))?;
+    let status = signature
+        .Status()
+        .map_err(|e| auth_error("authenticationFailed", &format!("status failed: {e:?}")))?;
+    match status {
+        KeyCredentialStatus::Success => Ok(()),
+        // 用户点了取消 / 关闭了认证弹窗，或选择了改用密码
+        KeyCredentialStatus::UserCanceled | KeyCredentialStatus::UserPrefersPassword => {
+            Err(auth_error("userCancel", "Authentication was canceled by the user"))
+        }
+        // 连续失败被系统锁定（非永久，稍后可重试）
+        KeyCredentialStatus::SecurityDeviceLocked => {
+            Err(auth_error("biometryLockout", "Too many failed attempts"))
+        }
+        KeyCredentialStatus::NotFound => {
+            Err(auth_error("credentialNotFound", "Credential not found"))
+        }
+        _ => Err(auth_error("authenticationFailed", "Authentication failed")),
+    }
+}
+
+/// Encrypt data using Windows Hello credential。
+/// 注：调用方需先完成用户验证（verify_user），此函数只做加密。
 fn encrypt_data(
     domain: &str,
     data: &[u8],
@@ -104,24 +170,16 @@ fn encrypt_data(
     }
 
     let credential = credential_result.Credential()?;
-    let challenge_buffer = CryptographicBuffer::ConvertStringToBinary(
-        &HSTRING::from(domain),
-        BinaryStringEncoding::Utf8,
-    )?;
 
-    // Sign the challenge to get a unique key
-    let signature = credential.RequestSignAsync(&challenge_buffer)?.get()?;
-    let signature_result = signature.Result()?;
-
-    // Use the signature to derive an encryption key
-    let hash_provider = HashAlgorithmProvider::OpenAlgorithm(&HashAlgorithmNames::Sha256()?)?;
-    let key_hash = hash_provider.HashData(&signature_result)?;
+    // 用凭证公钥派生确定性密钥（见 derive_key_hash 注释）
+    let key_hash = derive_key_hash(&credential)?;
 
     // Create AES encryption provider
     let aes_provider =
         SymmetricKeyAlgorithmProvider::OpenAlgorithm(&SymmetricAlgorithmNames::AesCbcPkcs7()?)?;
 
     // Generate IV from domain hash
+    let hash_provider = HashAlgorithmProvider::OpenAlgorithm(&HashAlgorithmNames::Sha256()?)?;
     let iv_data = CryptographicBuffer::ConvertStringToBinary(
         &HSTRING::from(format!("IV_{}", domain)),
         BinaryStringEncoding::Utf8,
@@ -145,7 +203,8 @@ fn encrypt_data(
     Ok(CryptographicBuffer::EncodeToBase64String(&encrypted_buffer)?.to_string())
 }
 
-/// Decrypt data using Windows Hello credential
+/// Decrypt data using Windows Hello credential。
+/// 注：调用方需先完成用户验证（verify_user），此函数只做解密。
 fn decrypt_data(
     domain: &str,
     encrypted_data: &str,
@@ -157,30 +216,16 @@ fn decrypt_data(
     }
 
     let credential = credential_result.Credential()?;
-    let challenge_buffer = CryptographicBuffer::ConvertStringToBinary(
-        &HSTRING::from(domain),
-        BinaryStringEncoding::Utf8,
-    )?;
 
-    // Sign the challenge to get the same key
-    let signature = credential.RequestSignAsync(&challenge_buffer)?.get()?;
-    let signature_status = signature.Status()?;
-
-    if signature_status != KeyCredentialStatus::Success {
-        return Err(Error::from(HRESULT(-1)));
-    }
-
-    let signature_result = signature.Result()?;
-
-    // Use the signature to derive the decryption key
-    let hash_provider = HashAlgorithmProvider::OpenAlgorithm(&HashAlgorithmNames::Sha256()?)?;
-    let key_hash = hash_provider.HashData(&signature_result)?;
+    // 用凭证公钥派生确定性密钥（与写入时一致）
+    let key_hash = derive_key_hash(&credential)?;
 
     // Create AES decryption provider
     let aes_provider =
         SymmetricKeyAlgorithmProvider::OpenAlgorithm(&SymmetricAlgorithmNames::AesCbcPkcs7()?)?;
 
     // Generate IV from domain hash (same as encryption)
+    let hash_provider = HashAlgorithmProvider::OpenAlgorithm(&HashAlgorithmNames::Sha256()?)?;
     let iv_data = CryptographicBuffer::ConvertStringToBinary(
         &HSTRING::from(format!("IV_{}", domain)),
         BinaryStringEncoding::Utf8,
@@ -343,25 +388,13 @@ impl<R: Runtime> Biometry<R> {
             return Ok(false);
         }
 
-        // Try to open the credential (without creating)
-        let credential_result = match get_credential(&domain, false) {
-            Ok(result) => result,
-            Err(_) => return Ok(false),
-        };
-
-        let status = credential_result.Status().map_err(|_| {
-            crate::Error::PluginInvoke(PluginInvokeError::InvokeRejected(ErrorResponse {
-                code: Some("internalError".to_string()),
-                message: Some("Failed to check credential status".to_string()),
-                data: (),
-            }))
-        })?;
-
-        if status != KeyCredentialStatus::Success {
-            return Ok(false);
-        }
-
-        // Check if there's data in the PasswordVault
+        // 只查 PasswordVault，不触碰 Windows Hello 凭据。
+        //
+        // 原实现会调用 get_credential()（OpenAsync）来判断「是否已绑定」，
+        // 而该调用会启动 Hello 窗口聚焦线程并触发 WinRT 冷启动，纯探测却付出
+        // 数百毫秒~数秒的代价，直接拖慢了锁定页「是否显示/自动唤起 Hello」的判定。
+        // 本插件的写入逻辑保证「凭据 + 加密数据」成对存在，故仅凭 vault 中是否
+        // 有对应条目即可可靠判定是否已绑定。
         let vault = PasswordVault::new().map_err(|_| {
             crate::Error::PluginInvoke(PluginInvokeError::InvokeRejected(ErrorResponse {
                 code: Some("internalError".to_string()),
@@ -373,7 +406,6 @@ impl<R: Runtime> Biometry<R> {
         let resource = HSTRING::from(&domain);
         let username = HSTRING::from(&name);
 
-        // Try to retrieve the credential without the password
         match vault.Retrieve(&resource, &username) {
             Ok(_) => Ok(true),
             Err(_) => Ok(false),
@@ -459,7 +491,20 @@ impl<R: Runtime> Biometry<R> {
             }))
         })?;
 
-        // Decrypt the data
+        // 先完成一次 Windows Hello 用户验证（PIN / 指纹 / 面容）。
+        // 此处在返回 crate::Result 的主流程中调用，错误码可原样透传：
+        // 用户取消返回 userCancel（前端静默处理，不清除凭据、不禁用入口），
+        // 只有真正的凭据失效才提示重新绑定。
+        let credential_obj = credential_result.Credential().map_err(|e| {
+            crate::Error::PluginInvoke(PluginInvokeError::InvokeRejected(ErrorResponse {
+                code: Some("credentialNotFound".to_string()),
+                message: Some(format!("Failed to get credential: {:?}", e)),
+                data: (),
+            }))
+        })?;
+        verify_user(&domain, &credential_obj)?;
+
+        // Decrypt the data（仅做解密，验证已在上方完成）
         let decrypted_data = decrypt_data(&domain, &encrypted_data.to_string(), &credential_result)
             .map_err(|e| {
                 crate::Error::PluginInvoke(PluginInvokeError::InvokeRejected(ErrorResponse {
@@ -527,7 +572,9 @@ impl<R: Runtime> Biometry<R> {
             ));
         }
 
-        // Encrypt the data
+        // 首次创建凭证（RequestCreateAsync）自身即包含一次 Windows Hello
+        // 用户确认，故此处不再额外 verify，避免「启用」时连弹两次认证框。
+        // Encrypt the data（仅做加密）
         let encrypted_data =
             encrypt_data(&domain, data.as_bytes(), &credential_result).map_err(|e| {
                 crate::Error::PluginInvoke(PluginInvokeError::InvokeRejected(ErrorResponse {

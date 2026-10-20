@@ -178,8 +178,8 @@ export function AddAccountPage({ editing }: Props) {
         toast.error(t("二维码识别失败"));
       }
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [refreshAccounts, navigate, toast],
+    // 依赖里必须包含 t：否则切换语言后仍用首次渲染时的旧翻译
+    [refreshAccounts, navigate, toast, t],
   );
 
   const stopCamera = useCallback(() => {
@@ -385,6 +385,12 @@ export function AddAccountPage({ editing }: Props) {
     input.onchange = () => {
       const file = input.files?.[0];
       if (!file) return;
+      // 限制图片大小：超大图解码后占用内存极高，可能卡死 WebView
+      const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+      if (file.size > MAX_IMAGE_BYTES) {
+        setScanNotice(t("图片过大（超过 10MB），请选择较小的图片"));
+        return;
+      }
       const reader = new FileReader();
       reader.onload = () => {
         const img = new Image();
@@ -578,14 +584,14 @@ export function AddAccountPage({ editing }: Props) {
         <IconButton label={t("返回")} onClick={() => goBack()}>
           <ChevronLeft />
         </IconButton>
-        <span style={{ fontSize: "var(--font-size-h4)", fontWeight: 500 }}>
+        <span className="app-bar-title">
           {isEdit ? t("编辑账户") : t("添加账户")}
         </span>
       </header>
 
       <section className="app-body">
         {!isEdit ? (
-          <div className="segmented segmented-fill" style={{ width: "100%", marginBottom: 12 }} role="tablist">
+          <div className="segmented segmented-fill segmented-full mb-12" role="tablist">
             {(
               [
                 ["scan", t("扫码")],
@@ -596,7 +602,6 @@ export function AddAccountPage({ editing }: Props) {
               <button
                 key={key}
                 className={mode === key ? "active" : ""}
-                style={{ flex: 1 }}
                 onClick={() => {
                   setMode(key);
                   if (key !== "scan") stopCamera();
@@ -609,7 +614,7 @@ export function AddAccountPage({ editing }: Props) {
         ) : null}
 
         {mode === "scan" && !isEdit ? (
-          <div className="panel" style={{ padding: 14 }}>
+          <div className="panel panel-pad">
             <div className="scan-box">
               {/* 移动端走原生相机（全屏原生取景），此处只显示图标占位 */}
               {scanning && !isMobile() ? (
@@ -617,13 +622,7 @@ export function AddAccountPage({ editing }: Props) {
                   ref={videoRef}
                   playsInline
                   muted
-                  style={{
-                    width: 200,
-                    height: 200,
-                    borderRadius: "var(--radius-md)",
-                    objectFit: "cover",
-                    background: "#000",
-                  }}
+                  className="scan-video"
                 />
               ) : (
                 <div className="qr-placeholder" aria-label={t("扫码区域")}>
@@ -634,16 +633,16 @@ export function AddAccountPage({ editing }: Props) {
                   </svg>
                 </div>
               )}
-              <div style={{ textAlign: "center" }}>
-                <div style={{ fontSize: "var(--font-size-lead)", fontWeight: 500 }}>
+              <div className="scan-caption">
+                <div className="scan-caption-title">
                   {scanning ? t("正在识别二维码…") : t("扫描二维码添加账户")}
                 </div>
-                <div style={{ fontSize: "var(--font-size-body)", color: "var(--color-text-3)", marginTop: 3 }}>
+                <div className="scan-caption-desc">
                   {t("支持摄像头实时扫码，或从本地图片识别（完全离线）")}
                 </div>
                 {/* 诊断行仅在桌面端（WebView 路径）显示 */}
                 {scanDiag && !isMobile() ? (
-                  <div style={{ fontSize: "var(--font-size-caption, 12px)", color: "var(--color-text-4, #999)", marginTop: 3 }}>
+                  <div className="scan-caption-diag">
                     {t("解码：")}{scanDiag}
                   </div>
                 ) : null}
@@ -658,7 +657,7 @@ export function AddAccountPage({ editing }: Props) {
                   <Button
                     variant="primary"
                     block
-                    icon={<Camera style={{ width: 16, height: 16 }} />}
+                    icon={<Camera className="icon-16" />}
                     onClick={startCamera}
                   >
                     {t("开启摄像头")}
@@ -667,7 +666,7 @@ export function AddAccountPage({ editing }: Props) {
                 <Button
                   variant="secondary"
                   block
-                  icon={<Upload style={{ width: 16, height: 16 }} />}
+                  icon={<Upload className="icon-16" />}
                   onClick={handlePickImage}
                 >
                   {t("从图片选择")}
@@ -675,15 +674,8 @@ export function AddAccountPage({ editing }: Props) {
               </div>
             </div>
             {scanNotice ? (
-              <div
-                className="notice"
-                style={{
-                  marginTop: 12,
-                  background: "var(--color-primary-container)",
-                  color: "var(--color-on-primary-container)",
-                }}
-              >
-                <Info style={{ color: "var(--color-primary)" }} />
+              <div className="notice notice-info mt-12">
+                <Info className="icon-primary" />
                 {scanNotice}
               </div>
             ) : null}
@@ -691,31 +683,30 @@ export function AddAccountPage({ editing }: Props) {
         ) : null}
 
         {mode === "manual" || isEdit ? (
-          <div className="panel" style={{ padding: 14 }}>
-            <div style={{ fontSize: "var(--font-size-h4)", fontWeight: 500, marginBottom: 4 }}>
+          <div className="panel panel-pad">
+            <div className="block-title mb-4">
               {isEdit ? t("编辑账户信息") : t("手动添加到身份验证器")}
             </div>
-            <div style={{ fontSize: "var(--font-size-body)", color: "var(--color-text-3)", marginBottom: 14 }}>
+            <div className="block-desc form-intro">
               {t("填写显示名称与密钥，或直接粘贴令牌自动解析")}
             </div>
 
-            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <div className="col-gap-14">
               {/* 显示名称 */}
               <div className="field">
                 <label className="field-label">
                   {t("显示名称")} <span className="req">*</span>
                 </label>
-                <div style={{ position: "relative" }}>
+                <div className="input-with-action">
                   <input
-                    className="ui-input"
+                    className="ui-input has-action"
                     value={displayName}
                     onChange={(e) => setDisplayName(e.target.value)}
                     placeholder={t("例如 GitHub、公司 VPN")}
-                    style={{ paddingRight: 40 }}
                   />
                   <IconButton
                     label={t("复制显示名称")}
-                    style={{ position: "absolute", right: 4, top: 0 }}
+                    className="input-action"
                     onClick={() => displayName && copyText(displayName)}
                   >
                     <Copy />
@@ -727,17 +718,16 @@ export function AddAccountPage({ editing }: Props) {
               {/* 账号 */}
               <div className="field">
                 <label className="field-label">{t("账号")}</label>
-                <div style={{ position: "relative" }}>
+                <div className="input-with-action">
                   <input
-                    className="ui-input"
+                    className="ui-input has-action"
                     value={account}
                     onChange={(e) => setAccount(e.target.value)}
                     placeholder={t("例如 wanghao@example.com")}
-                    style={{ paddingRight: 40 }}
                   />
                   <IconButton
                     label={t("复制账号")}
-                    style={{ position: "absolute", right: 4, top: 0 }}
+                    className="input-action"
                     onClick={() => account && copyText(account)}
                   >
                     <Copy />
@@ -751,17 +741,16 @@ export function AddAccountPage({ editing }: Props) {
                 <label className="field-label">
                   {t("密钥")} <span className="req">*</span>
                 </label>
-                <div style={{ position: "relative" }}>
+                <div className="input-with-action">
                   <input
-                    className="ui-input"
+                    className="ui-input has-action font-mono"
                     value={secret}
                     onChange={(e) => setSecret(e.target.value)}
                     placeholder={t("Base32 密钥，例如 JBSWY3DPEHPK3PXP")}
-                    style={{ paddingRight: 40, fontFamily: "var(--font-mono)" }}
                   />
                   <IconButton
                     label={t("复制密钥")}
-                    style={{ position: "absolute", right: 4, top: 0 }}
+                    className="input-action"
                     onClick={() => secret && copyText(secret)}
                   >
                     <Copy />
@@ -773,20 +762,19 @@ export function AddAccountPage({ editing }: Props) {
               {/* 令牌 */}
               <div className="field">
                 <label className="field-label">{t("令牌")}</label>
-                <div style={{ position: "relative" }}>
+                <div className="input-with-action">
                   <input
-                    className="ui-input"
+                    className="ui-input has-action font-mono token-input"
                     value={token}
                     onChange={(e) => {
                       setToken(e.target.value);
                       setTokenNotice(null);
                     }}
                     placeholder={t("粘贴 otpauth:// 链接可自动解析")}
-                    style={{ paddingRight: 40, fontFamily: "var(--font-mono)", fontSize: "var(--font-size-body)" }}
                   />
                   <IconButton
                     label={t("复制令牌")}
-                    style={{ position: "absolute", right: 4, top: 0 }}
+                    className="input-action"
                     onClick={() => token && copyText(token)}
                   >
                     <Copy />
@@ -796,16 +784,7 @@ export function AddAccountPage({ editing }: Props) {
                   <button
                     type="button"
                     onClick={handleParseToken}
-                    style={{
-                      alignSelf: "flex-start",
-                      marginTop: 2,
-                      padding: 0,
-                      border: "none",
-                      background: "transparent",
-                      color: "var(--color-primary)",
-                      fontSize: "var(--font-size-body)",
-                      cursor: "pointer",
-                    }}
+                    className="link-btn"
                   >
                     {t("从令牌解析并回填")}
                   </button>
@@ -813,29 +792,18 @@ export function AddAccountPage({ editing }: Props) {
               </div>
 
               {tokenNotice ? (
-                <div
-                  className="notice"
-                  style={{
-                    background: "var(--color-primary-container)",
-                    color: "var(--color-on-primary-container)",
-                  }}
-                >
-                  <Info style={{ color: "var(--color-primary)" }} />
+                <div className="notice notice-info">
+                  <Info className="icon-primary" />
                   {tokenNotice}
                 </div>
               ) : null}
 
               {/* 高级选项（始终展开） */}
-              <div
-                style={{
-                  borderTop: "1px solid var(--color-border-light)",
-                  paddingTop: 14,
-                }}
-              >
-                <div style={{ fontSize: "var(--font-size-lead)", fontWeight: 500, marginBottom: 12 }}>
+              <div className="advanced-section">
+                <div className="advanced-title">
                   {t("高级选项")}
                 </div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <div className="advanced-grid">
                   <div className="field">
                     <label className="field-label">{t("类型")}</label>
                     <Select
@@ -900,8 +868,8 @@ export function AddAccountPage({ editing }: Props) {
         ) : null}
 
         {mode === "file" && !isEdit ? (
-          <div className="panel" style={{ padding: 14 }}>
-            <div style={{ fontSize: "var(--font-size-h4)", fontWeight: 500, marginBottom: 12 }}>{t("从文本导入")}</div>
+          <div className="panel panel-pad">
+            <div className="block-title mb-12">{t("从文本导入")}</div>
             <div className="field">
               <label className="field-label">{t("粘贴 otpauth 链接")}</label>
               <textarea
@@ -916,8 +884,8 @@ export function AddAccountPage({ editing }: Props) {
             <Button
               variant="secondary"
               block
-              style={{ marginTop: 12 }}
-              icon={<Upload style={{ width: 14, height: 14 }} />}
+              className="mt-12"
+              icon={<Upload className="icon-14" />}
               onClick={handleImportFile}
             >
               {t("解析并导入")}
@@ -926,21 +894,15 @@ export function AddAccountPage({ editing }: Props) {
         ) : null}
 
         {localError ? (
-          <div
-            className="notice"
-            style={{ marginTop: 12, background: "var(--status-yuanliDanger-2)", color: "var(--status-yuanliDanger-6)" }}
-          >
-            <AlertTriangle style={{ color: "var(--status-yuanliDanger-6)" }} />
+          <div className="notice notice-err mt-12">
+            <AlertTriangle />
             {localError}
           </div>
         ) : null}
 
         {!isEdit ? (
-          <div
-            className="notice"
-            style={{ marginTop: 12, background: "var(--color-primary-container)", color: "var(--color-on-primary-container)" }}
-          >
-            <Info style={{ color: "var(--color-primary)" }} />
+          <div className="notice notice-info mt-12">
+            <Info className="icon-primary" />
             {t("请同时保存好恢复码，避免设备丢失后无法登录。")}
           </div>
         ) : null}
@@ -953,7 +915,7 @@ export function AddAccountPage({ editing }: Props) {
             variant="primary"
             block
             disabled={saving}
-            icon={<Check style={{ width: 14, height: 14 }} />}
+            icon={<Check className="icon-14" />}
             onClick={() => handleSave(false)}
           >
             {isEdit ? t("保存修改") : t("保存账户")}

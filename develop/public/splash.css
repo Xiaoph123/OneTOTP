@@ -1,0 +1,63 @@
+/* 首屏防白闪与静态启动画面样式。
+   独立成文件而非 index.html 内联 <style>：收紧 CSP 到 style-src 'self' 后，
+   内联样式块会被拦截（不依赖运行时是否注入 nonce 更稳妥）。 */
+
+html {
+  background: #fcfdfe;
+}
+html[data-theme="dark"] {
+  background: #141619;
+}
+body {
+  margin: 0;
+}
+
+/* 静态启动画面：随 HTML 立即渲染，React 挂载后由 main.tsx 移除。
+   背景色对齐应用 --color-bg-2（亮 #FCFDFE / 暗 #141619），确保淡出无跳变。 */
+#app-splash {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  background: #fcfdfe;
+  transition: opacity 200ms ease;
+}
+html[data-theme="dark"] #app-splash {
+  background: #141619;
+}
+#app-splash.is-hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+#app-splash svg {
+  width: 72px;
+  height: 72px;
+  display: block;
+}
+#app-splash .splash-text {
+  font-family: "PingFang SC", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+  font-size: 13px;
+  color: #a9aeb6;
+}
+#app-splash .onetotp-shine {
+  animation: onetotp-shine-sweep 1.8s ease-in-out infinite;
+  will-change: transform;
+}
+@keyframes onetotp-shine-sweep {
+  0% {
+    transform: translateX(-10px);
+  }
+  100% {
+    transform: translateX(30px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  #app-splash .onetotp-shine {
+    animation: none;
+    opacity: 0;
+  }
+}

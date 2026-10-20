@@ -10,27 +10,11 @@ import {
 import { CountdownRing } from "./Controls";
 import { MoreHorizontal } from "./icons";
 import { useToast } from "./Toast";
-import { copyText, formatCode } from "../lib/utils";
+import { avatarOf, copyText, formatCode } from "../lib/utils";
 import { hideWindow } from "../state/useAutoLock";
+import { useApp } from "../state/AppContext";
 import { isMobile } from "../lib/platform";
 import { useI18n } from "../i18n";
-
-/** 由服务名生成稳定的头像色与首字母 */
-function avatarOf(issuer: string): { text: string; bg: string; fg: string } {
-  const text = issuer.slice(0, 2).toUpperCase() || "OT";
-  const palette = [
-    { bg: "var(--color-text-1)", fg: "var(--color-bg-1)" },
-    { bg: "var(--primary-1)", fg: "var(--primary-6)" },
-    { bg: "var(--warning-1)", fg: "var(--warning-6)" },
-    { bg: "var(--success-1)", fg: "var(--success-6)" },
-    { bg: "var(--danger-2)", fg: "var(--danger-6)" },
-    { bg: "var(--color-bg-5)", fg: "var(--color-text-2)" },
-  ];
-  let hash = 0;
-  for (let i = 0; i < issuer.length; i += 1) hash = (hash * 31 + issuer.charCodeAt(i)) >>> 0;
-  const pick = palette[hash % palette.length];
-  return { text, bg: pick.bg, fg: pick.fg };
-}
 
 interface Props {
   account: AccountView;
@@ -59,6 +43,7 @@ export function CodeCard({
 }: Props) {
   const { t } = useI18n();
   const toast = useToast();
+  const { refreshAccounts } = useApp();
   const mobile = isMobile();
   // 桌面 hover 模式下由悬停控制显示；移动端无 hover，改为点击揭示
   const [hovering, setHovering] = useState(false);
@@ -88,15 +73,22 @@ export function CodeCard({
 
   const handleCopy = async () => {
     if (!code) return;
-    await copyText(code.code);
-    // HOTP 复制即视为消费一次，计数器前进后才能生成下一个验证码
-    if (isHotp) {
-      try {
-        await api.markUsed(account.id);
-      } catch {
-        // 忽略计数失败，不影响复制
-      }
+    try {
+      await copyText(code.code);
+    } catch {
+      // 写入剪贴板失败时不能再提示成功，否则用户会误以为已复制
+      toast.error(t("复制失败，请重试"));
+      return;
     }
+    // 记录使用时间：TOTP 用于「最近」筛选与详情页的最近使用时间；
+    // HOTP 额外由后端把计数器前进一位（否则会一直生成同一个验证码）。
+    try {
+      await api.markUsed(account.id);
+    } catch {
+      // 忽略记录失败，不影响复制
+    }
+    // 同步内存中的 lastUsedAt，否则「最近」筛选要等下次启动才反映本次使用
+    refreshAccounts().catch(() => {});
     toast.success(t("已复制到剪贴板"));
     if (autoHideAfterCopy) hideWindow();
   };
@@ -131,7 +123,7 @@ export function CodeCard({
       {showHead ? (
         <>
           <div className="otp-head">
-            <span className="avatar-sq" style={{ background: av.bg, color: av.fg }}>
+            <span className={`avatar-sq avatar-tone-${av.tone}`}>
               {av.text}
             </span>
             <div className="otp-head-main">
@@ -157,7 +149,7 @@ export function CodeCard({
       <div className="flex-row-between">
         <div className="otp-code">{visible ? display : masked}</div>
         {isHotp ? (
-          <span className="tag-soft" style={{ fontFamily: "var(--font-mono)" }}>
+          <span className="tag-soft font-mono">
             #{account.counter}
           </span>
         ) : (

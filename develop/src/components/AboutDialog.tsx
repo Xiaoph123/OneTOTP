@@ -60,7 +60,7 @@ export function AboutDialog({ open, accountCount, version, onClose }: Props) {
       >
         <div className="about-hero">
           <span className="about-logo">
-            <OneTotpMark style={{ width: 34, height: 34 }} />
+            <OneTotpMark className="icon-34" />
           </span>
           <div className="about-name">OneTotp</div>
           <div className="about-ver">{appVersion ? `v${appVersion}` : ""}</div>

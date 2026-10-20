@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { AppProvider, useApp } from "./state/AppContext";
 import { useAutoLock } from "./state/useAutoLock";
@@ -29,6 +29,17 @@ function Router() {
   useEffect(() => {
     if (settings?.language) setPref(settings.language);
   }, [settings?.language, setPref]);
+
+  // boot 完成（离开 booting 态）后再显窗并淡出静态启动画面，
+  // 保证用户看到的第一帧就是最终界面（锁定页或主界面），
+  // 不会出现「先显示主界面、数秒后才跳锁定页」的倒序。
+  const revealed = useRef(false);
+  useEffect(() => {
+    if (phase === "booting" || revealed.current) return;
+    revealed.current = true;
+    const reveal = (window as unknown as { __revealApp?: () => void }).__revealApp;
+    reveal?.();
+  }, [phase]);
 
   // 设置加载后同步字体大小
   useEffect(() => {
@@ -71,7 +82,7 @@ function Router() {
         <TitleBar />
         <div className="boot-screen">
           <OneTotpMarkLoading className="boot-logo" />
-          <span style={{ fontSize: "var(--font-size-lead)" }}>{t("正在启动 OneTotp…")}</span>
+          <span className="fs-lead">{t("正在启动 OneTotp…")}</span>
         </div>
       </div>
     );
@@ -90,16 +101,7 @@ function Router() {
     <div className="app-window">
       <TitleBar />
       {error ? (
-        <div
-          className="notice"
-          style={{
-            margin: "10px 14px 0",
-            background: "var(--status-yuanliDanger-2)",
-            color: "var(--status-yuanliDanger-6)",
-            cursor: "pointer",
-          }}
-          onClick={() => setError(null)}
-        >
+        <div className="notice notice-err app-error-bar" onClick={() => setError(null)}>
           {error}
         </div>
       ) : null}

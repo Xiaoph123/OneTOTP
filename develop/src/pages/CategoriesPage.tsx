@@ -5,6 +5,7 @@ import { TabBar, type TabKey } from "../components/TabBar";
 import { Button, IconButton } from "../components/Button";
 import { useToast } from "../components/Toast";
 import { ChevronLeft, Edit, Plus, Trash } from "../components/icons";
+import { ColorDot } from "../components/ColorDot";
 import { useI18n } from "../i18n";
 
 /** 源力色板，供快速选择分类颜色 */
@@ -104,13 +105,13 @@ export function CategoriesPage() {
         <IconButton label={t("返回")} onClick={() => goBack()}>
           <ChevronLeft />
         </IconButton>
-        <span style={{ fontSize: "var(--font-size-h4)", fontWeight: 500 }}>{t("分类管理")}</span>
+        <span className="app-bar-title">{t("分类管理")}</span>
       </header>
 
       <section className="app-body">
         {/* 新建 / 编辑表单 */}
-        <div className="panel" style={{ padding: 14 }}>
-          <div style={{ fontSize: "var(--font-size-h4)", fontWeight: 500, marginBottom: 12 }}>
+        <div className="panel panel-pad">
+          <div className="block-title mb-12">
             {editingId ? t("编辑分类") : t("新建分类")}
           </div>
           <div className="field">
@@ -126,53 +127,34 @@ export function CategoriesPage() {
               }}
             />
           </div>
-          <div className="field" style={{ marginTop: 14 }}>
+          <div className="field mt-14">
             <label className="field-label">{t("标识色")}</label>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div className="row gap-8">
               {PRESET_COLORS.map((c) => (
                 <button
                   key={c}
                   type="button"
                   aria-label={t("选择颜色 {color}", { color: c })}
                   onClick={() => setColor(c)}
-                  style={{
-                    width: 24,
-                    height: 24,
-                    borderRadius: "50%",
-                    border: "none",
-                    background: c,
-                    cursor: "pointer",
-                    boxShadow:
-                      color === c
-                        ? "0 0 0 2px var(--color-bg-1), 0 0 0 4px " + c
-                        : "inset 0 0 0 1px rgba(0,0,0,0.08)",
-                  }}
-                />
+                  className={`color-swatch${color === c ? " is-selected" : ""}`}
+                >
+                  <ColorDot color={c} className="color-swatch-fill" />
+                </button>
               ))}
               <label
                 title={t("自定义颜色")}
-                style={{
-                  position: "relative",
-                  width: 24,
-                  height: 24,
-                  borderRadius: "50%",
-                  overflow: "hidden",
-                  cursor: "pointer",
-                  boxShadow: "inset 0 0 0 1px var(--color-border-3)",
-                  background:
-                    "conic-gradient(#f65159,#f5b433,#1ebf6f,#1664ff,#6e4c9f,#f65159)",
-                }}
+                className="color-custom"
               >
                 <input
                   type="color"
                   value={color}
                   onChange={(e) => setColor(e.target.value.toUpperCase())}
-                  style={{ position: "absolute", inset: 0, opacity: 0, cursor: "pointer" }}
+                  className="color-custom-input"
                 />
               </label>
             </div>
           </div>
-          <div className="btn-row" style={{ marginTop: 16 }}>
+          <div className="btn-row mt-16">
             {editingId ? (
               <Button block onClick={resetForm} disabled={busy}>
                 {t("取消")}
@@ -185,7 +167,7 @@ export function CategoriesPage() {
         </div>
 
         {/* 分类列表 */}
-        <div className="s-group-title" style={{ marginTop: 16 }}>
+        <div className="s-group-title mt-16">
           {t("已有分类（{n}）", { n: categories.length })}
         </div>
         {categories.length === 0 ? (
@@ -193,39 +175,30 @@ export function CategoriesPage() {
             <span className="empty-desc">{t("还没有分类，创建一个来整理你的账户吧")}</span>
           </div>
         ) : (
-          <div className="panel" style={{ overflow: "hidden" }}>
+          <div className="panel panel-clip">
             {categories.map((cat, idx) => (
               <div
-                className="s-row"
+                className={`s-row${idx === categories.length - 1 ? " is-last" : ""}`}
                 key={cat.id}
-                style={{ borderBottom: idx === categories.length - 1 ? "none" : undefined }}
               >
-                <div className="s-main" style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <span
-                    style={{
-                      width: 10,
-                      height: 10,
-                      borderRadius: "50%",
-                      background: cat.color,
-                      flexShrink: 0,
-                    }}
-                  />
+                <div className="s-main row gap-10">
+                  <ColorDot color={cat.color} className="category-dot" />
                   <span className="s-title">{cat.name}</span>
                 </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0 }}>
+                <div className="row gap-2 shrink-0">
                   <IconButton
                     label={t("上移")}
                     onClick={() => move(idx, -1)}
                     disabled={idx === 0}
                   >
-                    <ChevronLeft style={{ transform: "rotate(90deg)" }} />
+                    <ChevronLeft className="rotate-90" />
                   </IconButton>
                   <IconButton
                     label={t("下移")}
                     onClick={() => move(idx, 1)}
                     disabled={idx === categories.length - 1}
                   >
-                    <ChevronLeft style={{ transform: "rotate(-90deg)" }} />
+                    <ChevronLeft className="rotate-neg-90" />
                   </IconButton>
                   <IconButton label={t("编辑")} onClick={() => startEdit(cat)}>
                     <Edit />
@@ -233,7 +206,7 @@ export function CategoriesPage() {
                   <IconButton
                     label={t("删除")}
                     onClick={() => setPendingDelete(cat)}
-                    style={{ color: "var(--color-danger)" }}
+                    className="icon-danger"
                   >
                     <Trash />
                   </IconButton>
@@ -243,11 +216,8 @@ export function CategoriesPage() {
           </div>
         )}
 
-        <div
-          className="notice"
-          style={{ marginTop: 12, background: "var(--color-bg-4)", color: "var(--color-text-2)" }}
-        >
-          <Plus style={{ color: "var(--color-text-3)" }} />
+        <div className="notice notice-soft mt-12">
+          <Plus className="icon-muted" />
           {t("分类可随时重命名、改色、调整顺序；删除时可选择保留账户。")}
         </div>
       </section>
@@ -264,16 +234,16 @@ export function CategoriesPage() {
           >
             <div className="modal-body">
               <span className="modal-icon">
-                <Trash style={{ width: 18, height: 18 }} />
+                <Trash className="icon-18" />
               </span>
-              <div style={{ minWidth: 0 }}>
+              <div className="min-w-0">
                 <div className="modal-title">{t("删除分类「{name}」", { name: pendingDelete.name })}</div>
                 <div className="modal-desc">
                   {t("该分类下的账户将如何处理？此操作不可撤销。")}
                 </div>
               </div>
             </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 18 }}>
+            <div className="col-gap-8 mt-18">
               <Button variant="danger" block disabled={busy} onClick={() => confirmDelete(true)}>
                 {t("删除分类及其中账户")}
               </Button>

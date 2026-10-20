@@ -8,7 +8,7 @@ import { useI18n } from "../i18n";
 /** 自绘窗口标题栏（关闭原生装饰后使用）。移动端无窗口装饰概念，不渲染。 */
 export function TitleBar() {
   const win = getCurrentWindow();
-  const { settings, saveSettings } = useApp();
+  const { settings, saveSettings, phase } = useApp();
   const { t } = useI18n();
 
   if (!isDesktop()) return null;
@@ -23,9 +23,16 @@ export function TitleBar() {
   // 明暗模式快捷切换：在亮色与暗色之间切换（system 模式下手动点击则切到反色）
   const mode = settings?.theme ?? "light";
   const isDark = resolveTheme(mode) === "dark";
+  // 锁定状态下保险库未解密，写入设置会失败（后端返回「应用未解锁」）。
+  // 此时隐藏主题按钮，避免点击后弹出无法理解的错误。
+  const canToggleTheme = Boolean(settings) && phase === "ready";
   const toggleTheme = async () => {
-    if (!settings) return;
-    await saveSettings({ ...settings, theme: isDark ? "light" : "dark" });
+    if (!settings || phase !== "ready") return;
+    try {
+      await saveSettings({ ...settings, theme: isDark ? "light" : "dark" });
+    } catch {
+      // 写入失败（如恰好被锁定）时静默忽略，不打扰用户
+    }
   };
 
   return (
@@ -37,7 +44,7 @@ export function TitleBar() {
         </span>
       </span>
       <div className="titlebar-actions">
-        {settings ? (
+        {canToggleTheme ? (
           <button
             className="titlebar-btn"
             aria-label={isDark ? t("切换到亮色模式") : t("切换到暗色模式")}

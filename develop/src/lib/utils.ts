@@ -11,16 +11,25 @@ export async function copyText(text: string): Promise<void> {
   try {
     const { writeText } = await import("@tauri-apps/plugin-clipboard-manager");
     await writeText(text);
+    return;
   } catch {
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(text);
-    }
+    // Tauri 插件不可用时回退到浏览器剪贴板
   }
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+  // 两种方式都不可用：抛出错误，由调用方提示失败（不能静默成功）
+  throw new Error("剪贴板不可用");
 }
 
 /** 清空系统剪贴板（解锁连续失败等安全场景使用） */
 export async function clearClipboard(): Promise<void> {
-  await copyText("");
+  try {
+    await copyText("");
+  } catch {
+    // 清理失败不应阻断解锁失败流程
+  }
 }
 
 /**
@@ -94,7 +103,21 @@ export function maskAccount(account: string): string {
 }
 
 /**
- * 把 #RRGGBB / #RGB 十六进制色转为 "r, g, b" 三元组，
+ * 由服务名生成稳定的头像文字与配色档位。
+ * 返回 `tone`（0~5）而非具体颜色，由 CSS 的 `.avatar-tone-N` 类着色，
+ * 避免在 JSX 里写内联样式（便于 CSP 收紧）。
+ */
+export function avatarOf(issuer: string): { text: string; tone: number } {
+  const name = issuer.trim();
+  // 中文等宽字符取 1 个字更协调；拉丁字母取 2 个更易识别
+  const isWide = /[\u3400-\u9FFF\uF900-\uFAFF]/.test(name.slice(0, 1));
+  const text = name ? (isWide ? name.slice(0, 1) : name.slice(0, 2).toUpperCase()) : "OT";
+  let hash = 0;
+  for (let i = 0; i < issuer.length; i += 1) hash = (hash * 31 + issuer.charCodeAt(i)) >>> 0;
+  return { text, tone: hash % 6 };
+}
+
+/** 把 #RRGGBB / #RGB 十六进制色转为 "r, g, b" 三元组，
  * 便于在 CSS 中用 rgba(var(--x), 0.1) 拼出低透明度色。
  * 非法输入返回 null，由调用方决定回退。
  */

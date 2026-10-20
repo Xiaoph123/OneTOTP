@@ -28,26 +28,23 @@ function revealWindow(): void {
 
 /**
  * 移除 index.html 中的静态启动画面。
- * 用双 rAF 等待 React 首帧（含同款 boot-screen）真正绘制后再淡出，
- * 两者视觉一致，因此衔接处不会闪烁。
+ * 由 App 在 boot() 完成后调用（见 App.tsx），确保首帧即为最终界面
+ * （锁定页或主界面），避免「先闪主界面、数秒后才跳锁定页」的倒序观感。
  */
 function dismissSplash(): void {
   const splash = document.getElementById("app-splash");
   if (!splash) return;
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => {
-      splash.classList.add("is-hidden");
-      splash.addEventListener("transitionend", () => splash.remove(), { once: true });
-      // 兜底：若过渡事件未触发（如减少动态效果），延时强制移除
-      window.setTimeout(() => splash.remove(), 400);
-    });
-  });
+  splash.classList.add("is-hidden");
+  splash.addEventListener("transitionend", () => splash.remove(), { once: true });
+  // 兜底：若过渡事件未触发（如减少动态效果），延时强制移除
+  window.setTimeout(() => splash.remove(), 400);
 }
 
-// 先等待 React 首帧绘制，再显窗并淡出启动画面，保证第一帧就是正确内容
-requestAnimationFrame(() => {
+// 暴露给 App：boot 完成后调用，一次性显窗并淡出启动画面
+(window as unknown as { __revealApp?: () => void }).__revealApp = () => {
+  revealWindow();
+  // 双 rAF 等 React 完成锁定页/主界面首帧绘制，再淡出，衔接无闪烁
   requestAnimationFrame(() => {
-    revealWindow();
-    dismissSplash();
+    requestAnimationFrame(() => dismissSplash());
   });
-});
+};

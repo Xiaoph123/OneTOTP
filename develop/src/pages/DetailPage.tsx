@@ -6,7 +6,7 @@ import { Button, IconButton } from "../components/Button";
 import { Select } from "../components/Select";
 import { ConfirmDialog } from "../components/Dialog";
 import { AlertTriangle, ChevronLeft, Edit, Heart } from "../components/icons";
-import { formatDateTime, relativeTime } from "../lib/utils";
+import { formatDateTime, relativeTime, avatarOf } from "../lib/utils";
 import { useI18n } from "../i18n";
 
 export function DetailPage({ accountId }: { accountId: string }) {
@@ -14,6 +14,7 @@ export function DetailPage({ accountId }: { accountId: string }) {
   const { t } = useI18n();
   const [account, setAccount] = useState<AccountView | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const avatar = avatarOf(account?.issuer ?? "");
 
   useEffect(() => {
     api.getAccountDetail(accountId).then(setAccount).catch(() => {});
@@ -49,57 +50,33 @@ export function DetailPage({ accountId }: { accountId: string }) {
         <IconButton label={t("返回")} onClick={() => goBack()}>
           <ChevronLeft />
         </IconButton>
-        <span style={{ fontSize: "var(--font-size-h4)", fontWeight: 500 }}>{t("账户详情")}</span>
+        <span className="app-bar-title">{t("账户详情")}</span>
       </header>
 
       <section className="app-body">
         {account ? (
           <>
             <div className="account-hero">
-              <span
-                className="avatar-sq"
-                style={{
-                  width: 44,
-                  height: 44,
-                  background: "var(--color-text-1)",
-                  color: "var(--color-bg-1)",
-                  fontSize: "var(--font-size-h4)",
-                }}
-              >
-                {account.issuer.slice(0, 2).toUpperCase()}
+              <span className={`avatar-sq avatar-lg avatar-tone-${avatar.tone}`}>
+                {avatar.text}
               </span>
-              <div style={{ minWidth: 0, flex: 1 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ fontSize: "var(--font-size-h3)", fontWeight: 500 }}>
+              <div className="min-w-0 flex-1">
+                <div className="row gap-8">
+                  <span className="hero-title">
                     {account.issuer}
                   </span>
-                  <span
-                    className="tag-soft"
-                    style={{
-                      background: "var(--status-yuanliSuccess-2)",
-                      color: "var(--status-yuanliSuccess-7)",
-                    }}
-                  >
+                  <span className="tag-soft tag-ok">
                     {t("已连接")}
                   </span>
                 </div>
-                <div
-                  style={{
-                    fontSize: "var(--font-size-body)",
-                    color: "var(--color-text-3)",
-                    marginTop: 2,
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
-                  }}
-                >
+                <div className="hero-account">
                   {account.account || t("未设置账户标识")}
                 </div>
               </div>
               <Button
                 variant="secondary"
                 size="sm"
-                icon={<Edit style={{ width: 13, height: 13 }} />}
+                icon={<Edit className="icon-13" />}
                 onClick={() => navigate({ name: "edit", accountId })}
               >
                 {t("编辑")}
@@ -107,7 +84,7 @@ export function DetailPage({ accountId }: { accountId: string }) {
             </div>
 
             <div className="panel account-info-panel">
-              <div style={{ fontSize: "var(--font-size-h4)", fontWeight: 500, marginBottom: 4 }}>
+              <div className="block-title mb-4">
                 {t("账户信息")}
               </div>
               <InfoRow label={t("服务名称")} value={account.issuer} />
@@ -116,20 +93,10 @@ export function DetailPage({ accountId }: { accountId: string }) {
                 label={t("类型")}
                 value={account.otpType === "hotp" ? t("HOTP（计数器 {n}）", { n: account.counter }) : t("TOTP（基于时间）")}
               />
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  gap: 12,
-                  padding: "8px 0",
-                  borderBottom: "1px solid var(--color-border-light)",
-                  fontSize: "var(--font-size-lead)",
-                }}
-              >
-                <span style={{ color: "var(--color-text-3)", flexShrink: 0 }}>{t("分类")}</span>
+              <div className="info-row info-row-select">
+                <span className="info-row-label">{t("分类")}</span>
                 <Select
-                  width={140}
+                  className="w-140"
                   size="small"
                   value={account.categoryId}
                   onChange={handleChangeCategory}
@@ -143,20 +110,19 @@ export function DetailPage({ accountId }: { accountId: string }) {
               <InfoRow label={t("最近使用")} value={relativeTime(account.lastUsedAt, t)} last />
             </div>
 
-            <div className="panel" style={{ marginTop: 12, overflow: "hidden" }}>
+            <div className="panel panel-clip mt-12">
               <button className="action-row" onClick={handleToggleFavorite}>
-                <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <Heart style={{ width: 16, height: 16 }} />
+                <span className="row gap-8">
+                  <Heart className="icon-16" />
                   {account.favorite ? t("取消收藏") : t("加入收藏")}
                 </span>
               </button>
               <button
-                className="action-row"
-                style={{ color: "var(--color-danger)", borderBottom: "none" }}
+                className="action-row action-row-danger"
                 onClick={() => setConfirmDelete(true)}
               >
-                <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <AlertTriangle style={{ width: 16, height: 16 }} />
+                <span className="row gap-8">
+                  <AlertTriangle className="icon-16" />
                   {t("删除账户")}
                 </span>
               </button>
@@ -186,21 +152,9 @@ export function DetailPage({ accountId }: { accountId: string }) {
 
 function InfoRow({ label, value, last }: { label: string; value: string; last?: boolean }) {
   return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        gap: 12,
-        padding: "11px 0",
-        borderBottom: last ? "none" : "1px solid var(--color-border-light)",
-        fontSize: "var(--font-size-lead)",
-      }}
-    >
-      <span style={{ color: "var(--color-text-3)", flexShrink: 0 }}>{label}</span>
-      <span style={{ color: "var(--color-text-1)", textAlign: "right", overflowWrap: "anywhere" }}>
-        {value}
-      </span>
+    <div className={`info-row${last ? " is-last" : ""}`}>
+      <span className="info-row-label">{label}</span>
+      <span className="info-row-value">{value}</span>
     </div>
   );
 }

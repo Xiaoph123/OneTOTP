@@ -2,8 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import { useApp } from "../state/AppContext";
 import { IconButton } from "../components/Button";
 import { Backspace, Eye, EyeOff, Fingerprint, Lock, OneTotpMark } from "../components/icons";
-import { authenticateBiometric, isBiometricEnrolled, isBiometricSupported } from "../lib/biometric";
+import { authenticateBiometric, isBiometricEnrolled } from "../lib/biometric";
 import { clearClipboard, readClearClipboardOnFail } from "../lib/utils";
+import { isDesktop } from "../lib/platform";
 import { useI18n } from "../i18n";
 
 /** 连续失败达到该次数时清空剪贴板 */
@@ -12,6 +13,7 @@ const CLEAR_ON_FAIL_THRESHOLD = 5;
 export function LockPage() {
   const { unlockWithPassword, passwordHint, hasLock, boot } = useApp();
   const { t } = useI18n();
+  const desktop = isDesktop();
   const [password, setPassword] = useState("");
   const [show, setShow] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -19,15 +21,18 @@ export function LockPage() {
   // 生物识别可用性：支持平台（Windows/macOS/Android/iOS）且已保存凭据时提供入口
   const [bioAvailable, setBioAvailable] = useState(false);
   const [bioBusy, setBioBusy] = useState(false);
-  const autoTriggered = useRef(false);
+  // bioBusy 的实时镜像：供事件监听回调读取最新值，避免闭包读到旧值
+  const bioBusyRef = useRef(false);
   // 连续解锁失败次数：达阈值后清空剪贴板，成功解锁时归零
   const failCount = useRef(0);
 
   useEffect(() => {
     let alive = true;
     (async () => {
-      const supported = await isBiometricSupported();
-      const enrolled = supported && (await isBiometricEnrolled());
+      // 只查「是否已保存凭据」即可判定是否提供生物识别入口：
+      // 有数据即代表该平台支持且已绑定，无需再单独调一次 checkStatus
+      // （那是 winrt 冷启动较慢的调用，会明显拖慢锁定页的自动唤起）。
+      const enrolled = await isBiometricEnrolled();
       if (alive) setBioAvailable(enrolled);
     })();
     return () => {
@@ -37,7 +42,8 @@ export function LockPage() {
 
   /** 走生物识别：认证通过后拿到口令，复用正常解锁流程 */
   const unlockByBiometric = async () => {
-    if (bioBusy) return;
+    if (bioBusyRef.current) return;
+    bioBusyRef.current = true;
     setBioBusy(true);
     setError(null);
     try {
@@ -49,20 +55,49 @@ export function LockPage() {
         const ok = await unlockWithPassword(result.password);
         if (!ok) setError(t("密码错误，请重试"));
       } else if (result.reason === "cancelled") {
-        // 用户主动取消，不提示错误
+        // 用户主动取消（点了系统弹窗的取消/关闭）：静默处理。
+        // 关键：不能清除凭据、不能禁用入口——用户随时可再点一次，
+        // 凭据在用户主动关闭开关前始终有效。
+      } else if (result.reason === "lockout") {
+        setError(t("生物识别尝试过多，请稍后再试"));
       } else {
+        // 认证未能完成（系统暂时不可用、锁屏等系统弹窗被遮挡等）。
+        // 注意：此处不能清除凭据或禁用入口——这类多为瞬时状态，
+        // 下次进入或点按钮应能重试。仅在真正「凭据已不存在」时才降级。
         setError(t("生物识别不可用，请使用密码解锁"));
       }
     } finally {
+      bioBusyRef.current = false;
       setBioBusy(false);
     }
   };
 
-  // 进入锁定页时自动唤起一次生物识别（用户已启用时才触发）
+  // 自动唤起生物识别。触发时机：
+  //  1) 锁定页挂载且页面可见时（首次进入 / 应用被系统锁定后回到前台）
+  //  2) 页面从后台切回前台时（用户取消后回桌面、再回应用）
+  // 关键：系统弹窗（含锁屏）无法在页面不可见时显示，故必须等可见再唤起；
+  // 且每次回到前台都重新尝试，避免「取消一次后就不再自动弹」的问题。
+  // 说明：刻意不监听 window 的 focus——桌面端系统认证框关闭会使窗口重新
+  // 获得焦点，若据此触发会形成「取消后立刻又弹」的循环。
   useEffect(() => {
-    if (!hasLock || !bioAvailable || autoTriggered.current) return;
-    autoTriggered.current = true;
-    unlockByBiometric();
+    if (!hasLock || !bioAvailable) return;
+
+    const maybeAutoTrigger = () => {
+      if (document.visibilityState !== "visible") return;
+      if (bioBusyRef.current) return;
+      unlockByBiometric();
+    };
+
+    // 挂载即尝试一次（冷启动进入锁定页）
+    maybeAutoTrigger();
+
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") maybeAutoTrigger();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasLock, bioAvailable]);
 
@@ -70,24 +105,12 @@ export function LockPage() {
     // 无锁定密码时的兜底：直接尝试进入
     return (
       <div className="lock-page">
-        <div className="lock-card" style={{ textAlign: "center" }}>
-          <OneTotpMark style={{ width: 56, height: 56 }} />
-          <div style={{ fontSize: "var(--font-size-h3)", fontWeight: 500, marginTop: 12 }}>
+        <div className="lock-card">
+          <OneTotpMark className="lock-boot-logo" />
+          <div className="lock-boot-title">
             {t("正在打开 OneTotp")}
           </div>
-          <button
-            onClick={boot}
-            style={{
-              marginTop: 16,
-              height: 36,
-              padding: "0 20px",
-              border: "none",
-              borderRadius: "var(--radius-md)",
-              background: "var(--color-primary)",
-              color: "var(--color-white)",
-              cursor: "pointer",
-            }}
-          >
+          <button className="btn-primary-inline lock-enter-btn" onClick={boot}>
             {t("进入应用")}
           </button>
         </div>
@@ -126,153 +149,124 @@ export function LockPage() {
   return (
     <div className="lock-page">
       <div className="lock-card">
-        <div className="lock-avatar">王</div>
-        <div style={{ fontSize: "var(--font-size-h3)", fontWeight: 500 }}>{t("应用已锁定")}</div>
-        <div style={{ fontSize: "var(--font-size-lead)", color: "var(--color-text-3)", marginTop: 4 }}>
+        <div className="lock-avatar"><OneTotpMark /></div>
+        <div className="lock-title">{t("应用已锁定")}</div>
+        <div className="lock-subtitle">
           {t("请输入密码以解锁 OneTotp")}
         </div>
 
         <form
-          style={{ marginTop: 16 }}
+          className="mt-16"
           onSubmit={(e) => {
             e.preventDefault();
             submit();
           }}
         >
-          <div style={{ position: "relative" }}>
+          <div className="lock-input-wrap">
             <input
-              className="ui-input"
+              className={`ui-input lock-input${desktop ? " is-desktop" : ""}`}
               type={show ? "text" : "password"}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder={t("输入锁定密码")}
-              autoFocus
+              // 移动端不自动聚焦：否则软键盘会立即弹出并遮住数字键盘区，
+              // 与移动端「用下方数字键盘输入」的交互冲突。
+              autoFocus={desktop}
               autoComplete="current-password"
-              style={{
-                height: 44,
-                fontSize: "var(--font-size-h3)",
-                textAlign: "center",
-                paddingRight: 44,
-              }}
             />
             <IconButton
               label={show ? t("隐藏密码") : t("显示密码")}
-              style={{ position: "absolute", right: 6, top: 6 }}
+              className="lock-eye"
               onClick={() => setShow((s) => !s)}
             >
               {show ? <EyeOff /> : <Eye />}
             </IconButton>
           </div>
 
-          <div style={{ display: "flex", justifyContent: "center", gap: 10, margin: "16px 0" }}>
-            {Array.from({ length: dots }).map((_, i) => (
-              <span
-                key={i}
-                style={{
-                  width: 11,
-                  height: 11,
-                  borderRadius: "50%",
-                  border: "1.5px solid var(--color-border-4)",
-                  background: i < password.length ? "var(--color-primary)" : "transparent",
-                  borderColor: i < password.length ? "var(--color-primary)" : "var(--color-border-4)",
-                }}
-              />
-            ))}
-          </div>
+          {/* 圆点指示器仅在移动端显示：桌面端用常规密码框，不需要 */}
+          {!desktop ? (
+            <div className="lock-dots">
+              {Array.from({ length: dots }).map((_, i) => (
+                <span key={i} className={`lock-dot${i < password.length ? " is-filled" : ""}`} />
+              ))}
+            </div>
+          ) : null}
 
           {error ? (
-            <div
-              className="notice"
-              style={{
-                marginBottom: 12,
-                background: "var(--status-yuanliDanger-2)",
-                color: "var(--status-yuanliDanger-6)",
-                justifyContent: "center",
-              }}
-            >
+            <div className={`notice notice-err notice-center${desktop ? " mt-12" : ""} mb-12`}>
               {error}
             </div>
           ) : null}
 
-          <button
-            type="submit"
-            disabled={busy}
-            style={{
-              width: "100%",
-              height: 36,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 6,
-              border: "none",
-              borderRadius: "var(--radius-md)",
-              background: "var(--color-primary)",
-              color: "var(--color-white)",
-              fontSize: "var(--font-size-h4)",
-              fontWeight: 500,
-              cursor: busy ? "not-allowed" : "pointer",
-              opacity: busy ? 0.7 : 1,
-            }}
-          >
-            <Lock style={{ width: 16, height: 16 }} />
+          <button type="submit" disabled={busy} className="lock-submit">
+            <Lock className="icon-16" />
             {t("解锁")}
           </button>
+
+          {/* 桌面端：Windows Hello 等生物识别作为独立的次级操作按钮 */}
+          {desktop ? (
+            <button
+              type="button"
+              disabled={!bioAvailable || bioBusy}
+              onClick={unlockByBiometric}
+              title={bioAvailable ? t("Windows Hello 解锁") : t("需先在设置中启用")}
+              className="lock-bio-btn"
+            >
+              <Fingerprint className="icon-18" />
+              {bioBusy ? t("正在验证…") : t("Windows Hello 解锁")}
+            </button>
+          ) : null}
         </form>
 
-        <div className="keypad" style={{ marginTop: 18 }}>
-          {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((d) => (
-            <button key={d} className="key-btn" type="button" onClick={() => press(d)}>
-              {d}
+        {/* 数字键盘仅在移动端显示：桌面端为物理键盘输入 */}
+        {!desktop ? (
+          <div className="keypad mt-18">
+            {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((d) => (
+              <button key={d} className="key-btn" type="button" onClick={() => press(d)}>
+                {d}
+              </button>
+            ))}
+            <button
+              className="key-btn ghost"
+              type="button"
+              aria-label={t("生物识别")}
+              disabled={!bioAvailable || bioBusy}
+              title={bioAvailable ? t("指纹 / 面容解锁") : t("需先在设置中启用")}
+              onClick={unlockByBiometric}
+            >
+              <Fingerprint className="icon-22" />
             </button>
-          ))}
-          <button
-            className="key-btn ghost"
-            type="button"
-            aria-label={t("生物识别")}
-            disabled={!bioAvailable || bioBusy}
-            title={bioAvailable ? t("指纹 / 面容解锁") : t("需先在设置中启用")}
-            onClick={unlockByBiometric}
-          >
-            <Fingerprint style={{ width: 22, height: 22 }} />
-          </button>
-          <button className="key-btn" type="button" onClick={() => press("0")}>
-            0
-          </button>
-          <button
-            className="key-btn ghost"
-            type="button"
-            aria-label={t("删除")}
-            onClick={() => setPassword((p) => p.slice(0, -1))}
-          >
-            <Backspace style={{ width: 22, height: 22 }} />
-          </button>
-        </div>
+            <button className="key-btn" type="button" onClick={() => press("0")}>
+              0
+            </button>
+            <button
+              className="key-btn ghost"
+              type="button"
+              aria-label={t("删除")}
+              onClick={() => setPassword((p) => p.slice(0, -1))}
+            >
+              <Backspace className="icon-22" />
+            </button>
+          </div>
+        ) : null}
 
         {passwordHint ? (
-          <div style={{ marginTop: 16, fontSize: "var(--font-size-body)", color: "var(--color-text-3)" }}>
+          <div className="lock-hint">
             {t("密码提示：{hint}", { hint: passwordHint })}
           </div>
         ) : null}
 
-        <div
-          style={{
-            marginTop: 16,
-            padding: "10px 12px",
-            borderRadius: "var(--radius-md)",
-            background: "var(--color-bg-4)",
-            display: "flex",
-            gap: 8,
-            textAlign: "left",
-          }}
-        >
-          <svg viewBox="0 0 16 16" fill="none" stroke="var(--color-text-3)" strokeWidth={1.5} style={{ width: 14, height: 14, flexShrink: 0, marginTop: 2 }}>
-            <circle cx="8" cy="8" r="6" />
-            <path d="M8 7.4v3.4M8 5.3v.1" strokeLinecap="round" />
-          </svg>
-          <span style={{ fontSize: "var(--font-size-body)", color: "var(--color-text-3)", lineHeight: "18px" }}>
-            {t("密码仅用于本机解锁，忘记后无法找回，只能通过加密备份在新设备恢复。")}
-          </span>
-        </div>
+        {!desktop ? (
+          <div className="lock-note">
+            <svg viewBox="0 0 16 16" fill="none" stroke="var(--color-text-3)" strokeWidth={1.5} className="lock-note-icon">
+              <circle cx="8" cy="8" r="6" />
+              <path d="M8 7.4v3.4M8 5.3v.1" strokeLinecap="round" />
+            </svg>
+            <span className="lock-note-text">
+              {t("密码仅用于本机解锁，忘记后无法找回，只能通过加密备份在新设备恢复。")}
+            </span>
+          </div>
+        ) : null}
       </div>
     </div>
   );

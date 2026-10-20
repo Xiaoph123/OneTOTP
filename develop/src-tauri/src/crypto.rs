@@ -92,9 +92,9 @@ pub fn decode_salt(file: &VaultFile) -> Result<Vec<u8>, String> {
     B64.decode(&file.salt).map_err(|_| "salt 解码失败".to_string())
 }
 
-/// 机器本地密钥：纯离线场景下无锁定密码时使用。
-/// 由固定的设备指纹派生，不做上传，仅防止明文落盘被直接读取。
-pub fn machine_key() -> [u8; KEY_LEN] {
+/// 旧版机器密钥：仅用 OS + ARCH 派生，所有同平台机器相同。
+/// **仅用于兼容读取旧保险库**，新数据不再使用。
+fn legacy_machine_key() -> [u8; KEY_LEN] {
     let seed = format!(
         "oneTotp-local-vault::{}::{}",
         std::env::consts::OS,
@@ -102,9 +102,45 @@ pub fn machine_key() -> [u8; KEY_LEN] {
     );
     let salt = b"onetotp-machine-salt-v1";
     let mut key = [0u8; KEY_LEN];
-    // 使用 Argon2 做一次确定性派生
     let _ = Argon2::default().hash_password_into(seed.as_bytes(), salt, &mut key);
     key
+}
+
+/// 机器本地密钥文件：把随机生成的 32 字节密钥落盘到应用数据目录。
+///
+/// 旧实现只按 OS+ARCH 派生，导致同平台所有设备密钥相同——拿到保险库文件即可解密。
+/// 现改为首次使用时生成随机密钥并保存，与设备绑定。
+/// 返回 `(当前密钥, 是否为旧版派生的密钥)`：旧保险库需用旧密钥才能解开。
+pub fn load_or_create_machine_key(app_dir: &std::path::Path) -> Result<[u8; KEY_LEN], String> {
+    let path = app_dir.join("onetotp.machine.key");
+    if let Ok(raw) = std::fs::read(&path) {
+        if raw.len() == KEY_LEN {
+            let mut key = [0u8; KEY_LEN];
+            key.copy_from_slice(&raw);
+            return Ok(key);
+        }
+    }
+    // 首次使用：生成随机密钥并持久化。
+    // 必须原子写入（临时文件 + rename）：若写入中途崩溃留下被截断的文件，
+    // 下次启动会因长度不符而重新生成密钥，导致既有保险库永久无法解密。
+    std::fs::create_dir_all(app_dir).map_err(|e| format!("创建应用目录失败: {e}"))?;
+    let mut key = [0u8; KEY_LEN];
+    OsRng.fill_bytes(&mut key);
+    let tmp = app_dir.join(".onetotp.machine.key.tmp");
+    std::fs::write(&tmp, key).map_err(|e| format!("写入机器密钥失败: {e}"))?;
+    if path.exists() {
+        let _ = std::fs::remove_file(&path);
+    }
+    std::fs::rename(&tmp, &path).map_err(|e| {
+        let _ = std::fs::remove_file(&tmp);
+        format!("提交机器密钥失败: {e}")
+    })?;
+    Ok(key)
+}
+
+/// 兼容用：旧版机器密钥（仅供迁移旧数据时尝试解密）
+pub fn legacy_machine_key_compat() -> [u8; KEY_LEN] {
+    legacy_machine_key()
 }
 
 /// 密码强度基础校验

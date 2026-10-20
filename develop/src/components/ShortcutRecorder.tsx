@@ -6,8 +6,8 @@ interface Props {
   value: string;
   /** 录制完成回调，参数为空字符串表示清除 */
   onChange: (shortcut: string) => void;
-  /** 控件宽度，需与其他设置项保持一致 */
-  width?: number | string;
+  /** 额外类名，用于与其他设置项控件宽度对齐（如 control-w） */
+  className?: string;
 }
 
 /** 将键盘事件转为 Tauri 全局快捷键格式，例如 Control+Shift+A */
@@ -45,7 +45,7 @@ function toShortcut(e: KeyboardEvent): string | null {
  * - 录制态下按 Delete / Backspace 清除快捷键
  * - 按 Esc 取消录制
  */
-export function ShortcutRecorder({ value, onChange, width = 124 }: Props) {
+export function ShortcutRecorder({ value, onChange, className }: Props) {
   const { t } = useI18n();
   const [recording, setRecording] = useState(false);
   const [hint, setHint] = useState<string | null>(null);
@@ -102,17 +102,8 @@ export function ShortcutRecorder({ value, onChange, width = 124 }: Props) {
     <button
       ref={btnRef}
       type="button"
-      className="ui-input"
-      style={{
-        width,
-        cursor: "pointer",
-        textAlign: "center",
-        fontFamily: "var(--font-mono)",
-        color: recording ? "var(--color-primary)" : value ? "var(--color-text-1)" : "var(--color-text-3)",
-        boxShadow: recording
-          ? "0 0 0 1px var(--color-primary), 0 0 0 3px rgba(22,100,255,0.3)"
-          : undefined,
-      }}
+      className={`ui-input shortcut-recorder${recording ? " is-recording" : ""}${className ? ` ${className}` : ""}`}
+      data-empty={value ? undefined : "true"}
       onClick={() => {
         setHint(null);
         setRecording((r) => !r);

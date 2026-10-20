@@ -40,10 +40,10 @@ export function ConfirmDialog({
         <div className="modal-body">
           {danger ? (
             <span className="modal-icon is-danger">
-              <AlertTriangle style={{ width: 18, height: 18 }} />
+              <AlertTriangle className="icon-18" />
             </span>
           ) : null}
-          <div style={{ minWidth: 0 }}>
+          <div className="min-w-0">
             <div className="modal-title">{title}</div>
             {description ? <div className="modal-desc">{description}</div> : null}
           </div>

@@ -43,7 +43,10 @@ pub fn read_lock(app_dir: &Path) -> Option<LockRecord> {
 
 pub fn write_lock(app_dir: &Path, record: &LockRecord) -> Result<(), String> {
     let data = serde_json::to_string_pretty(record).map_err(|e| e.to_string())?;
-    fs::write(lock_path(app_dir), data).map_err(|e| format!("写入锁定凭证失败: {e}"))
+    // 与保险库一致走原子写入：锁定凭证被截断会导致「读不到锁文件 → 误判未设密码」，
+    // 而保险库此时已用密码密钥加密，用户将无法解密自己的数据。
+    write_atomic(&lock_path(app_dir), data.as_bytes())
+        .map_err(|e| format!("写入锁定凭证失败: {e}"))
 }
 
 pub fn remove_lock(app_dir: &Path) -> Result<(), String> {
@@ -60,9 +63,32 @@ pub fn read_vault(app_dir: &Path) -> Result<VaultFile, String> {
     serde_json::from_str(&data).map_err(|e| format!("保险库解析失败: {e}"))
 }
 
+/// 原子写入：先写同目录临时文件，再 rename 覆盖目标。
+/// 避免写入过程中断电/崩溃留下被截断的损坏文件（JSON 无法解析会导致数据全失）。
+fn write_atomic(path: &Path, data: &[u8]) -> Result<(), String> {
+    let dir = path.parent().ok_or_else(|| "无效的目标路径".to_string())?;
+    fs::create_dir_all(dir).map_err(|e| format!("创建目录失败: {e}"))?;
+    let tmp = dir.join(format!(
+        ".{}.tmp",
+        path.file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_else(|| "tmp".to_string())
+    ));
+    fs::write(&tmp, data).map_err(|e| format!("写入临时文件失败: {e}"))?;
+    // 同分区 rename 是原子操作；Windows 下目标已存在时 rename 会失败，故先删除
+    if path.exists() {
+        let _ = fs::remove_file(path);
+    }
+    fs::rename(&tmp, path).map_err(|e| {
+        let _ = fs::remove_file(&tmp);
+        format!("提交文件失败: {e}")
+    })
+}
+
 pub fn write_vault(app_dir: &Path, file: &VaultFile) -> Result<(), String> {
     let data = serde_json::to_string_pretty(file).map_err(|e| e.to_string())?;
-    fs::write(vault_path(app_dir), data).map_err(|e| format!("写入保险库失败: {e}"))
+    write_atomic(&vault_path(app_dir), data.as_bytes())
+        .map_err(|e| format!("写入保险库失败: {e}"))
 }
 
 /// 写出加密快照，返回备份文件名
@@ -71,7 +97,8 @@ pub fn write_backup(app_dir: &Path, file: &VaultFile) -> Result<String, String> 
     fs::create_dir_all(&dir).map_err(|e| format!("创建备份目录失败: {e}"))?;
     let name = format!("vault-backup-{}.json", crate::totp::now_millis());
     let data = serde_json::to_string_pretty(file).map_err(|e| e.to_string())?;
-    fs::write(dir.join(&name), data).map_err(|e| format!("写入备份失败: {e}"))?;
+    write_atomic(&dir.join(&name), data.as_bytes())
+        .map_err(|e| format!("写入备份失败: {e}"))?;
     Ok(name)
 }
 
@@ -128,28 +155,33 @@ pub struct StorageUsage {
     pub backup_count: u32,
 }
 
-/// 递归统计单个路径的占用字节数
-fn dir_size(path: &Path) -> u64 {
+/// 统计单个路径占用；`max_depth` 限制递归层数，避免深层目录（或异常结构）拖慢统计。
+fn dir_size_limited(path: &Path, max_depth: u32) -> u64 {
     let Ok(meta) = fs::metadata(path) else {
         return 0;
     };
     if meta.is_file() {
         return meta.len();
     }
+    if max_depth == 0 {
+        return 0;
+    }
     let Ok(entries) = fs::read_dir(path) else {
         return 0;
     };
     entries
         .filter_map(|e| e.ok())
-        .map(|e| dir_size(&e.path()))
+        .map(|e| dir_size_limited(&e.path(), max_depth - 1))
         .sum()
 }
 
-/// 统计应用本地数据占用：总量、备份、保险库
+/// 统计应用本地数据占用：总量、备份、保险库。
+/// 数据目录结构固定（应用目录 / backups），限制深度为 2 层即可完整覆盖，
+/// 避免每次打开设置页都做无界递归遍历。
 pub fn storage_usage(app_dir: &Path) -> StorageUsage {
-    let backup_bytes = dir_size(&backup_dir(app_dir));
+    let backup_bytes = dir_size_limited(&backup_dir(app_dir), 2);
     let vault_bytes = fs::metadata(vault_path(app_dir)).map(|m| m.len()).unwrap_or(0);
-    let total_bytes = dir_size(app_dir);
+    let total_bytes = dir_size_limited(app_dir, 3);
     let backup_count = list_backups(app_dir).len() as u32;
     StorageUsage {
         total_bytes,

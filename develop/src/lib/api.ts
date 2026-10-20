@@ -315,12 +315,15 @@ export interface ImportResult {
   addedAccounts: number;
   appliedSettings: boolean;
   totalAccountsInBackup: number;
+  /** 因字段非法被跳过的账户数 */
+  skippedInvalid: number;
 }
 
 interface RawImportResult {
   added_accounts: number;
   applied_settings: boolean;
   total_accounts_in_backup: number;
+  skipped_invalid: number;
 }
 
 export const api = {
@@ -469,6 +472,7 @@ export const api = {
       addedAccounts: raw.added_accounts,
       appliedSettings: raw.applied_settings,
       totalAccountsInBackup: raw.total_accounts_in_backup,
+      skippedInvalid: raw.skipped_invalid,
     };
   },
 

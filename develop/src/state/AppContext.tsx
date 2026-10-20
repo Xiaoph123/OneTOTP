@@ -34,6 +34,10 @@ interface AppContextValue {
   refreshAccounts: () => Promise<void>;
   refreshCategories: () => Promise<void>;
   refreshSettings: () => Promise<void>;
+  /** 重新读取锁定状态（hasLock / 密码提示）。
+   *  运行时开启或关闭「应用锁定」后必须调用：hasLock 是自动锁定的总闸门，
+   *  若不刷新，本次会话内新开启的锁定不会生效、已关闭的锁定仍会触发锁定。 */
+  refreshLockState: () => Promise<void>;
   boot: () => Promise<void>;
   unlockWithPassword: (password: string) => Promise<boolean>;
   lockApp: () => Promise<void>;
@@ -74,6 +78,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const refreshSettings = useCallback(async () => {
     const s = await api.getSettings();
     setSettings(s);
+  }, []);
+
+  /** 重新读取锁定状态：hasLock 与密码提示（供运行时开关锁定后同步） */
+  const refreshLockState = useCallback(async () => {
+    const status = await api.getStatus();
+    setHasLock(status.hasLock);
+    setPasswordHint(status.passwordHint);
   }, []);
 
   const boot = useCallback(async () => {
@@ -142,6 +153,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setAccounts([]);
     setCategories([]);
     setCodes({});
+    // 清空导航历史：解锁后应回到首页，而不是沿用锁定前的深层页面
+    historyRef.current = [];
     setPhase("locked");
     setRoute({ name: "lock" });
   }, []);
@@ -174,10 +187,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return false;
   }, []);
 
-  // 解锁后轮询验证码
+  // 解锁后轮询验证码。
+  // 页面不可见（切后台 / 手机锁屏 / 窗口最小化）时暂停跨进程轮询，降低耗电；
+  // 回到前台立即刷新一次，保证显示不过期。
   useEffect(() => {
     if (phase !== "ready") return;
     let alive = true;
+    let timer: number | undefined;
+
     const tick = async () => {
       try {
         const results = await api.getCodes();
@@ -189,11 +206,33 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         // 忽略轮询错误
       }
     };
-    tick();
-    const timer = setInterval(tick, 1000);
+
+    const start = () => {
+      if (timer !== undefined) return;
+      tick();
+      timer = window.setInterval(tick, 1000);
+    };
+    const stop = () => {
+      if (timer === undefined) return;
+      window.clearInterval(timer);
+      timer = undefined;
+    };
+
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") {
+        start();
+      } else {
+        stop();
+      }
+    };
+
+    if (document.visibilityState === "visible") start();
+    document.addEventListener("visibilitychange", onVisibility);
+
     return () => {
       alive = false;
-      clearInterval(timer);
+      stop();
+      document.removeEventListener("visibilitychange", onVisibility);
     };
   }, [phase]);
 
@@ -245,6 +284,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       refreshAccounts,
       refreshCategories,
       refreshSettings,
+      refreshLockState,
       boot,
       unlockWithPassword,
       lockApp,
@@ -265,6 +305,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       refreshAccounts,
       refreshCategories,
       refreshSettings,
+      refreshLockState,
       boot,
       unlockWithPassword,
       lockApp,

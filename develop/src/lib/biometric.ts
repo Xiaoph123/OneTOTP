@@ -37,6 +37,22 @@ export interface BiometricResult {
 const FAIL_UNSUPPORTED: BiometricResult = { ok: false, reason: "unsupported", password: null };
 
 /**
+ * 生物识别认证进行中标志。
+ *
+ * Windows Hello / Touch ID 的系统对话框会抢占前台，使应用主窗口短暂失焦。
+ * 自动锁定（失焦锁定）若不感知这一点，会在弹出认证框的同时把应用锁死，
+ * 形成「一解锁就重锁、反复弹框」的死循环。认证期间置为 true，供
+ * useAutoLock 跳过失焦锁定判定。
+ */
+let biometricInFlight = false;
+
+/** 是否有一次生物识别认证正在进行中 */
+export function isBiometricInFlight(): boolean {
+  return biometricInFlight;
+}
+
+
+/**
  * 当前平台是否可能支持生物识别。
  * Linux 桌面端直接判否，避免调用不存在的插件命令。
  */
@@ -50,12 +66,23 @@ export function hasBiometricBridge(): boolean {
   return true; // 移动端（Android / iOS）均支持
 }
 
+/**
+ * 设备能力探测结果缓存。
+ * `checkStatus()` 在 Windows 上是 WinRT 冷启动调用（数百毫秒），
+ * 而设备能力在应用生命周期内几乎不变，故缓存结果避免重复等待。
+ * 仅缓存「支持」结论——不支持可能是临时状态（如系统暂时禁用），下次仍需重查。
+ */
+let supportedCache: boolean | null = null;
+
 /** 设备是否具备可用的生物识别能力（含是否已录入指纹/面容） */
 export async function isBiometricSupported(): Promise<boolean> {
   if (!hasBiometricBridge()) return false;
+  if (supportedCache === true) return true;
   try {
     const status = await checkStatus();
-    return status.isAvailable === true;
+    const ok = status.isAvailable === true;
+    if (ok) supportedCache = true;
+    return ok;
   } catch {
     return false;
   }
@@ -89,11 +116,14 @@ function toReason(e: unknown): string {
 export async function enrollBiometric(password: string): Promise<BiometricResult> {
   if (!password) return { ok: false, reason: "empty_password", password: null };
   if (!hasBiometricBridge()) return FAIL_UNSUPPORTED;
+  biometricInFlight = true;
   try {
     await setData({ domain: DATA_DOMAIN, name: DATA_NAME, data: password });
     return { ok: true, reason: null, password: null };
   } catch (e) {
     return { ok: false, reason: toReason(e), password: null };
+  } finally {
+    biometricInFlight = false;
   }
 }
 
@@ -106,6 +136,7 @@ export async function enrollBiometric(password: string): Promise<BiometricResult
  */
 export async function authenticateBiometric(reason?: string, cancelTitle?: string): Promise<BiometricResult> {
   if (!hasBiometricBridge()) return FAIL_UNSUPPORTED;
+  biometricInFlight = true;
   try {
     const res = await getData({
       domain: DATA_DOMAIN,
@@ -116,6 +147,8 @@ export async function authenticateBiometric(reason?: string, cancelTitle?: strin
     return { ok: true, reason: null, password: res.data };
   } catch (e) {
     return { ok: false, reason: toReason(e), password: null };
+  } finally {
+    biometricInFlight = false;
   }
 }
 

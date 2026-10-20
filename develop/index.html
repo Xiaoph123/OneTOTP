@@ -9,66 +9,10 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="theme-color" content="#ffffff" />
     <title>OneTotp</title>
-    <script>
-      // 首屏防白闪：在样式/React 就绪前先决定主题，避免亮暗切换跳变。
-      // 优先级：应用内已保存的主题设置 > 系统偏好。
-      // 主题设置由 src/lib/theme.ts 的 applyTheme() 镜像到 localStorage。
-      try {
-        var mode = null;
-        try {
-          mode = localStorage.getItem("onetotp.theme");
-        } catch (e) {}
-        if (mode !== "light" && mode !== "dark" && mode !== "system") mode = "light";
-        var dark =
-          mode === "dark" ||
-          (mode === "system" &&
-            window.matchMedia &&
-            window.matchMedia("(prefers-color-scheme: dark)").matches);
-        document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
-        var ua = navigator.userAgent.toLowerCase();
-        var mobile = /android|iphone|ipad|ipod/.test(ua) ||
-          (/macintosh/.test(ua) && navigator.maxTouchPoints > 1);
-        document.documentElement.setAttribute("data-platform", mobile ? "mobile" : "desktop");
-      } catch (e) {}
-    </script>
-    <style>
-      /* 静态启动画面：随 HTML 立即渲染，React 挂载后由 main.tsx 移除 */
-      /* 背景色对齐应用 --color-bg-2（亮 #FCFDFE / 暗 #141619），确保淡出无跳变 */
-      html { background: #fcfdfe; }
-      html[data-theme="dark"] { background: #141619; }
-      body { margin: 0; }
-      #app-splash {
-        position: fixed;
-        inset: 0;
-        z-index: 9999;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        gap: 16px;
-        background: #fcfdfe;
-        transition: opacity 200ms ease;
-      }
-      html[data-theme="dark"] #app-splash { background: #141619; }
-      #app-splash.is-hidden { opacity: 0; pointer-events: none; }
-      #app-splash svg { width: 72px; height: 72px; display: block; }
-      #app-splash .splash-text {
-        font-family: "PingFang SC", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
-        font-size: 13px;
-        color: #a9aeb6;
-      }
-      #app-splash .onetotp-shine {
-        animation: onetotp-shine-sweep 1.8s ease-in-out infinite;
-        will-change: transform;
-      }
-      @keyframes onetotp-shine-sweep {
-        0% { transform: translateX(-10px); }
-        100% { transform: translateX(30px); }
-      }
-      @media (prefers-reduced-motion: reduce) {
-        #app-splash .onetotp-shine { animation: none; opacity: 0; }
-      }
-    </style>
+    <!-- 主题与平台标记预置：外链同步脚本，避免内联脚本被收紧后的 CSP 拦截 -->
+    <script src="/theme-boot.js"></script>
+    <!-- 首屏与启动画面样式：外链文件，避免内联样式块被 CSP 拦截 -->
+    <link rel="stylesheet" href="/splash.css" />
   </head>
 
   <body>

@@ -20,7 +20,7 @@ export function EditAccountPage({ accountId }: { accountId: string }) {
     return (
       <>
         <header className="app-bar">
-          <span style={{ fontSize: "var(--font-size-h4)", fontWeight: 500 }}>{t("编辑账户")}</span>
+          <span className="app-bar-title">{t("编辑账户")}</span>
         </header>
         <section className="app-body">
           <div className="empty-state">
@@ -35,7 +35,7 @@ export function EditAccountPage({ accountId }: { accountId: string }) {
     return (
       <>
         <header className="app-bar">
-          <span style={{ fontSize: "var(--font-size-h4)", fontWeight: 500 }}>{t("编辑账户")}</span>
+          <span className="app-bar-title">{t("编辑账户")}</span>
         </header>
         <section className="app-body">
           <div className="empty-state">

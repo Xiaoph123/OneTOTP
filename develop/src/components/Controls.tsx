@@ -16,7 +16,6 @@ export function Switch({
       aria-label={label}
       disabled={disabled}
       className={`switch${checked ? " on" : ""}`}
-      style={disabled ? { opacity: 0.5, cursor: "not-allowed" } : undefined}
       onClick={() => !disabled && onChange(!checked)}
     >
       <i />
@@ -38,6 +37,7 @@ export function CountdownRing({
   const radius = 27;
   const circumference = 2 * Math.PI * radius; // ≈169.6
   const offset = circumference * (1 - pct);
+  // 颜色走类名而非内联样式；SVG 的 stroke / dashoffset 为属性，不受 CSP 限制
   const stroke = danger ? "var(--color-danger)" : "var(--color-primary)";
 
   return (
@@ -45,6 +45,7 @@ export function CountdownRing({
       <svg viewBox="0 0 64 64">
         <circle cx="32" cy="32" r={radius} fill="none" stroke="var(--color-bg-5)" strokeWidth="5" />
         <circle
+          className="otp-ring-progress"
           cx="32"
           cy="32"
           r={radius}
@@ -54,12 +55,9 @@ export function CountdownRing({
           strokeLinecap="round"
           strokeDasharray={circumference}
           strokeDashoffset={offset}
-          style={{ transition: "stroke-dashoffset 1s linear, stroke 200ms ease" }}
         />
       </svg>
-      <div className="otp-ring-num" style={{ color: danger ? "var(--color-danger)" : undefined }}>
-        {remaining}
-      </div>
+      <div className={`otp-ring-num${danger ? " is-danger" : ""}`}>{remaining}</div>
     </div>
   );
 }

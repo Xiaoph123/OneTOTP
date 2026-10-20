@@ -19,6 +19,11 @@ pub struct AppState {
     pub payload: Mutex<Option<VaultPayload>>,
     /// 关闭按钮行为缓存（quit | tray），供窗口事件同步读取
     pub close_behavior: Mutex<String>,
+    /// TOTP 验证码缓存：key = 账户 id，value = (周期序号, 当前码, 下一个码)。
+    /// 同一周期内复用 HMAC 结果，仅在跨周期（或账户变更）时重算。
+    pub code_cache: Mutex<std::collections::HashMap<String, (u64, String, Option<String>)>>,
+    /// 解锁失败次数与最近一次失败时间：用于抵御脚本爆破（指数退避）
+    pub unlock_failures: Mutex<(u32, std::time::Instant)>,
 }
 
 impl AppState {
@@ -28,6 +33,8 @@ impl AppState {
             key: Mutex::new(None),
             payload: Mutex::new(None),
             close_behavior: Mutex::new("quit".to_string()),
+            code_cache: Mutex::new(std::collections::HashMap::new()),
+            unlock_failures: Mutex::new((0, std::time::Instant::now())),
         }
     }
 
@@ -64,6 +71,18 @@ impl AppState {
 
     /// 持久化当前内存载荷（加密写回）
     pub fn persist(&self) -> Result<(), String> {
+        self.persist_inner(true, true)
+    }
+
+    /// 仅落盘主库、不产生备份快照，且不动验证码缓存。
+    /// 用于高频且不影响验证码结果的数据变更（如「最近使用」时间戳）：
+    /// 若走完整 persist，每次复制验证码都会生成一份备份，很快把真正的
+    /// 数据变更快照挤出保留窗口；同时清缓存会让所有账户白白重算一次 HMAC。
+    pub fn persist_quiet(&self) -> Result<(), String> {
+        self.persist_inner(false, false)
+    }
+
+    fn persist_inner(&self, with_backup: bool, clear_cache: bool) -> Result<(), String> {
         let key = self.current_key()?;
         let guard = self.payload.lock().map_err(|_| "状态锁异常".to_string())?;
         let payload = guard.as_ref().ok_or_else(|| "应用未解锁".to_string())?;
@@ -80,7 +99,14 @@ impl AppState {
         let file = crypto::encrypt_payload(payload, &key, &salt, uses_machine_key)?;
         store::write_vault(&self.app_dir, &file)?;
 
-        if payload.settings.auto_backup {
+        // 数据已变更：清空验证码缓存，确保下次取码按最新账户/密钥重算
+        if clear_cache {
+            if let Ok(mut cache) = self.code_cache.lock() {
+                cache.clear();
+            }
+        }
+
+        if with_backup && payload.settings.auto_backup {
             let _ = store::write_backup(&self.app_dir, &file);
             store::prune_backups(&self.app_dir, payload.settings.backup_keep);
         }
@@ -127,7 +153,7 @@ pub fn get_status(state: State<AppState>) -> Result<StatusView, String> {
 pub fn initialize_vault(state: State<AppState>) -> Result<(), String> {
     store::ensure_app_dir(&state.app_dir)?;
     let salt = crypto::new_salt();
-    let key = crypto::machine_key();
+    let key = crypto::load_or_create_machine_key(&state.app_dir)?;
 
     if !store::vault_exists(&state.app_dir) {
         store::create_empty_vault(&state.app_dir, &key, &salt, true)?;
@@ -135,13 +161,24 @@ pub fn initialize_vault(state: State<AppState>) -> Result<(), String> {
 
     let file = store::read_vault(&state.app_dir)?;
     let real_salt = crypto::decode_salt(&file)?;
-    let mut payload = crypto::decrypt_payload(&file, &key)?;
+
+    // 尝试用当前机器密钥解密；失败则回退到旧版派生密钥（兼容历史数据），
+    // 成功迁移后立即用新密钥重写，确保往后只依赖设备本地随机密钥。
+    let (mut payload, needs_rekey) = match crypto::decrypt_payload(&file, &key) {
+        Ok(p) => (p, false),
+        Err(_) => {
+            let legacy = crypto::legacy_machine_key_compat();
+            let p = crypto::decrypt_payload(&file, &legacy)
+                .map_err(|e| format!("无法解密保险库：{e}"))?;
+            (p, true)
+        }
+    };
     let migrated = migrate_categories(&mut payload);
 
     *state.key.lock().map_err(|_| "状态锁异常".to_string())? = Some(key);
     state.sync_close_behavior(&payload);
     *state.payload.lock().map_err(|_| "状态锁异常".to_string())? = Some(payload);
-    if migrated {
+    if migrated || needs_rekey {
         state.persist()?;
     }
     let _ = real_salt;
@@ -151,6 +188,26 @@ pub fn initialize_vault(state: State<AppState>) -> Result<(), String> {
 /// 使用锁定密码解锁
 #[tauri::command]
 pub fn unlock(state: State<AppState>, password: String) -> Result<(), String> {
+    // 失败退避：连续失败越多，延迟越长（上限 3 秒），抵御脚本暴力尝试。
+    // 成功输入密码时不受影响（仅在上次失败后的冷却期内施加延迟）。
+    {
+        let guard = state
+            .unlock_failures
+            .lock()
+            .map_err(|_| "状态锁异常".to_string())?;
+        let (count, last) = *guard;
+        if count > 0 {
+            // 指数退避：200ms * 2^(n-1)，封顶 3s
+            let backoff = std::time::Duration::from_millis(
+                (200u64.saturating_mul(1u64 << (count.min(5) - 1))).min(3000),
+            );
+            let elapsed = last.elapsed();
+            if elapsed < backoff {
+                std::thread::sleep(backoff - elapsed);
+            }
+        }
+    }
+
     let lock = store::read_lock(&state.app_dir).ok_or_else(|| "未设置锁定密码".to_string())?;
     let salt = base64_decode(&lock.salt)?;
     // 只派生一次 Argon2id：derive_key 与 hash_password 等价（后者就是前者再 base64），
@@ -158,7 +215,16 @@ pub fn unlock(state: State<AppState>, password: String) -> Result<(), String> {
     let key = crypto::derive_key(&password, &salt)?;
     let verifier = base64_encode(&key);
     if verifier != lock.verifier {
+        if let Ok(mut guard) = state.unlock_failures.lock() {
+            guard.0 = guard.0.saturating_add(1);
+            guard.1 = std::time::Instant::now();
+        }
         return Err("密码错误".to_string());
+    }
+
+    // 解锁成功：重置失败计数
+    if let Ok(mut guard) = state.unlock_failures.lock() {
+        *guard = (0, std::time::Instant::now());
     }
 
     let file = store::read_vault(&state.app_dir)?;
@@ -179,6 +245,10 @@ pub fn unlock(state: State<AppState>, password: String) -> Result<(), String> {
 pub fn lock(state: State<AppState>) -> Result<(), String> {
     *state.key.lock().map_err(|_| "状态锁异常".to_string())? = None;
     *state.payload.lock().map_err(|_| "状态锁异常".to_string())? = None;
+    // 锁定后不应在内存中残留任何有效验证码
+    if let Ok(mut cache) = state.code_cache.lock() {
+        cache.clear();
+    }
     Ok(())
 }
 
@@ -208,9 +278,14 @@ pub fn set_lock_password(
         let key = crypto::derive_key(&password, &salt)?;
         let verifier = base64_encode(&key);
 
-        let file = crypto::encrypt_payload(&payload, &key, &salt, false)?;
-        store::write_vault(&state.app_dir, &file)?;
-
+        // 顺序很关键：先写锁定凭证（含派生所需的 salt + verifier），再写保险库。
+        // 若反过来，一旦「保险库已用新密码密钥加密、凭证却未落盘」，
+        // salt 丢失将导致数据永久无法解密。
+        //
+        // 回滚必须恢复「原来的凭证」而不是直接删除：本命令同时用于
+        // 「首次启用锁定」与「修改密码」。修改密码时保险库此刻仍是旧密码密钥
+        // 加密的，若把旧凭证删掉，用户就再也无法解密自己的数据。
+        let previous_lock = store::read_lock(&state.app_dir);
         store::write_lock(
             &state.app_dir,
             &store::LockRecord {
@@ -220,11 +295,26 @@ pub fn set_lock_password(
             },
         )?;
 
+        let file = crypto::encrypt_payload(&payload, &key, &salt, false)?;
+        if let Err(e) = store::write_vault(&state.app_dir, &file) {
+            match previous_lock {
+                Some(prev) => {
+                    // 恢复旧凭证，使旧密码仍可解开当前保险库
+                    let _ = store::write_lock(&state.app_dir, &prev);
+                }
+                None => {
+                    // 首次启用：原本没有锁，删除凭证即回到「未启用锁定」
+                    let _ = store::remove_lock(&state.app_dir);
+                }
+            }
+            return Err(e);
+        }
+
         *state.key.lock().map_err(|_| "状态锁异常".to_string())? = Some(key);
     } else {
-        // 关闭锁定：改回机器密钥
+        // 关闭锁定：改回设备本地机器密钥
         let salt = crypto::new_salt();
-        let key = crypto::machine_key();
+        let key = crypto::load_or_create_machine_key(&state.app_dir)?;
         let file = crypto::encrypt_payload(&payload, &key, &salt, true)?;
         store::write_vault(&state.app_dir, &file)?;
         store::remove_lock(&state.app_dir)?;
@@ -339,10 +429,14 @@ pub fn list_accounts(state: State<AppState>) -> Result<Vec<AccountView>, String>
             .iter()
             .map(|a| AccountView::from_with_categories(a, &categories))
             .collect();
+        // 排序：收藏优先，其余按创建时间倒序（新账户在最前，顺序稳定）。
+        // 刻意不按 last_used_at 排序——每次复制验证码都会更新该字段，
+        // 若参与列表排序，被点击的卡片会立刻跳到顶部，从手指底下「跑掉」。
+        // 「最近」筛选页由前端按 last_used_at 自行排序。
         list.sort_by(|a, b| {
             b.favorite
                 .cmp(&a.favorite)
-                .then(b.last_used_at.cmp(&a.last_used_at))
+                .then(b.created_at.cmp(&a.created_at))
                 .then(a.issuer.cmp(&b.issuer))
         });
         Ok(list)
@@ -352,22 +446,76 @@ pub fn list_accounts(state: State<AppState>) -> Result<Vec<AccountView>, String>
 #[tauri::command]
 pub fn get_codes(state: State<AppState>) -> Result<Vec<CodeResult>, String> {
     let now = totp::now_secs();
-    state.with_payload(|p| {
-        let mut results = Vec::new();
-        for account in &p.accounts {
-            if let Ok((code, remaining, progress, next_code)) = totp::generate_code(account, now) {
+
+    // 同一 TOTP 周期内复用上一次的 HMAC 结果，避免每秒为所有账户重复计算。
+    // remaining / progress 依赖实时秒数，仍按当前时间现算（开销极小）。
+    //
+    // 注意：加锁顺序必须与 persist() 一致（先 payload，后 code_cache），
+    // 否则并发时可能形成锁顺序反转导致死锁。
+    let mut payload_guard = state
+        .payload
+        .lock()
+        .map_err(|_| "状态锁异常".to_string())?;
+    let p = payload_guard
+        .as_mut()
+        .ok_or_else(|| "应用未解锁".to_string())?;
+    let mut cache = state
+        .code_cache
+        .lock()
+        .map_err(|_| "状态锁异常".to_string())?;
+
+    let mut results = Vec::new();
+    for account in &p.accounts {
+        let otp_type = account.otp_type.trim().to_lowercase();
+        if otp_type == "hotp" {
+            // HOTP 依赖计数器，随使用变化，不走周期缓存
+            if let Ok((code, _, _, _)) = totp::generate_code(account, now) {
                 results.push(CodeResult {
                     id: account.id.clone(),
                     code,
                     otp_type: account.otp_type.clone(),
-                    remaining,
-                    progress,
-                    next_code,
+                    remaining: 0,
+                    progress: 0,
+                    next_code: None,
                 });
             }
+            continue;
         }
-        Ok(results)
-    })
+
+        let period = if account.period == 0 { 30 } else { account.period };
+        let counter = now / period as u64;
+        let elapsed = (now % period as u64) as u32;
+        let remaining = period - elapsed;
+        let progress = ((period - remaining) * 100) / period;
+
+        let cached = cache.get(&account.id).filter(|(c, _, _)| *c == counter);
+        let (code, next_code) = match cached {
+            Some((_, code, next)) => (code.clone(), next.clone()),
+            None => match totp::generate_code(account, now) {
+                Ok((code, _, _, next)) => {
+                    cache.insert(account.id.clone(), (counter, code.clone(), next.clone()));
+                    (code, next)
+                }
+                Err(_) => continue,
+            },
+        };
+
+        results.push(CodeResult {
+            id: account.id.clone(),
+            code,
+            otp_type: account.otp_type.clone(),
+            remaining,
+            progress,
+            next_code,
+        });
+    }
+
+    // 清理已删除账户的缓存条目，避免无界增长
+    let live: std::collections::HashSet<&str> =
+        p.accounts.iter().map(|a| a.id.as_str()).collect();
+    cache.retain(|id, _| live.contains(id.as_str()));
+
+    Ok(results)
 }
 
 #[tauri::command]
@@ -394,18 +542,7 @@ pub fn add_account(state: State<AppState>, input: AccountInput) -> Result<Accoun
 
     // 重复校验：密钥相同即视为同一个验证码（密钥决定生成的动态码）。
     // 错误信息带固定前缀，供前端识别并给出明确提示。
-    state.with_payload(|p| {
-        if let Some(existing) = p.accounts.iter().find(|a| a.secret == secret) {
-            return Err(format!(
-                "{}|{}|{}",
-                DUPLICATE_MARKER,
-                existing.issuer,
-                existing.account
-            ));
-        }
-        Ok(())
-    })?;
-
+    // 校验与写入必须在同一次锁内完成，否则并发添加相同密钥会绕过去重。
     let account = Account {
         id: uuid::Uuid::new_v4().to_string(),
         issuer,
@@ -424,6 +561,14 @@ pub fn add_account(state: State<AppState>, input: AccountInput) -> Result<Accoun
     };
     let mut view: Option<AccountView> = None;
     state.with_payload(|p| {
+        if let Some(existing) = p.accounts.iter().find(|a| a.secret == account.secret) {
+            return Err(format!(
+                "{}|{}|{}",
+                DUPLICATE_MARKER,
+                existing.issuer,
+                existing.account
+            ));
+        }
         view = Some(AccountView::from_with_categories(&account, &p.categories));
         p.accounts.push(account);
         Ok(())
@@ -453,7 +598,17 @@ pub fn import_otpauth_text(state: State<AppState>, text: String) -> Result<(u32,
     let mut added = 0u32;
     let mut skipped = 0u32;
     state.with_payload(|p| {
-        for acc in parsed {
+        for mut acc in parsed {
+            // 与 add_account 保持一致的服务端校验：
+            // 批量导入若跳过这些校验，会写入 get_codes 无法渲染的账户
+            if acc.issuer.trim().is_empty() {
+                // 无服务名时用账户标识兜底，避免导入后卡片标题为空
+                acc.issuer = if acc.account.trim().is_empty() {
+                    "OTP".to_string()
+                } else {
+                    acc.account.trim().to_string()
+                };
+            }
             // 密钥相同即视为重复，跳过而不入库
             if p.accounts.iter().any(|a| a.secret == acc.secret) {
                 skipped += 1;
@@ -513,19 +668,43 @@ pub fn mark_used(state: State<AppState>, id: String) -> Result<(), String> {
         }
         Ok(())
     })?;
-    state.persist()?;
+    // 「最近使用」与 HOTP 计数属于高频动作，走静默落盘（不生成备份快照），
+    // 避免用户每次复制验证码都产出一份备份，把真正的数据变更快照挤掉。
+    state.persist_quiet()?;
     Ok(())
 }
 
 #[tauri::command]
 pub fn get_settings(state: State<AppState>) -> Result<AppSettings, String> {
-    state.with_payload(|p| Ok(p.settings.clone()))
+    // 锁定状态以「锁定凭证文件」为唯一事实源。
+    // 若文件不存在（例如导入备份仅恢复了 lock_enabled 字段、或历史数据残留），
+    // 则强制报告为未启用，并回写修正，避免出现「开关显示已开启、实际未设置密码」，
+    // 导致用户点关闭/修改密码时收到「未设置锁定密码」的错误。
+    let has_lock = store::read_lock(&state.app_dir).is_some();
+    let mut corrected = false;
+    let settings = state.with_payload(|p| {
+        if p.settings.lock_enabled && !has_lock {
+            p.settings.lock_enabled = false;
+            corrected = true;
+        }
+        Ok(p.settings.clone())
+    })?;
+    if corrected {
+        // 尽力回写；失败不影响本次返回（下次读取仍会再校正）
+        let _ = state.persist();
+    }
+    Ok(settings)
 }
 
 #[tauri::command]
 pub fn update_settings(state: State<AppState>, settings: AppSettings) -> Result<(), String> {
+    // lock_enabled 只能由 set_lock_password 变更（它同时写/删锁定凭证文件），
+    // 此处强制与凭证文件保持一致，防止经通用设置写入造成状态不一致。
+    let has_lock = store::read_lock(&state.app_dir).is_some();
     state.with_payload(|p| {
-        p.settings = settings;
+        let mut next = settings;
+        next.lock_enabled = has_lock;
+        p.settings = next;
         Ok(())
     })?;
     state.persist()?;
@@ -597,6 +776,12 @@ pub fn import_vault(
     content: String,
     password: String,
 ) -> Result<ImportResult, String> {
+    // 后端同样限制体积：前端的选择文件校验可被绕过（如粘贴超长文本），
+    // 超大 JSON 会占用大量内存甚至导致界面失去响应。
+    const MAX_IMPORT_BYTES: usize = 10 * 1024 * 1024;
+    if content.len() > MAX_IMPORT_BYTES {
+        return Err("备份内容过大（超过 10MB），请确认文件是否正确".to_string());
+    }
     let file: VaultFile =
         serde_json::from_str(&content).map_err(|_| "备份文件格式不正确".to_string())?;
     let salt = crypto::decode_salt(&file)?;
@@ -606,6 +791,8 @@ pub fn import_vault(
     let scope = file.scope.clone();
     let mut added_accounts = 0u32;
     let mut applied_settings = false;
+    // 因数据非法而被跳过的账户数：向前端如实反馈，避免用户以为「账户丢失」
+    let mut skipped_invalid = 0u32;
 
     state.with_payload(|p| {
         if scope.accounts {
@@ -617,28 +804,60 @@ pub fn import_vault(
                     p.categories.push(cat.clone());
                 }
             }
-            // 再合并账户
+            // 再合并账户：先校验字段合法性，避免损坏/恶意备份注入非法数据
+            // （非法账户会让 get_codes 静默跳过，看起来像「账户消失」）
             let existing: std::collections::HashSet<String> =
                 p.accounts.iter().map(|a| a.id.clone()).collect();
             for acc in imported.accounts.iter() {
-                if !existing.contains(&acc.id) {
-                    p.accounts.push(acc.clone());
-                    added_accounts += 1;
+                if existing.contains(&acc.id) {
+                    continue;
                 }
+                let valid = !acc.id.trim().is_empty()
+                    && !acc.issuer.trim().is_empty()
+                    && totp::validate_secret(&acc.secret).is_ok()
+                    && totp::validate_account_input(
+                        &acc.otp_type,
+                        &acc.algorithm,
+                        acc.digits,
+                        acc.period,
+                    )
+                    .is_ok();
+                if !valid {
+                    skipped_invalid += 1;
+                    continue;
+                }
+                p.accounts.push(acc.clone());
+                added_accounts += 1;
             }
         }
         if scope.settings {
-            p.settings = imported.settings.clone();
+            // 备份不含锁定凭证文件，故 lock_enabled 不能随备份覆盖，
+            // 始终以本机实际锁文件为准，避免导入后出现状态不一致。
+            let has_lock = store::read_lock(&state.app_dir).is_some();
+            let mut next = imported.settings.clone();
+            next.lock_enabled = has_lock;
+            p.settings = next;
             applied_settings = true;
         }
         Ok(())
     })?;
     state.persist()?;
 
+    // 导入可能覆盖了「关闭按钮行为」：同步运行时缓存，
+    // 否则新设置要等下次启动才生效（窗口事件读的是这个缓存）。
+    if applied_settings {
+        if let Ok(guard) = state.payload.lock() {
+            if let Some(p) = guard.as_ref() {
+                state.sync_close_behavior(p);
+            }
+        }
+    }
+
     Ok(ImportResult {
         added_accounts,
         applied_settings,
         total_accounts_in_backup: imported.accounts.len() as u32,
+        skipped_invalid,
     })
 }
 
@@ -647,6 +866,8 @@ pub struct ImportResult {
     pub added_accounts: u32,
     pub applied_settings: bool,
     pub total_accounts_in_backup: u32,
+    /// 因字段非法（密钥/位数/周期/算法）被跳过的账户数
+    pub skipped_invalid: u32,
 }
 
 /// 分类重命名/改色的入参已在 models::CategoryInput 定义

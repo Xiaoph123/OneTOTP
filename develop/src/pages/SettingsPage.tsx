@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useApp } from "../state/AppContext";
 import { TabBar, type TabKey } from "../components/TabBar";
 import { Switch } from "../components/Controls";
@@ -6,7 +6,7 @@ import { Select } from "../components/Select";
 import { ShortcutRecorder } from "../components/ShortcutRecorder";
 import { useToast } from "../components/Toast";
 import { Button } from "../components/Button";
-import { api, type StorageUsage } from "../lib/api";
+import { api, type AppSettings, type StorageUsage } from "../lib/api";
 import { getAutostart, setAutostart } from "../lib/autostart";
 import { applyToggleShortcut } from "../lib/shortcut";
 import { ChevronRight } from "../components/icons";
@@ -17,8 +17,6 @@ import { isDesktop } from "../lib/platform";
 import { useI18n } from "../i18n";
 
 const MAX_BACKUP_KEEP = 10;
-/** 设置项右侧控件的统一宽度，保证各行对齐 */
-const CONTROL_WIDTH = 124;
 
 export function SettingsPage() {
   const { settings, saveSettings, navigate, accounts } = useApp();
@@ -26,8 +24,25 @@ export function SettingsPage() {
   const { t } = useI18n();
   const desktop = isDesktop();
   const [draft, setDraft] = useState(settings);
+  // 即时保存的防抖定时器：连续快速切换时合并为一次落盘。
+  // 声明靠前是因为下面的 settings 同步 effect 也要读 pendingSettings。
+  const saveTimer = useRef<number | null>(null);
+  const pendingSettings = useRef<AppSettings | null>(null);
   // 备份数量的输入框文本，独立于 draft，便于输入过程与失焦校正
   const [keepInput, setKeepInput] = useState(settings ? String(settings.backupKeep) : "");
+  // settings 外部变化（如导入备份）时同步输入框，避免显示旧值
+  useEffect(() => {
+    if (settings) setKeepInput(String(settings.backupKeep));
+  }, [settings?.backupKeep]);
+  // 外部改动 settings（标题栏切换主题、导入备份）时同步 draft，
+  // 否则本页各下拉框会一直显示打开页面时的旧值。
+  // 若存在尚未落盘的本地改动（防抖窗口内），则以用户刚操作的值为准，
+  // 不能在这时用旧 settings 覆盖掉用户刚才的改动。
+  useEffect(() => {
+    if (!settings) return;
+    if (pendingSettings.current !== null) return;
+    setDraft(settings);
+  }, [settings]);
   // 开机自启状态（由系统注册表/服务决定，非应用配置）
   const [autostart, setAutostartState] = useState(false);
   const [autostartBusy, setAutostartBusy] = useState(false);
@@ -62,6 +77,20 @@ export function SettingsPage() {
     }
   };
 
+  // 离开页面时若有未落盘的改动，立即补写，避免丢失
+  useEffect(() => {
+    return () => {
+      if (saveTimer.current !== null) {
+        window.clearTimeout(saveTimer.current);
+        saveTimer.current = null;
+      }
+      const pending = pendingSettings.current;
+      pendingSettings.current = null;
+      if (pending) saveSettings(pending).catch(() => {});
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   if (!draft) {
     return (
       <>
@@ -75,8 +104,27 @@ export function SettingsPage() {
     );
   }
 
+  /**
+   * 更新设置项并立即保存。
+   * 原先仅改本地 draft、需点底部「保存」才落盘，但主题/语言等却是即时保存——
+   * 行为不一致，用户容易误以为开关已生效，离开页面还会静默丢失改动。
+   */
   const update = <K extends keyof typeof draft>(key: K, value: (typeof draft)[K]) => {
-    setDraft({ ...draft, [key]: value });
+    const next = { ...draft, [key]: value };
+    setDraft(next);
+    pendingSettings.current = next;
+    if (saveTimer.current !== null) window.clearTimeout(saveTimer.current);
+    // 120ms 防抖：既保证「立即生效」的体感，又避免连点造成多次写盘
+    saveTimer.current = window.setTimeout(() => {
+      saveTimer.current = null;
+      const pending = pendingSettings.current;
+      pendingSettings.current = null;
+      if (pending) {
+        saveSettings(pending).catch((e) => {
+          toast.error(t("保存失败：{msg}", { msg: String(e) }));
+        });
+      }
+    }, 120);
   };
 
   /** 切换开机自启：直接调用系统接口并回读真实状态 */
@@ -187,13 +235,13 @@ export function SettingsPage() {
           </Row>
           {desktop ? (
             <Row title={t("全局快捷键")} desc={t("按下组合键快速唤起或隐藏窗口")}>
-              <ShortcutRecorder value={draft.shortcutToggle} onChange={changeShortcut} width={CONTROL_WIDTH} />
+              <ShortcutRecorder value={draft.shortcutToggle} onChange={changeShortcut} className="control-w" />
             </Row>
           ) : null}
           {desktop ? (
             <Row title={t("关闭按钮行为")} desc={t("点击标题栏关闭按钮时的处理方式")}>
               <Select
-                width={CONTROL_WIDTH}
+                className="control-w"
                 value={draft.closeBehavior}
                 onChange={(v) => update("closeBehavior", v)}
                 options={[
@@ -205,13 +253,13 @@ export function SettingsPage() {
           ) : null}
         </div>
 
-        <div className="s-group-title" style={{ marginTop: 12 }}>
+        <div className="s-group-title mt-12">
           {t("外观")}
         </div>
         <div className="panel">
           <Row title={t("语言")} desc={t("界面显示语言，自动将跟随系统语言环境")}>
             <Select
-              width={CONTROL_WIDTH}
+              className="control-w"
               value={draft.language}
               onChange={(v) => changeLanguage(v)}
               options={[
@@ -223,7 +271,7 @@ export function SettingsPage() {
           </Row>
           <Row title={t("字体大小")} desc={t("调整应用内文字的整体大小")}>
             <Select
-              width={CONTROL_WIDTH}
+              className="control-w"
               value={draft.fontScale}
               onChange={(v) => changeFontScale(v)}
               options={[
@@ -237,7 +285,7 @@ export function SettingsPage() {
           {desktop ? (
             <Row title={t("窗口尺寸")} desc={t("调整窗口宽度，紧凑 / 标准 / 宽松")}>
               <Select
-                width={CONTROL_WIDTH}
+                className="control-w"
                 value={draft.windowSize}
                 onChange={(v) => changeWindowSize(v)}
                 options={[
@@ -251,7 +299,7 @@ export function SettingsPage() {
           <Row title={t("主题外观")} desc={t("切换亮色 / 暗色，或跟随系统")}>
             <Select
               value={draft.theme}
-              width={CONTROL_WIDTH}
+              className="control-w"
               onChange={(v) => changeTheme(v)}
               options={[
                 { value: "light" as const, label: t("亮色") },
@@ -262,7 +310,7 @@ export function SettingsPage() {
           </Row>
           <Row title={t("验证码可见性")} desc={t("控制验证码在卡片上的显示方式")}>
             <Select
-              width={CONTROL_WIDTH}
+              className="control-w"
               value={draft.codeVisibility}
               onChange={(v) => update("codeVisibility", v)}
               options={[
@@ -283,7 +331,7 @@ export function SettingsPage() {
           ) : null}
           <Row title={t("卡片密度")} desc={t("控制卡片的疏密程度")}>
             <Select
-              width={CONTROL_WIDTH}
+              className="control-w"
               value={draft.cardDensity}
               onChange={(v) => update("cardDensity", v)}
               options={[
@@ -294,7 +342,7 @@ export function SettingsPage() {
           </Row>
           <Row title={t("卡片细节")} desc={t("控制卡片展示的信息量")}>
             <Select
-              width={CONTROL_WIDTH}
+              className="control-w"
               value={draft.cardDetail}
               onChange={(v) => update("cardDetail", v)}
               options={[
@@ -306,48 +354,47 @@ export function SettingsPage() {
           </Row>
         </div>
 
-        <div className="s-group-title" style={{ marginTop: 12 }}>
+        <div className="s-group-title mt-12">
           {t("数据与存储")}
         </div>
-        <div className="panel" style={{ overflow: "hidden" }}>
+        <div className="panel panel-clip">
           <button className="action-row" onClick={() => navigate({ name: "importExport" })}>
             <span>
               <span className="s-title">{t("导入 / 导出配置")}</span>
-              <span className="s-desc" style={{ display: "block" }}>
+              <span className="s-desc s-desc-block">
                 {t("通过加密文件在多台设备间迁移")}
               </span>
             </span>
-            <ChevronRight style={{ width: 14, height: 14, color: "var(--color-text-3)" }} />
+            <ChevronRight className="chevron-muted" />
           </button>
           <button className="action-row" onClick={() => navigate({ name: "security" })}>
             <span>
               <span className="s-title">{t("安全与锁定")}</span>
-              <span className="s-desc" style={{ display: "block" }}>
+              <span className="s-desc s-desc-block">
                 {t("锁定密码与自动锁定策略")}
               </span>
             </span>
-            <ChevronRight style={{ width: 14, height: 14, color: "var(--color-text-3)" }} />
+            <ChevronRight className="chevron-muted" />
           </button>
           <button className="action-row" onClick={() => navigate({ name: "categories" })}>
             <span>
               <span className="s-title">{t("分类管理")}</span>
-              <span className="s-desc" style={{ display: "block" }}>
+              <span className="s-desc s-desc-block">
                 {t("创建分类、设置颜色与排序")}
               </span>
             </span>
-            <ChevronRight style={{ width: 14, height: 14, color: "var(--color-text-3)" }} />
+            <ChevronRight className="chevron-muted" />
           </button>
           <Row title={t("自动备份")} desc={t("修改账户后保留加密快照")}>
             <Switch checked={draft.autoBackup} onChange={(v) => update("autoBackup", v)} label={t("自动备份")} />
           </Row>
           <Row title={t("备份保留数量")} desc={t("保留最近的本机快照，最多 {n} 个", { n: MAX_BACKUP_KEEP })}>
             <input
-              className="ui-input"
+              className="ui-input control-input"
               type="number"
               min={1}
               max={MAX_BACKUP_KEEP}
               step={1}
-              style={{ width: CONTROL_WIDTH, textAlign: "center" }}
               value={keepInput}
               onChange={(e) => setKeepInput(e.target.value)}
               onBlur={commitBackupKeep}
@@ -373,22 +420,22 @@ export function SettingsPage() {
           </Row>
         </div>
 
-        <div className="s-group-title" style={{ marginTop: 12 }}>
+        <div className="s-group-title mt-12">
           {t("关于")}
         </div>
-        <div className="panel" style={{ overflow: "hidden" }}>
+        <div className="panel panel-clip">
           <button className="action-row" onClick={() => setAboutOpen(true)}>
             <span>
               <span className="s-title">{t("关于 OneTotp")}</span>
-              <span className="s-desc" style={{ display: "block" }}>
+              <span className="s-desc s-desc-block">
                 {t("查看版本、运行平台与加密信息")}
               </span>
             </span>
-            <ChevronRight style={{ width: 14, height: 14, color: "var(--color-text-3)" }} />
+            <ChevronRight className="chevron-muted" />
           </button>
         </div>
 
-        <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+        <div className="btn-row mt-16">
           <Button variant="primary" block onClick={persist}>
             {t("保存设置")}
           </Button>

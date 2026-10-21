@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useApp } from "../state/AppContext";
 import { api } from "../lib/api";
-import { TabBar, type TabKey } from "../components/TabBar";
+import { TabBar } from "../components/TabBar";
 import { Switch } from "../components/Controls";
 import { Select } from "../components/Select";
 import { useToast } from "../components/Toast";
@@ -15,6 +15,7 @@ import {
   isBiometricSupported,
 } from "../lib/biometric";
 import { isDesktop } from "../lib/platform";
+import { NEVER_SENTINEL, resolveIdlePolicy } from "../lib/lockDecision";
 import { useI18n } from "../i18n";
 
 /** 各平台生物识别的展示名（Linux 等不支持平台回退为通用文案） */
@@ -28,7 +29,7 @@ function biometricLabel(t: (k: string) => string): string {
 
 export function SecurityPage() {
   const { t } = useI18n();
-  const { settings, saveSettings, navigate, goBack, refreshLockState } = useApp();
+  const { settings, saveSettings, goBack, refreshLockState } = useApp();
   const toast = useToast();
   const [draft, setDraft] = useState(settings);
   const [current, setCurrent] = useState("");
@@ -47,7 +48,7 @@ export function SecurityPage() {
   const passwordInputRef = useRef<HTMLInputElement | null>(null);
 
   // 启用/关闭锁定的弹窗（点开关直接弹窗，符合常规交互预期）
-  const [pwdDialog, setPwdDialog] = useState<null | "enable" | "disable">(null);
+  const [pwdDialog, setPwdDialog] = useState<null | "enable" | "disable" | "rotate">(null);
   const [dlgPwd, setDlgPwd] = useState("");
   const [dlgConfirm, setDlgConfirm] = useState("");
   const [dlgHint, setDlgHint] = useState("");
@@ -229,6 +230,28 @@ export function SecurityPage() {
     }
   };
 
+  /** 弹窗确认：重新加密保险库（同一口令 + 全新 salt，旧密钥立即作废） */
+  const confirmRotate = async () => {
+    setDlgError(null);
+    if (!dlgPwd) {
+      setDlgError(t("请输入当前密码"));
+      return;
+    }
+    setDlgBusy(true);
+    try {
+      await api.rotateVaultKey(dlgPwd);
+      // 口令未变，生物识别里保存的口令仍然有效，无需重新登记
+      setPwdDialog(null);
+      setDlgPwd("");
+      setMessage({ type: "ok", text: t("保险库已用新密钥重新加密") });
+      toast.success(t("保险库已用新密钥重新加密"));
+    } catch (e) {
+      setDlgError(String(e));
+    } finally {
+      setDlgBusy(false);
+    }
+  };
+
   const handleChangePassword = async () => {
     setMessage(null);
     if (next !== confirm) {
@@ -272,11 +295,23 @@ export function SecurityPage() {
     }
   };
 
-  const onTabSelect = (key: TabKey) => {
-    if (key === "codes") navigate({ name: "codes" });
-  };
-
   const strength = passwordStrength(next);
+
+  /**
+   * 「自动锁定时长」当前**实际**会怎么锁。
+   *
+   * 之前这里是一句静态说明（「无操作超过该时长后锁定」），选「立即」时
+   * 实际不做空闲计时，与文案不符，用户会判定为「设置不生效」。
+   * 现在把生效策略直接算出来展示，所见即所得。
+   */
+  const idlePolicy = resolveIdlePolicy(draft.autoLockSeconds, lockEnabled);
+  const idlePolicyDesc = !lockEnabled
+    ? t("启用应用锁定后生效")
+    : idlePolicy.kind === "idle"
+      ? t("空闲 {n} 秒后自动锁定", { n: idlePolicy.seconds })
+      : draft.autoLockSeconds >= NEVER_SENTINEL
+        ? t("不会因空闲自动锁定")
+        : t("仅在离开应用时锁定（不做空闲计时）");
 
   // 生物识别状态提示文案
   const bioHint = !bioAvailable
@@ -324,10 +359,10 @@ export function SecurityPage() {
           <div className="s-row">
             <div className="s-main">
               <div className="s-title">{t("自动锁定时长")}</div>
-              <div className="s-desc">{t("无操作超过该时长后锁定")}</div>
+              <div className="s-desc">{idlePolicyDesc}</div>
             </div>
             <Select
-              className="w-124"
+              variant="ghost"
               value={draft.autoLockSeconds}
               disabled={!lockEnabled}
               onChange={async (v) => {
@@ -336,7 +371,11 @@ export function SecurityPage() {
                 await saveSettings(nextDraft);
               }}
               options={[
-                { value: 0, label: t("立即") },
+                // 0 = 不做空闲计时，只靠「失焦 / 切到后台」锁定。
+                // 文案必须直白：叫「立即」会被理解成「马上锁 / 每秒锁」，
+                // 而真正的每秒锁定是死循环（见 lib/lockDecision.ts 注释）。
+                { value: 0, label: t("离开时锁定") },
+                { value: 30, label: t("30 秒") },
                 { value: 60, label: t("1 分钟") },
                 { value: 300, label: t("5 分钟") },
                 { value: 900, label: t("15 分钟") },
@@ -446,6 +485,22 @@ export function SecurityPage() {
               {t("修改密码")}
             </Button>
           </div>
+          <div className="btn-row mt-12">
+            <Button
+              block
+              disabled={busy}
+              onClick={() => {
+                setDlgPwd("");
+                setDlgError(null);
+                setPwdDialog("rotate");
+              }}
+            >
+              {t("重新加密保险库")}
+            </Button>
+          </div>
+          <div className="block-desc pwd-panel-desc">
+            {t("用同一密码、全新的密钥重新加密本地数据。旧版本的锁定凭证文件曾以明文保存密钥，若该文件被复制或备份过，请执行一次本操作。")}
+          </div>
         </div>
         ) : null}
 
@@ -484,12 +539,18 @@ export function SecurityPage() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="modal-title">
-              {pwdDialog === "enable" ? t("启用应用锁定") : t("关闭应用锁定")}
+              {pwdDialog === "enable"
+                ? t("启用应用锁定")
+                : pwdDialog === "disable"
+                  ? t("关闭应用锁定")
+                  : t("重新加密保险库")}
             </div>
             <div className="modal-desc mt-6">
               {pwdDialog === "enable"
                 ? t("设置一个锁定密码，打开应用时需输入才能查看验证码")
-                : t("请输入当前密码以确认关闭锁定")}
+                : pwdDialog === "disable"
+                  ? t("请输入当前密码以确认关闭锁定")
+                  : t("请输入当前密码。将通过全新随机盐重新派生密钥并重写本地保险库，旧密钥随即失效。")}
             </div>
             <div className="col-gap-12 mt-16">
               <input
@@ -536,12 +597,22 @@ export function SecurityPage() {
                 {t("取消")}
               </Button>
               <Button
-                variant={pwdDialog === "enable" ? "primary" : "danger"}
+                variant={pwdDialog === "disable" ? "danger" : "primary"}
                 block
                 disabled={dlgBusy}
-                onClick={pwdDialog === "enable" ? confirmEnable : confirmDisable}
+                onClick={
+                  pwdDialog === "enable"
+                    ? confirmEnable
+                    : pwdDialog === "disable"
+                      ? confirmDisable
+                      : confirmRotate
+                }
               >
-                {pwdDialog === "enable" ? t("启用") : t("关闭锁定")}
+                {pwdDialog === "enable"
+                  ? t("启用")
+                  : pwdDialog === "disable"
+                    ? t("关闭锁定")
+                    : t("重新加密")}
               </Button>
             </div>
           </div>
@@ -595,7 +666,7 @@ export function SecurityPage() {
         </div>
       ) : null}
 
-      <TabBar active="settings" onSelect={onTabSelect} />
+      <TabBar active="settings" />
     </>
   );
 }

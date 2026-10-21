@@ -12,7 +12,10 @@ pub const DUPLICATE_MARKER: &str = "duplicate:";
 
 /// 运行期状态：解锁后密钥只保存在内存中
 pub struct AppState {
+    /// 实际数据目录（可能是用户自定义的目录）
     pub app_dir: PathBuf,
+    /// 系统默认应用目录：数据目录指针文件固定放在这里
+    pub default_dir: PathBuf,
     /// 当前解锁密钥；None 表示未解锁
     pub key: Mutex<Option<[u8; 32]>>,
     /// 已解锁内存中的保险库载荷缓存
@@ -27,9 +30,10 @@ pub struct AppState {
 }
 
 impl AppState {
-    pub fn new(app_dir: PathBuf) -> Self {
+    pub fn new(app_dir: PathBuf, default_dir: PathBuf) -> Self {
         Self {
             app_dir,
+            default_dir,
             key: Mutex::new(None),
             payload: Mutex::new(None),
             close_behavior: Mutex::new("quit".to_string()),
@@ -38,7 +42,10 @@ impl AppState {
         }
     }
 
-    /// 读取当前关闭行为（供窗口事件使用）
+    /// 读取当前关闭行为（供窗口事件使用）。
+    /// 仅桌面端的关窗事件会调用；移动端没有「关闭按钮」，编译时会变成死代码，
+    /// 故在该平台显式放行，避免每次 Android 构建都刷一条告警。
+    #[cfg_attr(not(desktop), allow(dead_code))]
     pub fn close_behavior(&self) -> String {
         self.close_behavior
             .lock()
@@ -46,11 +53,54 @@ impl AppState {
             .unwrap_or_else(|_| "quit".to_string())
     }
 
+    /// 是否允许导出/导入空密码备份（读自当前设置，未解锁时按「不允许」处理）
+    pub fn allow_empty_backup_password(&self) -> bool {
+        self.payload
+            .lock()
+            .ok()
+            .and_then(|p| p.as_ref().map(|v| v.settings.allow_empty_backup_password))
+            .unwrap_or(false)
+    }
+
     /// 同步关闭行为缓存
     fn sync_close_behavior(&self, payload: &VaultPayload) {
         if let Ok(mut guard) = self.close_behavior.lock() {
             *guard = payload.settings.close_behavior.clone();
         }
+    }
+
+    /// 立即锁定：清空内存密钥、载荷与验证码缓存。
+    ///
+    /// 与 `lock` 命令等价，但可直接从非命令路径调用（例如窗口事件里
+    /// 「关闭到托盘」时主动锁定）。可用性不依赖前端事件是否送达。
+    ///
+    /// `reason` 会写入锁定事件日志，用于排查「为什么没有锁」：
+    /// 日志里没有记录 = 前端根本没发起锁定；有记录 = 已锁定、问题在界面同步。
+    pub fn lock_now(&self, reason: &str) {
+        if let Ok(mut guard) = self.key.lock() {
+            *guard = None;
+        }
+        if let Ok(mut guard) = self.payload.lock() {
+            *guard = None;
+        }
+        // 锁定后不应在内存中残留任何有效验证码
+        if let Ok(mut cache) = self.code_cache.lock() {
+            cache.clear();
+        }
+        store::append_lock_log(&self.app_dir, reason);
+    }
+
+    /// 处理窗口的「关闭请求」：返回 `true` 表示应当隐藏窗口（关闭到托盘）。
+    ///
+    /// 关闭到托盘时必须**同时锁定**：窗口是被原生侧隐藏的，`hide()` 不会产生
+    /// 前端的 focus 事件，前端「失焦自动锁定」那条链路根本不会触发，
+    /// 否则从托盘恢复时会直接看到明文验证码。
+    pub fn prepare_close(&self) -> bool {
+        let to_tray = self.close_behavior() == "tray";
+        if to_tray {
+            self.lock_now("close-to-tray");
+        }
+        to_tray
     }
 
     pub fn current_key(&self) -> Result<[u8; 32], String> {
@@ -160,7 +210,6 @@ pub fn initialize_vault(state: State<AppState>) -> Result<(), String> {
     }
 
     let file = store::read_vault(&state.app_dir)?;
-    let real_salt = crypto::decode_salt(&file)?;
 
     // 尝试用当前机器密钥解密；失败则回退到旧版派生密钥（兼容历史数据），
     // 成功迁移后立即用新密钥重写，确保往后只依赖设备本地随机密钥。
@@ -168,8 +217,12 @@ pub fn initialize_vault(state: State<AppState>) -> Result<(), String> {
         Ok(p) => (p, false),
         Err(_) => {
             let legacy = crypto::legacy_machine_key_compat();
-            let p = crypto::decrypt_payload(&file, &legacy)
-                .map_err(|e| format!("无法解密保险库：{e}"))?;
+            let p = crypto::decrypt_payload(&file, &legacy).map_err(|_| {
+                "无法解密保险库：本机缺少与之匹配的机器密钥或解锁口令。\
+                 若曾设置解锁口令，请确认 onetotp.lock.json 未被删除；\
+                 数据可用加密备份在其他设备恢复。"
+                    .to_string()
+            })?;
             (p, true)
         }
     };
@@ -181,7 +234,6 @@ pub fn initialize_vault(state: State<AppState>) -> Result<(), String> {
     if migrated || needs_rekey {
         state.persist()?;
     }
-    let _ = real_salt;
     Ok(())
 }
 
@@ -209,17 +261,21 @@ pub fn unlock(state: State<AppState>, password: String) -> Result<(), String> {
     }
 
     let lock = store::read_lock(&state.app_dir).ok_or_else(|| "未设置锁定密码".to_string())?;
-    let salt = base64_decode(&lock.salt)?;
-    // 只派生一次 Argon2id：derive_key 与 hash_password 等价（后者就是前者再 base64），
-    // 原先调用两次会把最耗时的密钥派生做两遍，明显拖慢解锁。
-    let key = crypto::derive_key(&password, &salt)?;
-    let verifier = base64_encode(&key);
-    if verifier != lock.verifier {
-        if let Ok(mut guard) = state.unlock_failures.lock() {
-            guard.0 = guard.0.saturating_add(1);
-            guard.1 = std::time::Instant::now();
+    let (key, needs_upgrade) = match verify_lock_password(&lock, &password) {
+        Ok(v) => v,
+        Err(e) => {
+            if let Ok(mut guard) = state.unlock_failures.lock() {
+                guard.0 = guard.0.saturating_add(1);
+                guard.1 = std::time::Instant::now();
+            }
+            return Err(e);
         }
-        return Err("密码错误".to_string());
+    };
+
+    // 旧格式升级：口令已证实正确，原地把 verifier 换成单向校验值。
+    // salt 与保险库密钥都不变，故这一步不影响解密，失败也只是下次再试。
+    if needs_upgrade {
+        upgrade_lock_record_if_needed(&state.app_dir, &lock, &key);
     }
 
     // 解锁成功：重置失败计数
@@ -243,12 +299,7 @@ pub fn unlock(state: State<AppState>, password: String) -> Result<(), String> {
 /// 锁定：清空内存密钥与载荷
 #[tauri::command]
 pub fn lock(state: State<AppState>) -> Result<(), String> {
-    *state.key.lock().map_err(|_| "状态锁异常".to_string())? = None;
-    *state.payload.lock().map_err(|_| "状态锁异常".to_string())? = None;
-    // 锁定后不应在内存中残留任何有效验证码
-    if let Ok(mut cache) = state.code_cache.lock() {
-        cache.clear();
-    }
+    state.lock_now("frontend");
     Ok(())
 }
 
@@ -274,9 +325,10 @@ pub fn set_lock_password(
 
     if enable {
         let salt = crypto::new_salt();
-        // 同 unlock：Argon2id 只派生一次，verifier 即该密钥的 base64
+        // 同 unlock：Argon2id 只派生一次，verifier 为带固定上下文的 HMAC
+        // （不可反推密钥；早期版本直接存密钥 base64，见 crypto::legacy_verifier）
         let key = crypto::derive_key(&password, &salt)?;
-        let verifier = base64_encode(&key);
+        let verifier = crypto::derive_verifier(&key);
 
         // 顺序很关键：先写锁定凭证（含派生所需的 salt + verifier），再写保险库。
         // 若反过来，一旦「保险库已用新密码密钥加密、凭证却未落盘」，
@@ -289,6 +341,7 @@ pub fn set_lock_password(
         store::write_lock(
             &state.app_dir,
             &store::LockRecord {
+                version: store::LOCK_RECORD_VERSION,
                 salt: base64_encode(&salt),
                 verifier,
                 hint: hint.clone(),
@@ -329,6 +382,120 @@ pub fn set_lock_password(
     }
     drop(guard);
     state.persist()?;
+    Ok(())
+}
+
+/// 用口令校验锁定凭证，返回派生出的保险库密钥。
+///
+/// 返回值第二项表示该凭证是否为旧格式（v0，`verifier` 就是密钥本身），
+/// 调用方应在其后将其升级为 v1。
+///
+/// 两种版本的校验方式不同，且都必须恒定时间比较：
+/// - v1：`HMAC-SHA256(密钥, 固定上下文)`，校验值不泄露密钥
+/// - v0：密钥的 base64，仅为了让老用户还能打开自己的保险库
+fn verify_lock_password(
+    record: &store::LockRecord,
+    password: &str,
+) -> Result<([u8; 32], bool), String> {
+    let salt = base64_decode(&record.salt)?;
+    let key = crypto::derive_key(password, &salt)?;
+    let matched = if record.version >= store::LOCK_RECORD_VERSION {
+        crypto::constant_time_eq(
+            crypto::derive_verifier(&key).as_bytes(),
+            record.verifier.as_bytes(),
+        )
+    } else {
+        crypto::constant_time_eq(
+            crypto::legacy_verifier(&key).as_bytes(),
+            record.verifier.as_bytes(),
+        )
+    };
+    if !matched {
+        return Err("密码错误".to_string());
+    }
+    let needs_upgrade = record.version < store::LOCK_RECORD_VERSION;
+    Ok((key, needs_upgrade))
+}
+
+/// 缺失锁定凭证、或凭证为旧格式时，把凭证写成当前版本（salt / 密钥不变）。
+fn upgrade_lock_record_if_needed(
+    app_dir: &std::path::Path,
+    record: &store::LockRecord,
+    key: &[u8; 32],
+) {
+    if record.version >= store::LOCK_RECORD_VERSION {
+        return;
+    }
+    let upgraded = store::LockRecord {
+        version: store::LOCK_RECORD_VERSION,
+        salt: record.salt.clone(),
+        verifier: crypto::derive_verifier(key),
+        hint: record.hint.clone(),
+    };
+    let _ = store::write_lock(app_dir, &upgraded);
+}
+
+/// 重新加密保险库：用同一口令，但**全新的 salt** 重新派生密钥并重写数据。
+///
+/// 用途：旧版本把保险库密钥本身以 base64 明文写进 `onetotp.lock.json`
+/// （见 `crypto::legacy_verifier`），任何读到过该文件的人都能直接解密保险库。
+/// 口令不必变——只要更换 salt，派生出的密钥就完全不同，旧密钥立即作废。
+///
+/// 口令必须正确：否则用户以为换过密钥，实际仍是用旧密钥加密。
+#[tauri::command]
+pub fn rotate_vault_key(state: State<AppState>, password: String) -> Result<(), String> {
+    let lock = store::read_lock(&state.app_dir).ok_or_else(|| "未启用锁定密码".to_string())?;
+    let payload = state
+        .payload
+        .lock()
+        .map_err(|_| "状态锁异常".to_string())?
+        .clone()
+        .ok_or_else(|| "应用未解锁".to_string())?;
+
+    // 校验当前口令（兼容 v0 / v1 两种校验值）。
+    // 这里只需要「口令是否正确」，新密钥会由新 salt 重新派生。
+    if let Err(e) = verify_lock_password(&lock, &password) {
+        if let Ok(mut guard) = state.unlock_failures.lock() {
+            guard.0 = guard.0.saturating_add(1);
+            guard.1 = std::time::Instant::now();
+        }
+        return Err(e);
+    }
+
+    let new_salt = crypto::new_salt();
+    let new_key = crypto::derive_key(&password, &new_salt)?;
+
+    // 顺序与 set_lock_password 一致：先提交凭证（含新 salt），再写保险库。
+    // 若反过来，一旦「保险库已用新密钥加密、凭证仍是旧盐」就会永久无法解密。
+    let previous = lock.clone();
+    store::write_lock(
+        &state.app_dir,
+        &store::LockRecord {
+            version: store::LOCK_RECORD_VERSION,
+            salt: base64_encode(&new_salt),
+            verifier: crypto::derive_verifier(&new_key),
+            hint: lock.hint.clone(),
+        },
+    )?;
+
+    let file = crypto::encrypt_payload(&payload, &new_key, &new_salt, false)?;
+    if let Err(e) = store::write_vault(&state.app_dir, &file) {
+        // 回滚凭证：保险库仍是旧密钥加密的，旧凭证才能解开它
+        let _ = store::write_lock(&state.app_dir, &previous);
+        return Err(e);
+    }
+
+    // 快照留存新密文，便于事后恢复
+    if payload.settings.auto_backup {
+        let _ = store::write_backup(&state.app_dir, &file);
+        store::prune_backups(&state.app_dir, payload.settings.backup_keep);
+    }
+
+    // 内存密钥必须同步，否则后续 persist 会用旧密钥覆盖刚写好的数据
+    *state.key.lock().map_err(|_| "状态锁异常".to_string())? = Some(new_key);
+    if let Ok(mut guard) = state.unlock_failures.lock() {
+        *guard = (0, std::time::Instant::now());
+    }
     Ok(())
 }
 
@@ -702,7 +869,7 @@ pub fn update_settings(state: State<AppState>, settings: AppSettings) -> Result<
     // 此处强制与凭证文件保持一致，防止经通用设置写入造成状态不一致。
     let has_lock = store::read_lock(&state.app_dir).is_some();
     state.with_payload(|p| {
-        let mut next = settings;
+        let mut next = sanitize_settings(settings);
         next.lock_enabled = has_lock;
         p.settings = next;
         Ok(())
@@ -717,8 +884,10 @@ pub fn update_settings(state: State<AppState>, settings: AppSettings) -> Result<
     Ok(())
 }
 
-/// 导出为加密备份字符串（OneTotp 格式）
+/// 导出为加密备份字符串（OneTOTP 格式）
 /// `include_accounts` / `include_settings` 控制导出内容范围
+///
+/// 密码为空时，仅在设置中开启了「允许空密码备份」的前提下放行。
 #[tauri::command]
 pub fn export_vault(
     state: State<AppState>,
@@ -726,7 +895,13 @@ pub fn export_vault(
     include_accounts: bool,
     include_settings: bool,
 ) -> Result<String, String> {
-    crypto::validate_password(&password)?;
+    if password.is_empty() {
+        if !state.allow_empty_backup_password() {
+            return Err("导出密码长度至少 8 位".to_string());
+        }
+    } else {
+        crypto::validate_password(&password)?;
+    }
     if !include_accounts && !include_settings {
         return Err("请至少选择一项要导出的内容".to_string());
     }
@@ -767,6 +942,120 @@ pub fn export_vault(
     serde_json::to_string_pretty(&file).map_err(|e| e.to_string())
 }
 
+/// 把导出的备份内容写入用户指定的文件路径。
+///
+/// 桌面端传入绝对路径；Android 的系统文档选择器返回 `content://` URI，
+/// 必须经 ContentResolver 打开（`std::fs` 无法处理），故统一走 fs 插件。
+///
+/// 只允许写入 `.json` / `.txt` 后缀，避免被当成任意文件写入通道（安全边界）。
+/// 内容由 `export_vault` 生成，调用方不得传入任意来源的数据。
+#[tauri::command]
+pub fn write_backup_file(
+    app: tauri::AppHandle,
+    path: String,
+    content: String,
+) -> Result<(), String> {
+    const MAX_EXPORT_BYTES: usize = 10 * 1024 * 1024;
+    if content.len() > MAX_EXPORT_BYTES {
+        return Err("导出内容过大，无法写入文件".to_string());
+    }
+
+    // Android 文档选择器返回的 URI：后缀由用户在系统界面里决定，
+    // 这里无法也不应再校验扩展名（URI 本身不带扩展名）。
+    if path.starts_with("content://") {
+        return write_content_uri(&app, &path, content.as_bytes());
+    }
+
+    let p = std::path::Path::new(&path);
+    if !p.is_absolute() {
+        return Err("导出的目标路径必须是绝对路径".to_string());
+    }
+    let ext = p
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.to_ascii_lowercase())
+        .unwrap_or_default();
+    if ext != "json" && ext != "txt" {
+        return Err("导出文件必须是 .json 或 .txt".to_string());
+    }
+    if let Some(dir) = p.parent() {
+        std::fs::create_dir_all(dir).map_err(|e| format!("创建目录失败: {e}"))?;
+    }
+    std::fs::write(p, content.as_bytes()).map_err(|e| format!("写入文件失败: {e}"))
+}
+
+/// 读取用户选中的备份文件内容。
+///
+/// 桌面端为绝对路径，Android 为 `content://` URI；两者都限制 10MB，
+/// 与 `import_vault` 的体积上限保持一致，避免超大文件占满内存。
+#[tauri::command]
+pub fn read_backup_file(app: tauri::AppHandle, path: String) -> Result<String, String> {
+    const MAX_IMPORT_BYTES: u64 = 10 * 1024 * 1024;
+
+    if path.starts_with("content://") {
+        let file = open_content_uri(&app, &path, false)?;
+        let mut buf = String::new();
+        use std::io::Read;
+        file.take(MAX_IMPORT_BYTES + 1)
+            .read_to_string(&mut buf)
+            .map_err(|e| format!("读取文件失败: {e}"))?;
+        if buf.len() as u64 > MAX_IMPORT_BYTES {
+            return Err("备份文件过大（超过 10MB），请确认文件是否正确".to_string());
+        }
+        return Ok(buf);
+    }
+
+    let p = std::path::Path::new(&path);
+    if !p.is_absolute() {
+        return Err("备份文件路径必须是绝对路径".to_string());
+    }
+    let meta = std::fs::metadata(p).map_err(|e| format!("读取文件失败: {e}"))?;
+    if meta.len() > MAX_IMPORT_BYTES {
+        return Err("备份文件过大（超过 10MB），请确认文件是否正确".to_string());
+    }
+    std::fs::read_to_string(p).map_err(|e| format!("读取文件失败: {e}"))
+}
+
+/// 通过 fs 插件打开 Android `content://` URI。
+///
+/// `write = true` 时以「写 + 截断」模式打开（覆盖已有文件），
+/// 否则只读。URI 由系统文档选择器产生，不接受前端任意构造的地址。
+#[cfg(target_os = "android")]
+fn open_content_uri(
+    app: &tauri::AppHandle,
+    uri: &str,
+    write: bool,
+) -> Result<std::fs::File, String> {
+    use tauri_plugin_fs::{FsExt, OpenOptions};
+    let url = url::Url::parse(uri).map_err(|_| "无效的文件地址".to_string())?;
+    let mut opts = OpenOptions::new();
+    if write {
+        opts.write(true).truncate(true).create(true);
+    } else {
+        opts.read(true);
+    }
+    app.fs()
+        .open(url, opts)
+        .map_err(|e| format!("打开文件失败: {e}"))
+}
+
+#[cfg(not(target_os = "android"))]
+fn open_content_uri(
+    _app: &tauri::AppHandle,
+    _uri: &str,
+    _write: bool,
+) -> Result<std::fs::File, String> {
+    Err("当前平台不支持 content:// 文件地址".to_string())
+}
+
+fn write_content_uri(app: &tauri::AppHandle, uri: &str, bytes: &[u8]) -> Result<(), String> {
+    use std::io::Write;
+    let mut file = open_content_uri(app, uri, true)?;
+    file.write_all(bytes)
+        .map_err(|e| format!("写入文件失败: {e}"))?;
+    file.flush().map_err(|e| format!("写入文件失败: {e}"))
+}
+
 /// 从加密备份导入。按备份范围标记合并：
 /// - 含账户：将备份账户合并进现有账户（按 id 去重）
 /// - 含配置：覆盖当前应用配置
@@ -793,6 +1082,8 @@ pub fn import_vault(
     let mut applied_settings = false;
     // 因数据非法而被跳过的账户数：向前端如实反馈，避免用户以为「账户丢失」
     let mut skipped_invalid = 0u32;
+    // 因密钥与现有账户重复而被跳过的数量（去重口径与 add_account 一致）
+    let mut skipped_duplicate = 0u32;
 
     state.with_payload(|p| {
         if scope.accounts {
@@ -806,10 +1097,16 @@ pub fn import_vault(
             }
             // 再合并账户：先校验字段合法性，避免损坏/恶意备份注入非法数据
             // （非法账户会让 get_codes 静默跳过，看起来像「账户消失」）
-            let existing: std::collections::HashSet<String> =
+            //
+            // 去重口径必须与 add_account / update_account 一致：**密钥相同即视为
+            // 同一个验证码**（验证码由密钥唯一决定）。旧实现只按 id 去重，同一
+            // 密钥从备份重复导入后会在列表里出现多张生成同样数字的卡片。
+            let existing_ids: std::collections::HashSet<String> =
                 p.accounts.iter().map(|a| a.id.clone()).collect();
+            let mut existing_secrets: std::collections::HashSet<String> =
+                p.accounts.iter().map(|a| a.secret.clone()).collect();
             for acc in imported.accounts.iter() {
-                if existing.contains(&acc.id) {
+                if existing_ids.contains(&acc.id) {
                     continue;
                 }
                 let valid = !acc.id.trim().is_empty()
@@ -826,6 +1123,11 @@ pub fn import_vault(
                     skipped_invalid += 1;
                     continue;
                 }
+                if existing_secrets.contains(&acc.secret) {
+                    skipped_duplicate += 1;
+                    continue;
+                }
+                existing_secrets.insert(acc.secret.clone());
                 p.accounts.push(acc.clone());
                 added_accounts += 1;
             }
@@ -833,8 +1135,9 @@ pub fn import_vault(
         if scope.settings {
             // 备份不含锁定凭证文件，故 lock_enabled 不能随备份覆盖，
             // 始终以本机实际锁文件为准，避免导入后出现状态不一致。
+            // 其余字段同样过一遍白名单：备份是外部数据，不应直接信任。
             let has_lock = store::read_lock(&state.app_dir).is_some();
-            let mut next = imported.settings.clone();
+            let mut next = sanitize_settings(imported.settings.clone());
             next.lock_enabled = has_lock;
             p.settings = next;
             applied_settings = true;
@@ -858,6 +1161,7 @@ pub fn import_vault(
         applied_settings,
         total_accounts_in_backup: imported.accounts.len() as u32,
         skipped_invalid,
+        skipped_duplicate,
     })
 }
 
@@ -868,6 +1172,8 @@ pub struct ImportResult {
     pub total_accounts_in_backup: u32,
     /// 因字段非法（密钥/位数/周期/算法）被跳过的账户数
     pub skipped_invalid: u32,
+    /// 因密钥与现有账户重复被跳过的账户数
+    pub skipped_duplicate: u32,
 }
 
 /// 分类重命名/改色的入参已在 models::CategoryInput 定义
@@ -1069,6 +1375,70 @@ fn normalize_hex_color(color: &str) -> String {
     }
 }
 
+/// 规范化设置：枚举字段只接受白名单取值，数值字段夹到合法区间。
+///
+/// 前端虽然也有 `|| "light"` 之类的兜底，但设置会经「加密备份导入」这条
+/// 外部数据通道写入，后端不能假设客户端一定自洽——非法值一旦落盘，
+/// 会让下一次启动的渲染逻辑走到未定义分支。
+fn sanitize_settings(mut s: AppSettings) -> AppSettings {
+    fn one_of(value: &str, allowed: &[&str], fallback: &str) -> String {
+        if allowed.contains(&value) {
+            value.to_string()
+        } else {
+            fallback.to_string()
+        }
+    }
+    s.theme = one_of(&s.theme, &["light", "dark", "system"], "light");
+    s.code_visibility = one_of(&s.code_visibility, &["never", "always", "hover"], "never");
+    s.card_density = one_of(&s.card_density, &["compact", "standard"], "standard");
+    s.card_detail = one_of(&s.card_detail, &["minimal", "standard", "detailed"], "standard");
+    s.close_behavior = one_of(&s.close_behavior, &["quit", "tray"], "quit");
+    s.language = one_of(&s.language, &["auto", "zh", "en"], "auto");
+    s.window_size = one_of(&s.window_size, &["compact", "standard", "expanded"], "standard");
+    s.font_scale = one_of(&s.font_scale, &["small", "standard", "large", "xlarge"], "standard");
+    // 0 =「立即」（不做空闲计时），999999 =「从不」，超出范围回退默认 60 秒
+    if s.auto_lock_seconds > 999_999 {
+        s.auto_lock_seconds = 60;
+    }
+    // 备份保留份数：至少留 1 份，最多 10 份（与界面选项一致）
+    s.backup_keep = s.backup_keep.clamp(1, 10);
+    // 密码提示为明文展示，限制长度避免撑破界面
+    if s.password_hint.chars().count() > 100 {
+        s.password_hint = s.password_hint.chars().take(100).collect();
+    }
+    s
+}
+
+/// 当前是否处于远程桌面 / 远程协助会话。
+///
+/// 用 `SESSIONNAME` 环境变量判断（`RDP-Tcp#…` / `RDP-…` 均为远程会话）：
+/// 不引入额外 Win32 依赖，且对普通本地会话返回 false。
+/// 前端据此在「隐私保护 → 远程时隐藏窗口」开启时隐藏窗口，
+/// 避免远程画面把验证码一起传出去。
+/// 诊断追踪：把前端的关键判定写入 trace.log。
+///
+/// 仅在环境变量 `ONETOTP_TRACE=1` 时生效（默认完全静默），用于排查
+/// 「锁屏/自动认证为什么没触发」这类只能靠时序观察的问题。
+/// 只记录判定结果与原因码，**不写任何密钥、口令或验证码**。
+#[tauri::command]
+pub fn trace_event(state: State<AppState>, message: String) {
+    if std::env::var("ONETOTP_TRACE").ok().as_deref() != Some("1") {
+        return;
+    }
+    store::append_trace_log(&state.app_dir, &message);
+}
+
+#[tauri::command]
+pub fn is_remote_session() -> bool {
+    match std::env::var("SESSIONNAME") {
+        Ok(name) => {
+            let upper = name.to_uppercase();
+            upper.starts_with("RDP-") || upper.starts_with("RDP#")
+        }
+        Err(_) => false,
+    }
+}
+
 #[tauri::command]
 pub fn list_backups(state: State<AppState>) -> Result<Vec<BackupView>, String> {
     Ok(store::list_backups(&state.app_dir)
@@ -1109,6 +1479,93 @@ pub fn clear_backups(state: State<AppState>) -> Result<u32, String> {
     store::clear_backups(&state.app_dir)
 }
 
+/// 数据目录信息：当前实际目录 + 系统默认目录
+#[derive(serde::Serialize)]
+pub struct DataDirView {
+    /// 当前实际使用的数据目录
+    pub current: String,
+    /// 系统默认目录（未自定义时与 current 相同）
+    pub default_dir: String,
+    /// 是否已自定义
+    pub custom: bool,
+}
+
+/// 读取当前数据目录
+#[tauri::command]
+pub fn get_data_dir(state: State<AppState>) -> DataDirView {
+    let current = state.app_dir.to_string_lossy().to_string();
+    let default_dir = state.default_dir.to_string_lossy().to_string();
+    DataDirView {
+        custom: state.app_dir != state.default_dir,
+        current,
+        default_dir,
+    }
+}
+
+/// 切换数据目录：把现有数据迁移到新目录，写入指针，然后重启应用。
+///
+/// 必须重启：`AppState.app_dir` 在启动时确定，运行期改它会让已打开的
+/// 文件句柄、缓存与磁盘状态不一致。重启是最简单可靠的做法。
+///
+/// 安全约束：
+/// - 目标必须是绝对路径，且不能是当前目录本身
+/// - 目标不能位于当前数据目录内部（否则复制会自我递归）
+/// - 迁移只复制、不删除源目录，失败时用户数据仍在原处
+#[tauri::command]
+pub fn set_data_dir(app: tauri::AppHandle, state: State<AppState>, dir: String) -> Result<(), String> {
+    let raw = dir.trim();
+    if raw.is_empty() {
+        return Err("目录不能为空".to_string());
+    }
+    let target = std::path::PathBuf::from(raw);
+    if !target.is_absolute() {
+        return Err("请提供绝对路径".to_string());
+    }
+    // 规范化后再比较，避免 `..` 或末尾斜杠造成误判
+    let target = target
+        .canonicalize()
+        .map_err(|_| "目标目录不存在或无法访问".to_string())?;
+    let current = state
+        .app_dir
+        .canonicalize()
+        .unwrap_or_else(|_| state.app_dir.clone());
+    if target == current {
+        return Err("目标目录与当前数据目录相同".to_string());
+    }
+    // 目标在当前目录内部：复制时会把自己复制进去，必须拒绝
+    if target.starts_with(&current) {
+        return Err("目标目录不能位于当前数据目录内部".to_string());
+    }
+    if !target.is_dir() {
+        return Err("目标路径不是目录".to_string());
+    }
+
+    store::migrate_data_dir(&current, &target)?;
+    store::write_data_dir_pointer(&state.default_dir, Some(&target))?;
+
+    // 迁移完成：重启应用让新的 app_dir 生效
+    app.restart();
+}
+
+/// 恢复默认数据目录：把数据迁回系统默认目录并重启
+#[tauri::command]
+pub fn reset_data_dir(app: tauri::AppHandle, state: State<AppState>) -> Result<(), String> {
+    let current = state
+        .app_dir
+        .canonicalize()
+        .unwrap_or_else(|_| state.app_dir.clone());
+    let default_dir = state
+        .default_dir
+        .canonicalize()
+        .unwrap_or_else(|_| state.default_dir.clone());
+    if current == default_dir {
+        return Err("当前已是默认数据目录".to_string());
+    }
+    store::migrate_data_dir(&current, &default_dir)?;
+    store::write_data_dir_pointer(&state.default_dir, None)?;
+    app.restart();
+}
+
 fn base64_encode(data: &[u8]) -> String {
     use base64::{engine::general_purpose::STANDARD as B64, Engine};
     B64.encode(data)
@@ -1117,4 +1574,328 @@ fn base64_encode(data: &[u8]) -> String {
 fn base64_decode(data: &str) -> Result<Vec<u8>, String> {
     use base64::{engine::general_purpose::STANDARD as B64, Engine};
     B64.decode(data).map_err(|_| "Base64 解码失败".to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::Category;
+
+    fn account_with_legacy_category(name: &str) -> Account {
+        Account {
+            id: uuid::Uuid::new_v4().to_string(),
+            issuer: "Issuer".to_string(),
+            account: "acc".to_string(),
+            secret: "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ".to_string(),
+            otp_type: "totp".to_string(),
+            algorithm: "SHA1".to_string(),
+            digits: 6,
+            period: 30,
+            counter: 0,
+            category_id: String::new(),
+            category: name.to_string(),
+            favorite: false,
+            created_at: 0,
+            last_used_at: 0,
+        }
+    }
+
+    // ── 关闭窗口：关闭到托盘必须同时锁定 ──
+
+    /// 构造一个「已解锁」的 AppState
+    fn unlocked_state() -> AppState {
+        let dir = std::env::temp_dir();
+        let state = AppState::new(dir.clone(), dir);
+        *state.key.lock().unwrap() = Some([7u8; 32]);
+        *state.payload.lock().unwrap() = Some(VaultPayload {
+            accounts: vec![account_with_legacy_category("工作")],
+            settings: AppSettings::default(),
+            categories: Vec::new(),
+        });
+        state.code_cache.lock().unwrap().insert(
+            "a".to_string(),
+            (1, "123456".to_string(), None),
+        );
+        state
+    }
+
+    /// 关闭到托盘：必须隐藏窗口并立即锁定内存密钥/载荷/验证码缓存。
+    /// 回归点：旧实现只 hide() 不锁定，从托盘恢复后会直接看到明文验证码。
+    #[test]
+    fn close_to_tray_locks_the_vault() {
+        let state = unlocked_state();
+        *state.close_behavior.lock().unwrap() = "tray".to_string();
+
+        assert!(state.prepare_close(), "关闭到托盘应要求隐藏窗口");
+
+        assert!(state.key.lock().unwrap().is_none(), "内存密钥必须清空");
+        assert!(state.payload.lock().unwrap().is_none(), "内存载荷必须清空");
+        assert!(state.code_cache.lock().unwrap().is_empty(), "验证码缓存必须清空");
+        assert!(state.current_key().is_err(), "锁定后取密钥必须失败");
+    }
+
+    /// 关闭即退出：不隐藏，也不需要在 Rust 侧锁定（进程即将结束）
+    #[test]
+    fn close_to_quit_does_not_hide_or_lock() {
+        let state = unlocked_state();
+        *state.close_behavior.lock().unwrap() = "quit".to_string();
+
+        assert!(!state.prepare_close(), "退出行为不应阻止关闭");
+        assert!(state.key.lock().unwrap().is_some(), "退出路径不必清空密钥");
+        assert!(state.payload.lock().unwrap().is_some());
+    }
+
+    #[test]
+    fn sanitize_settings_keeps_whitelisted_values() {        let s = AppSettings {
+            theme: "dark".to_string(),
+            code_visibility: "always".to_string(),
+            card_density: "compact".to_string(),
+            card_detail: "detailed".to_string(),
+            close_behavior: "tray".to_string(),
+            language: "en".to_string(),
+            window_size: "expanded".to_string(),
+            font_scale: "xlarge".to_string(),
+            auto_lock_seconds: 300,
+            backup_keep: 5,
+            ..AppSettings::default()
+        };
+        let out = sanitize_settings(s);
+        assert_eq!(out.theme, "dark");
+        assert_eq!(out.code_visibility, "always");
+        assert_eq!(out.card_density, "compact");
+        assert_eq!(out.card_detail, "detailed");
+        assert_eq!(out.close_behavior, "tray");
+        assert_eq!(out.language, "en");
+        assert_eq!(out.window_size, "expanded");
+        assert_eq!(out.font_scale, "xlarge");
+        assert_eq!(out.auto_lock_seconds, 300);
+        assert_eq!(out.backup_keep, 5);
+    }
+
+    #[test]
+    fn sanitize_settings_replaces_out_of_range_values() {
+        let s = AppSettings {
+            theme: "neon".to_string(),
+            code_visibility: "maybe".to_string(),
+            card_density: "huge".to_string(),
+            card_detail: "insane".to_string(),
+            close_behavior: "explode".to_string(),
+            language: "fr".to_string(),
+            window_size: "gigantic".to_string(),
+            font_scale: "huge".to_string(),
+            // 超出「从不」上限
+            auto_lock_seconds: 1_000_000,
+            // 0 份会让 prune_backups 删掉全部快照，10 份是界面上限
+            backup_keep: 0,
+            password_hint: "x".repeat(200),
+            ..AppSettings::default()
+        };
+        let out = sanitize_settings(s);
+        assert_eq!(out.theme, "light");
+        assert_eq!(out.code_visibility, "never");
+        assert_eq!(out.card_density, "standard");
+        assert_eq!(out.card_detail, "standard");
+        assert_eq!(out.close_behavior, "quit");
+        assert_eq!(out.language, "auto");
+        assert_eq!(out.window_size, "standard");
+        assert_eq!(out.font_scale, "standard");
+        assert_eq!(out.auto_lock_seconds, 60);
+        assert_eq!(out.backup_keep, 1);
+        assert_eq!(out.password_hint.chars().count(), 100);
+    }
+
+    /// 「立即」(0) 与「从不」(999999) 都是合法取值，不能被夹掉
+    #[test]
+    fn sanitize_settings_preserves_zero_and_never_sentinel() {
+        let zero = sanitize_settings(AppSettings {
+            auto_lock_seconds: 0,
+            ..AppSettings::default()
+        });
+        assert_eq!(zero.auto_lock_seconds, 0);
+
+        let never = sanitize_settings(AppSettings {
+            auto_lock_seconds: 999_999,
+            ..AppSettings::default()
+        });
+        assert_eq!(never.auto_lock_seconds, 999_999);
+    }
+
+    #[test]
+    fn normalize_hex_color_only_accepts_full_hex() {
+        assert_eq!(normalize_hex_color("#1664ff"), "#1664FF");
+        assert_eq!(normalize_hex_color("  #ABCDEF "), "#ABCDEF");
+        // 以下都应回退到源力蓝
+        assert_eq!(normalize_hex_color("#FFF"), "#1664FF");
+        assert_eq!(normalize_hex_color("1664FF"), "#1664FF");
+        assert_eq!(normalize_hex_color("#GGGGGG"), "#1664FF");
+        // 越界注入尝试
+        assert_eq!(normalize_hex_color("#1664FF;background:url(x)"), "#1664FF");
+    }
+
+    #[test]
+    fn migrate_categories_converts_legacy_names_once() {
+        let mut payload = VaultPayload {
+            accounts: vec![
+                account_with_legacy_category("工作"),
+                account_with_legacy_category("工作"),
+                account_with_legacy_category("生活"),
+            ],
+            settings: AppSettings::default(),
+            categories: Vec::new(),
+        };
+
+        assert!(migrate_categories(&mut payload), "存在旧分类名时应报告有改动");
+        // 两个同名旧分类只生成一个分类实体
+        assert_eq!(payload.categories.len(), 2);
+        let work = payload
+            .categories
+            .iter()
+            .find(|c| c.name == "工作")
+            .expect("应生成「工作」分类");
+        assert!(work.color.starts_with('#'));
+        for acc in &payload.accounts {
+            assert!(!acc.category_id.is_empty(), "category_id 必须被回填");
+            assert!(acc.category.is_empty(), "旧字段必须被清空");
+        }
+        // 再次执行应无改动（幂等）
+        assert!(!migrate_categories(&mut payload));
+    }
+
+    #[test]
+    fn migrate_categories_reuses_existing_entity() {        let existing = Category {
+            id: "cat-1".to_string(),
+            name: "工作".to_string(),
+            color: "#123456".to_string(),
+            order: 0,
+            created_at: 0,
+        };
+        let mut payload = VaultPayload {
+            accounts: vec![account_with_legacy_category("工作")],
+            settings: AppSettings::default(),
+            categories: vec![existing],
+        };
+        assert!(migrate_categories(&mut payload));
+        assert_eq!(payload.categories.len(), 1, "不应重复创建同名分类");
+        assert_eq!(payload.accounts[0].category_id, "cat-1");
+    }
+
+    // ── 锁定凭证校验：v0（旧 / 不安全格式）与 v1（HMAC 校验值） ──
+
+    const PASSWORD: &str = "correct horse battery";
+
+    /// 构造一份 v0 旧格式凭证：verifier 就是保险库密钥的 base64
+    fn legacy_record(password: &str) -> (store::LockRecord, [u8; 32]) {
+        let salt = crate::crypto::new_salt();
+        let key = crate::crypto::derive_key(password, &salt).unwrap();
+        let record = store::LockRecord {
+            version: 0,
+            salt: base64_encode(&salt),
+            verifier: crate::crypto::legacy_verifier(&key),
+            hint: String::new(),
+        };
+        (record, key)
+    }
+
+    /// 构造一份 v1 当前格式凭证
+    fn current_record(password: &str) -> (store::LockRecord, [u8; 32]) {
+        let salt = crate::crypto::new_salt();
+        let key = crate::crypto::derive_key(password, &salt).unwrap();
+        let record = store::LockRecord {
+            version: store::LOCK_RECORD_VERSION,
+            salt: base64_encode(&salt),
+            verifier: crate::crypto::derive_verifier(&key),
+            hint: String::new(),
+        };
+        (record, key)
+    }
+
+    #[test]
+    fn verifies_v1_record_and_reports_no_upgrade() {
+        let (record, key) = current_record(PASSWORD);
+        let (derived, needs_upgrade) = verify_lock_password(&record, PASSWORD).unwrap();
+        assert_eq!(derived, key);
+        assert!(!needs_upgrade, "v1 不应再被判定为需要升级");
+    }
+
+    /// 旧格式必须能继续打开：否则升级后老用户会被锁在门外
+    #[test]
+    fn verifies_legacy_record_and_reports_upgrade() {
+        let (record, key) = legacy_record(PASSWORD);
+        let (derived, needs_upgrade) = verify_lock_password(&record, PASSWORD).unwrap();
+        assert_eq!(derived, key);
+        assert!(needs_upgrade, "v0 应标记为需升级");
+    }
+
+    #[test]
+    fn rejects_wrong_password_in_both_formats() {
+        let (v1, _) = current_record(PASSWORD);
+        assert!(verify_lock_password(&v1, "wrong password").is_err());
+
+        let (v0, _) = legacy_record(PASSWORD);
+        assert!(verify_lock_password(&v0, "wrong password").is_err());
+    }
+
+    /// 两种格式的校验值不可互换：把 v1 的 HMAC 值塞进 v0 凭证必须失败，
+    /// 反之亦然。否则版本字段一旦被误改，就等于绕过口令校验。
+    #[test]
+    fn verifier_formats_are_not_interchangeable() {
+        let salt = crate::crypto::new_salt();
+        let key = crate::crypto::derive_key(PASSWORD, &salt).unwrap();
+        let salt_b64 = base64_encode(&salt);
+
+        let v0_with_hmac = store::LockRecord {
+            version: 0,
+            salt: salt_b64.clone(),
+            verifier: crate::crypto::derive_verifier(&key),
+            hint: String::new(),
+        };
+        assert!(verify_lock_password(&v0_with_hmac, PASSWORD).is_err());
+
+        let v1_with_key = store::LockRecord {
+            version: store::LOCK_RECORD_VERSION,
+            salt: salt_b64,
+            verifier: crate::crypto::legacy_verifier(&key),
+            hint: String::new(),
+        };
+        assert!(verify_lock_password(&v1_with_key, PASSWORD).is_err());
+    }
+
+    /// 升级后同一口令仍可解锁，且保险库密钥不变（升级只改 verifier）
+    #[test]
+    fn upgrade_keeps_password_and_key_working() {
+        let dir = std::env::temp_dir().join(format!("onetotp-lock-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let (record, key) = legacy_record(PASSWORD);
+        store::write_lock(&dir, &record).unwrap();
+
+        let (derived, needs_upgrade) = verify_lock_password(&record, PASSWORD).unwrap();
+        assert!(needs_upgrade);
+        upgrade_lock_record_if_needed(&dir, &record, &derived);
+
+        let upgraded = store::read_lock(&dir).expect("升级后必须仍能读出凭证");
+        assert_eq!(upgraded.version, store::LOCK_RECORD_VERSION);
+        assert_eq!(upgraded.salt, record.salt, "salt 不得改变，否则密钥会变");
+        // 升级后的凭证：同一口令仍通过，且不再需要升级
+        let (again, needs_upgrade_again) = verify_lock_password(&upgraded, PASSWORD).unwrap();
+        assert_eq!(again, key, "密钥必须保持不变，否则既有保险库解不开");
+        assert!(!needs_upgrade_again);
+        // 升级后 verifier 里不再包含密钥本身
+        assert_ne!(crate::crypto::legacy_verifier(&key), upgraded.verifier);
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// 幂等：已是 v1 的凭证重复调用升级不应改写
+    #[test]
+    fn upgrade_is_idempotent() {
+        let dir = std::env::temp_dir().join(format!("onetotp-lock2-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let (record, key) = current_record(PASSWORD);
+        store::write_lock(&dir, &record).unwrap();
+        upgrade_lock_record_if_needed(&dir, &record, &key);
+        let after = store::read_lock(&dir).unwrap();
+        assert_eq!(after.verifier, record.verifier);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

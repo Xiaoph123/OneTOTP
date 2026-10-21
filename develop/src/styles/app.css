@@ -76,6 +76,31 @@ select {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  /* 品牌区同时是「回到首页」按钮：去掉按钮默认样式，保留可点区域与指针 */
+  padding: 0 4px;
+  margin-left: -4px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  color: inherit;
+  transition: background 140ms ease;
+  /* 标题栏整体是拖拽区，品牌按钮必须排除，否则点击会被当作拖窗口 */
+  -webkit-app-region: no-drag;
+}
+.titlebar-home:hover:not(:disabled) {
+  background: var(--color-bg-5);
+}
+/* 当前已在首页时不再需要点击反馈，但仍保留指针形状表示可点 */
+.titlebar-home.is-current {
+  cursor: default;
+}
+.titlebar-home.is-current:hover {
+  background: transparent;
+}
+.titlebar-home:disabled {
+  cursor: default;
 }
 .titlebar-logo {
   width: 20px;
@@ -95,7 +120,9 @@ select {
   -webkit-app-region: no-drag;
 }
 .titlebar-btn {
-  width: 48px;
+  /* 窗口控制按钮（最小化 / 关闭）：收紧到 38px，
+     与功能按钮同一视觉量级，避免右侧两个方块显得笨重 */
+  width: 38px;
   align-self: stretch;
   display: inline-flex;
   align-items: center;
@@ -107,9 +134,14 @@ select {
   transition: background 140ms ease, color 140ms ease;
   -webkit-app-region: no-drag;
 }
+/* 功能按钮（主题 / 设置）只是辅助入口，比窗口控制按钮窄一档，
+   避免一排 4 个等宽按钮把标题栏右侧拉得过散 */
+.titlebar-btn.is-action {
+  width: 36px;
+}
 .titlebar-btn svg {
-  width: 15px;
-  height: 15px;
+  width: 14px;
+  height: 14px;
 }
 .titlebar-btn:hover {
   background: var(--color-bg-5);
@@ -180,7 +212,8 @@ select {
 
 /* 搜索行：搜索框与添加按钮统一高度；添加按钮为图标+文字的主操作 */
 .search-row {
-  --search-add-h: 36px;
+  /* 与设置项控件（32px）等高，避免搜索行过分抢眼 */
+  --search-add-h: 32px;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -212,9 +245,10 @@ select {
    需带 .search-row 前缀提升优先级——否则会被后面的 .ui-btn-primary 覆盖回默认阴影。 */
 .search-row .search-add-btn {
   flex-shrink: 0;
-  padding: 0 14px;
+  padding: 0 12px;
   width: auto;
   height: var(--search-add-h);
+  font-size: var(--font-size-lead);
   box-shadow: none;
 }
 /* 搜索框内图标与输入框 */
@@ -289,6 +323,17 @@ select {
   box-shadow: var(--shadow-1);
 }
 
+/* 设置页：整页文字不可选中（输入框除外，需保留编辑与选择能力） */
+.settings-page {
+  user-select: none;
+  -webkit-user-select: none;
+}
+.settings-page input,
+.settings-page textarea {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
 /* 账户详情页：身份头部 */
 .account-hero {
   display: flex;
@@ -337,10 +382,19 @@ select {
   text-align: right;
   overflow-wrap: anywhere;
 }
-/* 危险操作行（删除） */
-.action-row-danger {
+/* 危险操作行（删除）
+   注意：必须写成 `.action-row.action-row-danger` 提高特异性。
+   `.action-row` 在文件更后处定义了 color，同特异性的单类选择器会按
+   出现顺序覆盖，导致危险色被冲掉、显示成普通文字色。 */
+.action-row.action-row-danger {
   color: var(--color-danger);
   border-bottom: none;
+}
+.action-row.action-row-danger svg {
+  color: var(--color-danger);
+}
+.action-row.action-row-danger:hover {
+  background: var(--status-yuanliDanger-2);
 }
 /* 成功态软标签 */
 .tag-ok {
@@ -433,6 +487,9 @@ select {
   gap: 12px;
   padding: 12px 14px;
   border-bottom: 1px solid var(--color-border-light);
+  /* 设置项文字不可选中：避免拖动或连续点击时出现蓝色选区 */
+  user-select: none;
+  -webkit-user-select: none;
 }
 .s-row:last-child {
   border-bottom: none;
@@ -440,6 +497,54 @@ select {
 /* 右侧控件统一不收缩，保证各行宽度一致、左边缘对齐 */
 .s-row > *:last-child {
   flex-shrink: 0;
+}
+/* 块状设置行：标题在上、控件独占下一整行（适用于路径等长内容） */
+.s-row-block {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+}
+.s-row-block > *:last-child {
+  flex-shrink: 1;
+}
+/* 数据存储目录：只读输入框 + 内嵌图标按钮 */
+.dir-setting {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+.dir-setting .link-btn {
+  align-self: flex-start;
+}
+.dir-input {
+  /* 路径通常很长，等宽字体更易辨认层级；只读态用浅底区分于可编辑输入框 */
+  font-family: var(--font-mono);
+  font-size: var(--font-size-body);
+  background-color: var(--color-bg-4);
+  color: var(--color-text-2);
+  cursor: default;
+  /* 只读输入框仍可聚焦选中文本，便于用户复制路径 */
+  text-overflow: ellipsis;
+}
+.dir-input:focus {
+  box-shadow: 0 0 0 1px var(--color-border-3), 0 1px 1px rgba(0, 0, 0, 0.05);
+}
+/* 设置项下方的风险提示条 */
+.s-hint-warn {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 8px 14px 10px;
+  border-bottom: 1px solid var(--color-border-light);
+  background: var(--status-yuanliWarning-2);
+  color: var(--status-yuanliWarning-6);
+  font-size: var(--font-size-body);
+  line-height: 16px;
+}
+.s-hint-warn svg {
+  flex-shrink: 0;
+  margin-top: 1px;
 }
 .s-main {
   min-width: 0;
@@ -695,21 +800,36 @@ html .sticky-actions .ui-btn {
 .otp-card {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 6px;
   background: var(--color-bg-card);
   border: 1px solid var(--color-border-light);
   border-radius: var(--radius-md);
-  padding: 12px;
+  padding: 8px 10px;
   box-shadow: var(--shadow-1);
-  transition: box-shadow 180ms ease, border-color 150ms ease;
+  /* transform / background 加入过渡，为按下反馈提供顺滑的回落动画 */
+  transition:
+    box-shadow 180ms ease,
+    border-color 150ms ease,
+    transform 140ms cubic-bezier(0.2, 0, 0.2, 1),
+    background-color 140ms ease;
   cursor: pointer;
   /* 卡片内文字不做选中（验证码通过点击复制，无需划选） */
   user-select: none;
   -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
 }
 .otp-card:hover {
   box-shadow: var(--shadow-3);
   border-color: var(--primary-3);
+}
+/* 按下反馈：轻微下压 + 收敛阴影 + 淡底，模拟实体按键触感；
+   过渡时长缩短到 70ms，让「按下」即刻响应，「松开」按常规时长回弹 */
+.otp-card:active {
+  transform: scale(0.975);
+  box-shadow: var(--shadow-1);
+  border-color: var(--primary-4);
+  background: var(--color-bg-4);
+  transition-duration: 70ms;
 }
 .otp-card:focus-visible {
   outline: 2px solid var(--color-primary);
@@ -717,18 +837,18 @@ html .sticky-actions .ui-btn {
 }
 /* 紧凑密度：更小的内边距与验证码字号，适合一屏展示更多账户 */
 .otp-card.is-compact {
-  padding: 10px 12px;
-  gap: 8px;
+  padding: 6px 8px;
+  gap: 5px;
 }
 .otp-card.is-compact .otp-code {
-  font-size: 26px;
-  line-height: 32px;
-  letter-spacing: 4px;
+  font-size: 22px;
+  line-height: 26px;
+  letter-spacing: 3px;
 }
 .otp-card.is-compact .otp-ring,
 .otp-card.is-compact .otp-ring svg {
-  width: 42px;
-  height: 42px;
+  width: 40px;
+  height: 40px;
 }
 .otp-card.is-compact .otp-ring-num {
   font-size: var(--font-size-body);
@@ -739,7 +859,7 @@ html .sticky-actions .ui-btn {
 .otp-head {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 7px;
   min-width: 0;
 }
 .otp-head-main {
@@ -750,7 +870,7 @@ html .sticky-actions .ui-btn {
   color: var(--color-text-1);
   font-size: var(--font-size-h4);
   font-weight: var(--font-weight-medium);
-  line-height: 20px;
+  line-height: 17px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -758,7 +878,7 @@ html .sticky-actions .ui-btn {
 .otp-account {
   color: var(--color-text-3);
   font-size: var(--font-size-body);
-  line-height: 18px;
+  line-height: 15px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -775,25 +895,33 @@ html .sticky-actions .ui-btn {
 }
 .otp-code {
   font-family: var(--font-mono);
-  font-size: 34px;
-  letter-spacing: 5px;
+  font-size: 27px;
+  letter-spacing: 3px;
   font-weight: var(--font-weight-semibold);
   color: var(--color-text-1);
-  line-height: 40px;
+  line-height: 30px;
   font-variant-numeric: tabular-nums;
 }
 .otp-card.is-expiring .otp-code {
   color: var(--color-danger);
 }
+/* 卡片内标签与验证码行收紧间距：仅作用于卡片，避免影响全局 .tag-soft */
+.otp-card .tag-soft {
+  padding: 0 5px;
+  line-height: 15px;
+}
+.otp-card .flex-row-between {
+  gap: 8px;
+}
 .otp-ring {
-  width: 52px;
-  height: 52px;
+  width: 42px;
+  height: 42px;
   flex-shrink: 0;
   position: relative;
 }
 .otp-ring svg {
-  width: 52px;
-  height: 52px;
+  width: 42px;
+  height: 42px;
   transform: rotate(-90deg);
 }
 .otp-ring-num {
@@ -827,7 +955,7 @@ html .sticky-actions .ui-btn {
 .otp-tags {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   flex-wrap: wrap;
 }
 /* 下一个验证码（复杂模式，位于标签行右侧） */
@@ -854,8 +982,8 @@ html .sticky-actions .ui-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
   border-radius: var(--radius-sm);
   font-size: var(--font-size-body);
   font-weight: var(--font-weight-medium);
@@ -1301,16 +1429,10 @@ html[data-platform="desktop"] .modal-actions > .ui-btn {
 .select {
   position: relative;
   display: inline-block;
-  /* 默认撑满父容器；需要固定宽度时用 .w-124 / .w-140 等工具类 */
+  /* 默认撑满父容器；设置行等需要收窄的地方用 .control-w 统一宽度 */
   width: 100%;
   font-size: var(--font-size-lead);
   line-height: var(--line-height-h4);
-}
-.w-124 {
-  width: 124px;
-}
-.w-140 {
-  width: 140px;
 }
 .select-trigger {
   display: flex;
@@ -1387,11 +1509,65 @@ html[data-platform="desktop"] .modal-actions > .ui-btn {
 .select.disabled:hover .select-trigger {
   box-shadow: 0 0 0 1px var(--color-border-3);
 }
+
+/* ── ghost 变体：无边框，仅当前值 + 箭头，点击弹出浮层菜单 ──
+   用于设置行右侧：宽度随内容自适应，不再固定占位；
+   浮层覆盖在内容上方，不挤压行高与布局。 */
+.select-ghost {
+  width: auto;
+  max-width: 100%;
+}
+.select-ghost .select-trigger {
+  height: 28px;
+  padding: 0 6px;
+  gap: 2px;
+  background: transparent;
+  box-shadow: none;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-2);
+  transition: background 140ms ease, color 140ms ease;
+}
+.select-ghost .select-trigger:hover {
+  background: var(--color-bg-5);
+  color: var(--color-text-1);
+  box-shadow: none;
+}
+.select-ghost.focus .select-trigger {
+  background: var(--color-primary-container);
+  color: var(--color-primary);
+  box-shadow: none;
+}
+.select-ghost .select-value {
+  flex: 0 1 auto;
+  max-width: 132px;
+}
+.select-ghost .select-suffix {
+  margin-left: 2px;
+}
+.select-ghost .select-arrow {
+  width: 12px;
+  height: 12px;
+}
+.select-ghost.focus .select-suffix {
+  color: var(--color-primary);
+}
+.select-ghost.disabled .select-trigger {
+  background: transparent;
+  box-shadow: none;
+}
+.select-ghost.disabled:hover .select-trigger {
+  background: transparent;
+  box-shadow: none;
+}
 .select-dropdown {
   position: absolute;
   top: calc(100% + 4px);
   left: 0;
-  width: 100%;
+  /* 触发器收窄后，下拉按内容自适应并保证不小于触发器宽度，
+     避免长选项文字被裁切 */
+  width: max-content;
+  min-width: 100%;
+  max-width: 260px;
   background: var(--color-bg-1);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-4);
@@ -1404,6 +1580,22 @@ html[data-platform="desktop"] .modal-actions > .ui-btn {
 .select.focus .select-dropdown {
   display: block;
 }
+/* 收窄的控件位于设置行右侧，下拉改为右对齐展开，
+   避免按内容变宽后溢出窗口右边缘 */
+.control-w .select-dropdown {
+  left: auto;
+  right: 0;
+}
+/* ghost 浮层：右对齐、按内容自适应，投影更明显以体现「浮起」 */
+.select-ghost .select-dropdown {
+  left: auto;
+  right: 0;
+  top: calc(100% + 6px);
+  min-width: 132px;
+  max-width: 240px;
+  padding: 4px;
+  box-shadow: var(--shadow-5);
+}
 .select-option {
   display: flex;
   align-items: center;
@@ -1412,6 +1604,7 @@ html[data-platform="desktop"] .modal-actions > .ui-btn {
   color: var(--color-text-1);
   font-size: var(--font-size-lead);
   line-height: var(--line-height-h4);
+  white-space: nowrap;
   cursor: pointer;
   transition: background 100ms ease;
 }
@@ -1484,11 +1677,6 @@ html[data-platform="mobile"] .scan-actions > .ui-btn {
   color: var(--color-text-3);
   margin-top: 3px;
 }
-.scan-caption-diag {
-  font-size: var(--font-size-body);
-  color: var(--color-text-4);
-  margin-top: 3px;
-}
 /* 表单说明与输入框右侧操作按钮 */
 .form-intro {
   margin-bottom: 14px;
@@ -1521,6 +1709,7 @@ html[data-platform="mobile"] .scan-actions > .ui-btn {
   font-size: var(--font-size-body);
   cursor: pointer;
 }
+
 /* 高级选项区 */
 .advanced-section {
   border-top: 1px solid var(--color-border-light);
@@ -1623,6 +1812,38 @@ html[data-platform="mobile"] .scan-actions > .ui-btn {
 }
 .text-left {
   text-align: left;
+}
+
+/* 导出内容选项组：嵌在外层卡片内，不再画自己的边框，仅保留行分隔线 */
+.export-content {
+  border-radius: var(--radius-md);
+  background: var(--color-bg-4);
+  overflow: hidden;
+}
+
+/* 导入拖放区：包裹文本域，拖入文件时给出明确的可放置反馈 */
+.drop-zone {
+  position: relative;
+  border-radius: var(--radius-md);
+  transition: box-shadow 140ms ease;
+}
+.drop-zone.is-dragover {
+  box-shadow: 0 0 0 2px var(--color-primary);
+}
+.drop-zone-mask {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-radius: var(--radius-md);
+  background: rgba(22, 100, 255, 0.08);
+  backdrop-filter: blur(1px);
+  color: var(--color-primary);
+  font-size: var(--font-size-body);
+  pointer-events: none;
 }
 .backup-head {
   display: flex;
@@ -1831,6 +2052,12 @@ html[data-platform="desktop"] .lock-submit {
   margin-top: 16px;
   height: 36px;
   padding: 0 20px;
+}
+/* 保险库无法打开时的错误块：错误信息可能较长，允许换行且不被卡片裁切 */
+.lock-card .lock-error {
+  max-width: 100%;
+  word-break: break-word;
+  text-align: left;
 }
 .keypad {
   display: grid;
@@ -2181,12 +2408,14 @@ html[data-platform="desktop"] .lock-submit {
 .s-desc-block {
   display: block;
 }
-/* 设置行右侧固定宽度控件 */
+/* 设置行右侧控件宽度：仅用于快捷键录制框等仍需固定宽度的控件。
+   下拉框已改为 ghost 变体（宽度随内容自适应），不再使用此类。 */
 .control-w {
-  width: 124px;
+  width: 108px;
 }
+/* 数字输入框（备份保留数量）与选择器同宽 */
 .control-input {
-  width: 124px;
+  width: 108px;
   text-align: center;
 }
 /* 可点击跳转行的右侧箭头 */
@@ -2311,6 +2540,15 @@ html[data-platform="mobile"] .ui-input,
 html[data-platform="mobile"] .select-trigger {
   height: 44px;
 }
+/* ghost 变体在移动端保持紧凑高度：它只是「当前值 + 箭头」的轻量入口，
+   撑到 44px 会让设置行显得臃肿；点击热区由整行高度保证。 */
+html[data-platform="mobile"] .select-ghost .select-trigger {
+  height: 32px;
+  padding: 0 8px;
+}
+html[data-platform="mobile"] .select-ghost .select-value {
+  max-width: 160px;
+}
 
 /* 搜索栏与"添加"按钮在移动端保持等高：统一 44px */
 html[data-platform="mobile"] .search-row {
@@ -2428,3 +2666,13 @@ html[data-platform="mobile"] .sticky-actions {
   padding: 12px 16px;
 }
 
+
+/* ── 隐私保护：失焦时遮挡验证码 ──────────────────────────── */
+html[data-privacy-mask="on"] .otp-code,
+html[data-privacy-mask="on"] .otp-next-code {
+  filter: blur(7px);
+}
+html[data-privacy-mask="on"] .otp-code,
+html[data-privacy-mask="on"] .otp-next-code {
+  transition: filter 0.12s ease;
+}

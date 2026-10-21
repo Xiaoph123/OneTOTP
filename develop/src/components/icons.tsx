@@ -275,6 +275,14 @@ export const Upload = (p: IconProps) => (
   </svg>
 );
 
+/** 打开的文件夹：用于「选择导出位置」 */
+export const FolderOpen = (p: IconProps) => (
+  <svg {...base(p)} strokeWidth={1.6}>
+    <path d="M2.5 13.5V4.5a1 1 0 0 1 1-1h3l1.5 2h4.5a1 1 0 0 1 1 1v1.5" />
+    <path d="M2.5 13.5l1.8-5.2a1 1 0 0 1 .95-.7h10.1a1 1 0 0 1 .95 1.3l-1.6 4.6a1 1 0 0 1-.95.7H3.5a1 1 0 0 1-1-1z" />
+  </svg>
+);
+
 export const Eye = (p: IconProps) => (
   <svg {...base(p)} strokeWidth={1.5}>
     <path d="M1.7 9S4.6 4 9 4s7.3 5 7.3 5S13.4 14 9 14 1.7 9 1.7 9z" />

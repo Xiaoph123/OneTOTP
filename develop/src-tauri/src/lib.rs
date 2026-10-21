@@ -11,6 +11,8 @@ use tauri::Manager;
 pub fn run() {
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_clipboard_manager::init());
 
     // 桌面专属插件：单实例、开机自启、全局快捷键
@@ -18,12 +20,8 @@ pub fn run() {
     let builder = builder
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
             use tauri::Emitter;
-            // 检测到重复启动：唤起已有窗口并提示
-            if let Some(w) = app.get_webview_window("main") {
-                let _ = w.show();
-                let _ = w.unminimize();
-                let _ = w.set_focus();
-            }
+            // 检测到重复启动：唤起已有窗口并提示（同时校正锁定界面）
+            show_main_window(app);
             let _ = app.emit("single-instance", ());
         }))
         .plugin(tauri_plugin_autostart::init(
@@ -46,13 +44,16 @@ pub fn run() {
 
     builder
         .setup(|app| {
-            // 使用应用数据目录持久化本地保险库
-            let app_dir = app
+            // 系统默认应用目录：数据目录指针文件固定放在这里
+            let default_dir = app
                 .path()
                 .app_data_dir()
                 .expect("无法解析应用数据目录");
+            store::ensure_app_dir(&default_dir)?;
+            // 若用户自定义过数据目录，则实际读写都指向该目录
+            let app_dir = store::read_data_dir_pointer(&default_dir).unwrap_or_else(|| default_dir.clone());
             store::ensure_app_dir(&app_dir)?;
-            app.manage(AppState::new(app_dir));
+            app.manage(AppState::new(app_dir, default_dir));
 
             #[cfg(desktop)]
             setup_tray(app)?;
@@ -63,11 +64,17 @@ pub fn run() {
             // 关闭按钮行为：读取运行时设置决定退出还是隐藏到托盘
             #[cfg(desktop)]
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                use tauri::Emitter;
                 let state = window.state::<AppState>();
-                let behavior = state.close_behavior();
-                if behavior == "tray" {
+                // 关闭到托盘时同步锁定内存中的密钥与载荷（详见 prepare_close）。
+                if state.prepare_close() {
                     api.prevent_close();
                     let _ = window.hide();
+                    // 主动通知前端切到锁定页。
+                    // 不能只靠前端的「失焦」或「取码失败」去推断：窗口是原生侧
+                    // 隐藏的，隐藏期间 WebView 可能被降频，恢复时事件顺序不可靠。
+                    // 事件会排队，窗口再次显示时送达。
+                    let _ = window.app_handle().emit("onetotp://locked", ());
                 }
             }
             #[cfg(not(desktop))]
@@ -79,6 +86,7 @@ pub fn run() {
             commands::unlock,
             commands::lock,
             commands::set_lock_password,
+            commands::rotate_vault_key,
             commands::list_accounts,
             commands::get_codes,
             commands::get_account_detail,
@@ -98,13 +106,37 @@ pub fn run() {
             commands::get_settings,
             commands::update_settings,
             commands::export_vault,
+            commands::write_backup_file,
+            commands::read_backup_file,
             commands::import_vault,
             commands::list_backups,
+            commands::is_remote_session,
+            commands::trace_event,
             commands::get_storage_usage,
             commands::clear_backups,
+            commands::get_data_dir,
+            commands::set_data_dir,
+            commands::reset_data_dir,
         ])
         .run(tauri::generate_context!())
         .expect("运行 Tauri 应用失败");
+}
+
+/// 显示主窗口，并通知前端按后端实际锁定状态校正界面。
+///
+/// 窗口被 `hide()` 隐藏后再 `show()` **不会产生前端的焦点变化事件**（Tauri 视角里
+/// 它从未失去焦点），所以前端无法据此发现自己应该回到锁屏页。
+/// 这里统一在「显示窗口」的每条入口上补发一次通知。
+#[cfg(desktop)]
+fn show_main_window(app: &tauri::AppHandle) {
+    use tauri::Emitter;
+    if let Some(w) = app.get_webview_window("main") {
+        let _ = w.show();
+        let _ = w.unminimize();
+        let _ = w.set_focus();
+        // 前端收到后调用 get_status()，未锁定时不做任何事
+        let _ = app.emit("onetotp://locked", ());
+    }
 }
 
 /// 桌面端系统托盘：显示主窗口 / 退出
@@ -113,22 +145,26 @@ fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     use tauri::{
         menu::{Menu, MenuItem},
         tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
+        Emitter,
     };
 
-    let show_item = MenuItem::with_id(app, "show", "显示 OneTotp", true, None::<&str>)?;
+    let show_item = MenuItem::with_id(app, "show", "显示 OneTOTP", true, None::<&str>)?;
+    let settings_item = MenuItem::with_id(app, "settings", "设置", true, None::<&str>)?;
     let quit_item = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
-    let menu = Menu::with_items(app, &[&show_item, &quit_item])?;
+    let menu = Menu::with_items(app, &[&show_item, &settings_item, &quit_item])?;
     TrayIconBuilder::new()
         .icon(app.default_window_icon().unwrap().clone())
-        .tooltip("OneTotp")
+        .tooltip("OneTOTP")
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| match event.id.as_ref() {
-            "show" => {
-                if let Some(w) = app.get_webview_window("main") {
-                    let _ = w.show();
-                    let _ = w.set_focus();
-                }
+            "show" => show_main_window(app),
+            "settings" => {
+                // 先显示窗口，再通知前端跳转到设置页。
+                // 顺序不能反：窗口隐藏时前端可能被降频，事件会排队，
+                // 但先 show 能保证用户立刻看到窗口，不会以为点击无效。
+                show_main_window(app);
+                let _ = app.emit("onetotp://navigate", "settings");
             }
             "quit" => app.exit(0),
             _ => {}
@@ -146,8 +182,7 @@ fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
                     if w.is_visible().unwrap_or(false) {
                         let _ = w.hide();
                     } else {
-                        let _ = w.show();
-                        let _ = w.set_focus();
+                        show_main_window(app);
                     }
                 }
             }

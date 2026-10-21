@@ -6,14 +6,81 @@ use std::path::{Path, PathBuf};
 pub const VAULT_FILE: &str = "onetotp.vault.json";
 pub const LOCK_FILE: &str = "onetotp.lock.json";
 pub const BACKUP_DIR: &str = "backups";
+pub const LOCK_LOG_FILE: &str = "lock-events.log";
+/// 数据目录指针文件：始终存放在系统默认应用目录下，
+/// 内容为自定义数据目录的绝对路径。启动时先读它决定真正的 app_dir。
+pub const DATA_DIR_POINTER: &str = "onetotp.datadir.json";
+/// 机器密钥文件名（与 crypto 模块保持一致）
+const MACHINE_KEY_FILE: &str = "onetotp.machine.key";
 
-/// 锁定凭证文件（保存密码校验哈希与盐，独立于保险库密钥）
+/// 锁定事件日志保留的最大行数（只保留最近若干次）
+const LOCK_LOG_MAX_LINES: usize = 50;
+
+/// 追加一条诊断追踪（仅在 ONETOTP_TRACE=1 时由命令触发）
+pub fn append_trace_log(app_dir: &Path, message: &str) {
+    let path = app_dir.join("trace.log");
+    let stamp = crate::totp::now_millis();
+    let line = format!("{stamp}\t{message}\n");
+    // 简单追加 + 上限裁剪，避免长期开启时无限增长
+    let mut lines: Vec<String> = fs::read_to_string(&path)
+        .unwrap_or_default()
+        .lines()
+        .map(|s| s.to_string())
+        .collect();
+    lines.push(line.trim_end().to_string());
+    if lines.len() > 300 {
+        let drop = lines.len() - 300;
+        lines.drain(0..drop);
+    }
+    let mut body = lines.join("\n");
+    body.push('\n');
+    let _ = fs::write(&path, body);
+}
+
+/// 追加一条锁定事件记录。
+///
+/// 只记录**时间 + 触发来源**，不含任何密钥、口令或验证码，可用于排查
+/// 「离开应用后为什么没有锁定」：若无记录，说明锁定请求从未发出。
+pub fn append_lock_log(app_dir: &Path, reason: &str) {
+    let path = app_dir.join(LOCK_LOG_FILE);
+    let stamp = crate::totp::now_millis();
+    let line = format!("{stamp}\t{reason}\n");
+
+    // 读取现有内容并裁剪：日志只用于近期排查，不无限增长
+    let mut lines: Vec<String> = fs::read_to_string(&path)
+        .unwrap_or_default()
+        .lines()
+        .map(|s| s.to_string())
+        .collect();
+    lines.push(line.trim_end().to_string());
+    if lines.len() > LOCK_LOG_MAX_LINES {
+        let drop = lines.len() - LOCK_LOG_MAX_LINES;
+        lines.drain(0..drop);
+    }
+    let mut body = lines.join("\n");
+    body.push('\n');
+    // 尽力写入：日志失败绝不能影响锁定本身
+    let _ = fs::write(&path, body);
+}
+
+/// 锁定凭证文件（保存密码校验值与盐，独立于保险库密钥）
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct LockRecord {
+    /// 凭证格式版本。
+    /// - `0`（字段缺失）：旧格式，`verifier` 就是保险库密钥的 base64，不安全
+    /// - `1`：`verifier` 为 HMAC-SHA256(密钥, 固定上下文)，无法反推密钥
+    ///
+    /// 用 `serde(default)` 兼容旧文件：旧文件没有该字段，读出即为 0，
+    /// `unlock` 会按旧规则校验，并在成功后原地升级为新格式。
+    #[serde(default)]
+    pub version: u32,
     pub salt: String,
     pub verifier: String,
     pub hint: String,
 }
+
+/// 当前写入的凭证格式版本
+pub const LOCK_RECORD_VERSION: u32 = 1;
 
 pub fn vault_path(app_dir: &Path) -> PathBuf {
     app_dir.join(VAULT_FILE)
@@ -29,6 +96,91 @@ pub fn backup_dir(app_dir: &Path) -> PathBuf {
 
 pub fn ensure_app_dir(app_dir: &Path) -> Result<(), String> {
     fs::create_dir_all(app_dir).map_err(|e| format!("创建应用目录失败: {e}"))
+}
+
+/// 读取自定义数据目录指针。
+///
+/// 指针文件固定放在系统默认应用目录（`default_dir`）下，内容为自定义目录的
+/// 绝对路径。这样即使数据目录被移到别处，下次启动仍能找到它。
+/// 返回 `None` 表示未自定义（使用默认目录）。
+pub fn read_data_dir_pointer(default_dir: &Path) -> Option<PathBuf> {
+    let path = default_dir.join(DATA_DIR_POINTER);
+    let data = fs::read_to_string(path).ok()?;
+    let value: serde_json::Value = serde_json::from_str(&data).ok()?;
+    let dir = value.get("data_dir")?.as_str()?.trim().to_string();
+    if dir.is_empty() {
+        return None;
+    }
+    let path = PathBuf::from(dir);
+    // 指针指向的目录必须存在，否则视为无效（用户可能手动删掉了）
+    if path.is_dir() {
+        Some(path)
+    } else {
+        None
+    }
+}
+
+/// 写入自定义数据目录指针；传 `None` 表示恢复默认（删除指针文件）。
+pub fn write_data_dir_pointer(default_dir: &Path, data_dir: Option<&Path>) -> Result<(), String> {
+    let path = default_dir.join(DATA_DIR_POINTER);
+    match data_dir {
+        Some(dir) => {
+            let body = serde_json::json!({ "data_dir": dir.to_string_lossy() });
+            let text = serde_json::to_string_pretty(&body).map_err(|e| e.to_string())?;
+            write_atomic(&path, text.as_bytes())
+                .map_err(|e| format!("写入数据目录指针失败: {e}"))
+        }
+        None => {
+            if path.exists() {
+                fs::remove_file(&path).map_err(|e| format!("删除数据目录指针失败: {e}"))?;
+            }
+            Ok(())
+        }
+    }
+}
+
+/// 把数据目录从 `from` 迁移到 `to`。
+///
+/// 只搬运本应用自己的文件（保险库、锁定凭证、机器密钥、备份目录、日志），
+/// 不碰目标目录里的其他内容。目标目录已存在同名文件时直接覆盖——
+/// 调用方（前端）必须先做二次确认，因为这会替换目标目录里的旧数据。
+///
+/// 迁移完成后**不删除源目录**：万一新目录不可用，用户还能手动找回。
+pub fn migrate_data_dir(from: &Path, to: &Path) -> Result<(), String> {
+    if from == to {
+        return Ok(());
+    }
+    fs::create_dir_all(to).map_err(|e| format!("创建目标目录失败: {e}"))?;
+
+    // 逐个文件搬运：任一失败立即返回，已搬运的文件保留在目标目录，
+    // 源目录数据不动，用户可重试或手动处理。
+    let files = [VAULT_FILE, LOCK_FILE, MACHINE_KEY_FILE, LOCK_LOG_FILE, "trace.log"];
+    for name in files {
+        let src = from.join(name);
+        if !src.is_file() {
+            continue;
+        }
+        let dst = to.join(name);
+        fs::copy(&src, &dst).map_err(|e| format!("复制 {name} 失败: {e}"))?;
+    }
+
+    // 备份快照目录：整体复制（保留文件名，便于按时间排序）
+    let src_backups = backup_dir(from);
+    if src_backups.is_dir() {
+        let dst_backups = backup_dir(to);
+        fs::create_dir_all(&dst_backups).map_err(|e| format!("创建备份目录失败: {e}"))?;
+        let entries = fs::read_dir(&src_backups).map_err(|e| format!("读取备份目录失败: {e}"))?;
+        for entry in entries.filter_map(|e| e.ok()) {
+            let path = entry.path();
+            if !path.is_file() {
+                continue;
+            }
+            let Some(name) = path.file_name() else { continue };
+            fs::copy(&path, dst_backups.join(name))
+                .map_err(|e| format!("复制备份快照失败: {e}"))?;
+        }
+    }
+    Ok(())
 }
 
 pub fn vault_exists(app_dir: &Path) -> bool {
@@ -344,4 +496,83 @@ pub fn parse_otpauth(uri: &str) -> Result<Account, String> {
         created_at: crate::totp::now_millis(),
         last_used_at: 0,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const SECRET: &str = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ";
+
+    #[test]
+    fn parses_standard_totp_uri() {
+        let uri = format!("otpauth://totp/GitHub:alice@example.com?secret={SECRET}&issuer=GitHub");
+        let acc = parse_otpauth(&uri).unwrap();
+        assert_eq!(acc.otp_type, "totp");
+        assert_eq!(acc.issuer, "GitHub");
+        assert_eq!(acc.account, "alice@example.com");
+        assert_eq!(acc.secret, SECRET);
+        assert_eq!(acc.algorithm, "SHA1");
+        assert_eq!(acc.digits, 6);
+        assert_eq!(acc.period, 30);
+        assert_eq!(acc.counter, 0);
+        assert!(!acc.id.is_empty());
+    }
+
+    #[test]
+    fn issuer_falls_back_to_label_prefix() {
+        let uri = format!("otpauth://totp/ACME%20Co:bob?secret={SECRET}");
+        let acc = parse_otpauth(&uri).unwrap();
+        assert_eq!(acc.issuer, "ACME Co", "标签需 percent-decode 后取冒号前缀");
+        assert_eq!(acc.account, "bob");
+    }
+
+    #[test]
+    fn parses_hotp_with_counter_and_algorithm_aliases() {
+        let uri = format!(
+            "otpauth://hotp/ACME:carol?secret={SECRET}&counter=42&algorithm=sha-256&digits=8&period=60"
+        );
+        let acc = parse_otpauth(&uri).unwrap();
+        assert_eq!(acc.otp_type, "hotp");
+        assert_eq!(acc.counter, 42);
+        assert_eq!(acc.algorithm, "SHA256");
+        assert_eq!(acc.digits, 8);
+    }
+
+    #[test]
+    fn secret_is_normalized_on_parse() {
+        let uri = "otpauth://totp/x?secret=gezd%20gnbv-gy3t-qojq";
+        let acc = parse_otpauth(&uri).unwrap();
+        assert_eq!(acc.secret, "GEZDGNBVGY3TQOJQ");
+    }
+
+    #[test]
+    fn rejects_bad_input() {
+        // 非 otpauth 协议
+        assert!(parse_otpauth("https://totp/x?secret=GEZDGNBV").is_err());
+        // 缺 secret
+        assert!(parse_otpauth("otpauth://totp/x?issuer=ACME").is_err());
+        // 非法 base32
+        assert!(parse_otpauth("otpauth://totp/x?secret=!!!").is_err());
+        // 未知 OTP 类型
+        assert!(parse_otpauth(&format!("otpauth://sms/x?secret={SECRET}")).is_err());
+        // 位数越界
+        assert!(parse_otpauth(&format!("otpauth://totp/x?secret={SECRET}&digits=9")).is_err());
+        // 周期越界
+        assert!(parse_otpauth(&format!("otpauth://totp/x?secret={SECRET}&period=0")).is_err());
+        // 不支持的算法
+        assert!(parse_otpauth(&format!("otpauth://totp/x?secret={SECRET}&algorithm=MD5")).is_err());
+        // 完全不是 URL
+        assert!(parse_otpauth("not a url").is_err());
+    }
+
+    #[test]
+    fn lock_record_without_version_is_read_as_legacy() {
+        // 旧版 lock.json 没有 version 字段，必须仍能反序列化（version=0）
+        let legacy = r#"{"salt":"AAAA","verifier":"BBBB","hint":"提示"}"#;
+        let rec: LockRecord = serde_json::from_str(legacy).unwrap();
+        assert_eq!(rec.version, 0);
+        assert_eq!(rec.hint, "提示");
+        assert_eq!(rec.verifier, "BBBB");
+    }
 }

@@ -119,6 +119,10 @@ export interface AppSettings {
   clickToCopy: boolean;
   codeVisibility: CodeVisibility;
   hideOnScreenshot: boolean;
+  /** 远程桌面会话时隐藏窗口 */
+  hideOnRemote: boolean;
+  /** 窗口失焦时遮挡验证码数字 */
+  hideOnUnfocused: boolean;
   autoBackup: boolean;
   backupKeep: number;
   passwordHint: string;
@@ -132,6 +136,8 @@ export interface AppSettings {
   fontScale: FontScale;
   /** 解锁连续失败 5 次后清空剪贴板 */
   clearClipboardOnFail: boolean;
+  /** 允许备份使用空密码（导出/导入都不再强制密码） */
+  allowEmptyBackupPassword: boolean;
 }
 
 export type FontScale = "small" | "standard" | "large" | "xlarge";
@@ -149,6 +155,8 @@ interface RawSettings {
   click_to_copy: boolean;
   code_visibility: string;
   hide_on_screenshot: boolean;
+  hide_on_remote: boolean;
+  hide_on_unfocused: boolean;
   auto_backup: boolean;
   backup_keep: number;
   password_hint: string;
@@ -161,6 +169,7 @@ interface RawSettings {
   window_size: string;
   font_scale: string;
   clear_clipboard_on_fail: boolean;
+  allow_empty_backup_password: boolean;
 }
 
 function mapSettings(raw: RawSettings): AppSettings {
@@ -174,6 +183,8 @@ function mapSettings(raw: RawSettings): AppSettings {
     clickToCopy: raw.click_to_copy,
     codeVisibility: (raw.code_visibility as CodeVisibility) || "never",
     hideOnScreenshot: raw.hide_on_screenshot,
+    hideOnRemote: raw.hide_on_remote ?? true,
+    hideOnUnfocused: raw.hide_on_unfocused ?? true,
     autoBackup: raw.auto_backup,
     backupKeep: raw.backup_keep,
     passwordHint: raw.password_hint,
@@ -186,6 +197,7 @@ function mapSettings(raw: RawSettings): AppSettings {
     windowSize: (raw.window_size as WindowSize) || "standard",
     fontScale: (raw.font_scale as FontScale) || "standard",
     clearClipboardOnFail: raw.clear_clipboard_on_fail ?? true,
+    allowEmptyBackupPassword: raw.allow_empty_backup_password ?? false,
   };
 }
 
@@ -200,6 +212,8 @@ function toRawSettings(s: AppSettings): RawSettings {
     click_to_copy: s.clickToCopy,
     code_visibility: s.codeVisibility,
     hide_on_screenshot: s.hideOnScreenshot,
+    hide_on_remote: s.hideOnRemote,
+    hide_on_unfocused: s.hideOnUnfocused,
     auto_backup: s.autoBackup,
     backup_keep: s.backupKeep,
     password_hint: s.passwordHint,
@@ -212,6 +226,7 @@ function toRawSettings(s: AppSettings): RawSettings {
     window_size: s.windowSize,
     font_scale: s.fontScale,
     clear_clipboard_on_fail: s.clearClipboardOnFail,
+    allow_empty_backup_password: s.allowEmptyBackupPassword,
   };
 }
 
@@ -248,6 +263,22 @@ interface RawStorageUsage {
   backup_bytes: number;
   vault_bytes: number;
   backup_count: number;
+}
+
+/** 数据目录信息 */
+export interface DataDirInfo {
+  /** 当前实际使用的数据目录 */
+  current: string;
+  /** 系统默认目录 */
+  defaultDir: string;
+  /** 是否已自定义 */
+  custom: boolean;
+}
+
+interface RawDataDir {
+  current: string;
+  default_dir: string;
+  custom: boolean;
 }
 
 export interface AccountInput {
@@ -317,6 +348,8 @@ export interface ImportResult {
   totalAccountsInBackup: number;
   /** 因字段非法被跳过的账户数 */
   skippedInvalid: number;
+  /** 因密钥与现有账户重复被跳过的账户数 */
+  skippedDuplicate: number;
 }
 
 interface RawImportResult {
@@ -324,6 +357,7 @@ interface RawImportResult {
   applied_settings: boolean;
   total_accounts_in_backup: number;
   skipped_invalid: number;
+  skipped_duplicate: number;
 }
 
 export const api = {
@@ -352,6 +386,14 @@ export const api = {
 
   setLockPassword(password: string, hint: string, enable: boolean): Promise<void> {
     return invoke("set_lock_password", { password, hint, enable });
+  },
+
+  /**
+   * 重新加密保险库：同一口令 + 全新 salt，重新派生密钥并重写本地数据。
+   * 用于让曾经以明文写在锁定凭证文件里的旧密钥彻底作废。
+   */
+  rotateVaultKey(password: string): Promise<void> {
+    return invoke("rotate_vault_key", { password });
   },
 
   async listAccounts(): Promise<AccountView[]> {
@@ -466,6 +508,16 @@ export const api = {
     });
   },
 
+  /** 把导出的备份内容写入用户指定路径（桌面端为绝对路径，Android 为 content:// URI） */
+  writeBackupFile(path: string, content: string): Promise<void> {
+    return invoke("write_backup_file", { path, content });
+  },
+
+  /** 读取用户选中的备份文件内容（桌面端为绝对路径，Android 为 content:// URI） */
+  readBackupFile(path: string): Promise<string> {
+    return invoke("read_backup_file", { path });
+  },
+
   async importVault(content: string, password: string): Promise<ImportResult> {
     const raw = await invoke<RawImportResult>("import_vault", { content, password });
     return {
@@ -473,6 +525,7 @@ export const api = {
       appliedSettings: raw.applied_settings,
       totalAccountsInBackup: raw.total_accounts_in_backup,
       skippedInvalid: raw.skipped_invalid,
+      skippedDuplicate: raw.skipped_duplicate,
     };
   },
 
@@ -493,5 +546,42 @@ export const api = {
   /** 清理全部本地备份快照，返回删除数量 */
   clearBackups(): Promise<number> {
     return invoke("clear_backups");
+  },
+
+  /** 读取当前数据目录（含系统默认目录与是否已自定义） */
+  async getDataDir(): Promise<DataDirInfo> {
+    const raw = await invoke<RawDataDir>("get_data_dir");
+    return {
+      current: raw.current,
+      defaultDir: raw.default_dir,
+      custom: raw.custom,
+    };
+  },
+
+  /** 切换数据目录：迁移现有数据后应用会自动重启 */
+  setDataDir(dir: string): Promise<void> {
+    return invoke("set_data_dir", { dir });
+  },
+
+  /** 恢复默认数据目录：迁移数据后应用会自动重启 */
+  resetDataDir(): Promise<void> {
+    return invoke("reset_data_dir");
+  },
+
+  /** 当前是否处于远程桌面 / 远程协助会话 */
+  isRemoteSession(): Promise<boolean> {
+    return invoke("is_remote_session");
+  },
+
+  /**
+   * 诊断追踪：写入 trace.log。仅当后端启动时带有 `ONETOTP_TRACE=1` 才落盘，
+   * 默认完全静默；失败也不影响业务（诊断用）。
+   */
+  async traceEvent(message: string): Promise<void> {
+    try {
+      await invoke("trace_event", { message });
+    } catch {
+      // 忽略：诊断失败不影响功能
+    }
   },
 };

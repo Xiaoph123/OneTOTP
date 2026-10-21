@@ -21,6 +21,7 @@ import {
   setData,
 } from "@choochmeque/tauri-plugin-biometry-api";
 import { isDesktop } from "./platform";
+import { isLockSuppressed, markBiometricEnd, markBiometricStart } from "./lockGuard";
 
 /** 存储解锁口令所用的命名空间与键名 */
 const DATA_DOMAIN = "com.wanghao.onetotp";
@@ -32,23 +33,24 @@ export interface BiometricResult {
   reason: string | null;
   /** 认证成功后返回的解锁口令 */
   password: string | null;
+  /** 原始错误文本，供界面提示与问题排查使用 */
+  detail?: string;
 }
 
-const FAIL_UNSUPPORTED: BiometricResult = { ok: false, reason: "unsupported", password: null };
+const FAIL_UNSUPPORTED: BiometricResult = {
+  ok: false,
+  reason: "unsupported",
+  password: null,
+};
 
 /**
- * 生物识别认证进行中标志。
+ * 是否应把当前的前台/可见性变化视为「系统认证弹窗引起」而忽略。
  *
- * Windows Hello / Touch ID 的系统对话框会抢占前台，使应用主窗口短暂失焦。
- * 自动锁定（失焦锁定）若不感知这一点，会在弹出认证框的同时把应用锁死，
- * 形成「一解锁就重锁、反复弹框」的死循环。认证期间置为 true，供
- * useAutoLock 跳过失焦锁定判定。
+ * 实现已上移到 `lib/lockGuard.ts`（唯一状态源）：本模块只负责在认证前后
+ * 打点，判定逻辑与自动锁定共用一份，避免两处各存一套时间窗而漏判。
  */
-let biometricInFlight = false;
-
-/** 是否有一次生物识别认证正在进行中 */
-export function isBiometricInFlight(): boolean {
-  return biometricInFlight;
+export function isBiometricOverlayActive(): boolean {
+  return isLockSuppressed();
 }
 
 
@@ -98,14 +100,49 @@ export async function isBiometricEnrolled(): Promise<boolean> {
   }
 }
 
+/**
+ * 把插件抛出的错误还原成可判断的文本。
+ *
+ * 关键：插件走 Tauri 的 `InvokeRejected`，错误到达 JS 时往往是
+ * **对象**（`{ code, message, data }`）而不是字符串。旧实现直接 `String(e)`，
+ * 结果恒为 "[object Object]"，所有失败都被归为 `failed`，
+ * 既分不清「用户取消 / 凭据失效 / 解密失败」，也让界面只能给一句泛泛提示。
+ */
+function errorText(e: unknown): string {
+  if (typeof e === "string") return e;
+  if (e && typeof e === "object") {
+    const obj = e as { code?: unknown; message?: unknown };
+    const parts = [obj.code, obj.message].filter((v) => typeof v === "string" && v);
+    if (parts.length > 0) return parts.join(" ");
+    try {
+      return JSON.stringify(e);
+    } catch {
+      return "";
+    }
+  }
+  return String(e ?? "");
+}
+
 /** 把错误映射为稳定原因码，便于 UI 判断（如用户取消不提示错误） */
 function toReason(e: unknown): string {
-  const msg = String(e ?? "").toLowerCase();
+  const msg = errorText(e).toLowerCase();
+  // 顺序要紧：userCancel 里含 cancel，必须优先判为「取消」
   if (msg.includes("cancel")) return "cancelled";
-  if (msg.includes("notenrolled") || msg.includes("not enrolled")) return "not_enrolled";
-  if (msg.includes("notavailable")) return "unsupported";
   if (msg.includes("lockout")) return "lockout";
-  if (msg.includes("notsupported")) return "unsupported";
+  // 凭据/数据不存在：说明本机 Hello 凭据已失效（重设 PIN、换机、被系统清理等），
+  // 但加密数据条目可能仍在——这正是「开关看着是开的，却弹不出认证框」的成因。
+  if (
+    msg.includes("credentialnotfound") ||
+    msg.includes("credential not found") ||
+    msg.includes("credential not available") ||
+    msg.includes("datanotfound") ||
+    msg.includes("failed to retrieve data")
+  ) {
+    return "credential_missing";
+  }
+  if (msg.includes("decryptionfailed")) return "decryption_failed";
+  if (msg.includes("notenrolled") || msg.includes("not enrolled")) return "not_enrolled";
+  if (msg.includes("notavailable") || msg.includes("notsupported")) return "unsupported";
   return "failed";
 }
 
@@ -116,14 +153,14 @@ function toReason(e: unknown): string {
 export async function enrollBiometric(password: string): Promise<BiometricResult> {
   if (!password) return { ok: false, reason: "empty_password", password: null };
   if (!hasBiometricBridge()) return FAIL_UNSUPPORTED;
-  biometricInFlight = true;
+  markBiometricStart();
   try {
     await setData({ domain: DATA_DOMAIN, name: DATA_NAME, data: password });
     return { ok: true, reason: null, password: null };
   } catch (e) {
-    return { ok: false, reason: toReason(e), password: null };
+    return { ok: false, reason: toReason(e), password: null, detail: errorText(e) };
   } finally {
-    biometricInFlight = false;
+    markBiometricEnd();
   }
 }
 
@@ -136,19 +173,19 @@ export async function enrollBiometric(password: string): Promise<BiometricResult
  */
 export async function authenticateBiometric(reason?: string, cancelTitle?: string): Promise<BiometricResult> {
   if (!hasBiometricBridge()) return FAIL_UNSUPPORTED;
-  biometricInFlight = true;
+  markBiometricStart();
   try {
     const res = await getData({
       domain: DATA_DOMAIN,
       name: DATA_NAME,
-      reason: reason || "验证身份以解锁 OneTotp",
+      reason: reason || "验证身份以解锁 OneTOTP",
       cancelTitle,
     });
     return { ok: true, reason: null, password: res.data };
   } catch (e) {
-    return { ok: false, reason: toReason(e), password: null };
+    return { ok: false, reason: toReason(e), password: null, detail: errorText(e) };
   } finally {
-    biometricInFlight = false;
+    markBiometricEnd();
   }
 }
 

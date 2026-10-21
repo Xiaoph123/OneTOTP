@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useApp } from "../state/AppContext";
 import { api, type Category } from "../lib/api";
-import { TabBar, type TabKey } from "../components/TabBar";
+import { TabBar } from "../components/TabBar";
 import { Button, IconButton } from "../components/Button";
 import { useToast } from "../components/Toast";
 import { ChevronLeft, Edit, Plus, Trash } from "../components/icons";
@@ -12,7 +12,7 @@ import { useI18n } from "../i18n";
 const PRESET_COLORS = ["#1664FF", "#2A814B", "#BD7E00", "#D7312A", "#6E4C9F", "#24758E"];
 
 export function CategoriesPage() {
-  const { navigate, goBack, categories, refreshCategories, refreshAccounts } = useApp();
+  const { goBack, categories, refreshCategories, refreshAccounts } = useApp();
   const toast = useToast();
   const { t } = useI18n();
 
@@ -94,18 +94,13 @@ export function CategoriesPage() {
     }
   };
 
-  const onTabSelect = (key: TabKey) => {
-    if (key === "codes") navigate({ name: "codes" });
-    if (key === "settings") navigate({ name: "settings" });
-  };
-
   return (
     <>
       <header className="app-bar">
         <IconButton label={t("返回")} onClick={() => goBack()}>
           <ChevronLeft />
         </IconButton>
-        <span className="app-bar-title">{t("分类管理")}</span>
+        <span className="app-bar-title">{t("验证码分类")}</span>
       </header>
 
       <section className="app-body">
@@ -258,7 +253,7 @@ export function CategoriesPage() {
         </div>
       ) : null}
 
-      <TabBar active="settings" onSelect={onTabSelect} />
+      <TabBar active="settings" />
     </>
   );
 }

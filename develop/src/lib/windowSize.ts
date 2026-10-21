@@ -18,12 +18,38 @@ export const WINDOW_WIDTHS: Record<WindowSize, number> = {
 /** 默认高度（首次/无法读取当前高度时的回退值） */
 export const WINDOW_HEIGHT = 720;
 
+/** 尺寸档位的本机缓存键（与 theme.ts 同一思路：锁定态下也能还原窗口尺寸） */
+const WINDOW_SIZE_CACHE_KEY = "onetotp.windowSize";
+
+/**
+ * 读取缓存的尺寸档位。
+ *
+ * 为什么需要缓存：窗口尺寸属于保险库里的设置，**锁定状态下读不到**
+ * （解密需要口令），于是锁屏页会一直用默认宽度，用户会觉得
+ * 「锁屏页大小不跟随窗口尺寸设置」。尺寸不是敏感信息，镜像到 localStorage
+ * 即可在解锁前就应用。
+ */
+export function readCachedWindowSize(): WindowSize {
+  try {
+    const v = localStorage.getItem(WINDOW_SIZE_CACHE_KEY);
+    if (v === "compact" || v === "standard" || v === "expanded") return v;
+  } catch {
+    // localStorage 不可用（隐私模式等）时回退默认值
+  }
+  return "standard";
+}
+
 /**
  * 应用尺寸档位：调整主窗口宽度，**保持用户当前高度**。
  * 原实现固定用 WINDOW_HEIGHT，会把用户手动拖高的窗口强制拉回默认值。
  */
 export async function applyWindowSize(size: WindowSize): Promise<void> {
   if (!isDesktop() || !isTauri()) return;
+  try {
+    localStorage.setItem(WINDOW_SIZE_CACHE_KEY, size);
+  } catch {
+    // 写入失败只影响锁定态下的还原，可忽略
+  }
   const width = WINDOW_WIDTHS[size];
   try {
     const win = getCurrentWindow();
@@ -41,4 +67,9 @@ export async function applyWindowSize(size: WindowSize): Promise<void> {
   } catch {
     // 平台或权限不支持时忽略
   }
+}
+
+/** 应用缓存中的尺寸档位（供锁屏页等「设置尚未解密」的场景使用） */
+export async function applyCachedWindowSize(): Promise<void> {
+  await applyWindowSize(readCachedWindowSize());
 }

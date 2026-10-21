@@ -20,7 +20,9 @@ use windows::{
     Security::Cryptography::{BinaryStringEncoding, CryptographicBuffer},
     Storage::Streams::IBuffer,
     Win32::UI::WindowsAndMessaging::{
-        BringWindowToTop, FindWindowW, IsIconic, SetForegroundWindow, ShowWindow, SW_RESTORE,
+        BringWindowToTop, FindWindowW, GetForegroundWindow, IsIconic, SetForegroundWindow,
+        SetWindowPos, ShowWindow, HWND_NOTOPMOST, HWND_TOPMOST, SWP_NOMOVE, SWP_NOSIZE,
+        SWP_SHOWWINDOW, SW_RESTORE,
     },
 };
 
@@ -40,32 +42,59 @@ fn to_wide(s: &str) -> Vec<u16> {
         .collect()
 }
 
-/// Try to find and foreground the Windows Hello credential dialog.
+/// 尝试把 Windows Hello 凭据对话框提到前台。
+///
+/// 返回 `true` 表示**已经确认它成为前台窗口**（而不只是「找到了窗口」）。
+///
+/// Windows 有前台锁（foreground lock）：非前台进程调用 `SetForegroundWindow`
+/// 常被系统忽略，表现为「对话框已创建、任务栏里能看到，但要手动点一下才上来」。
+/// 这里先把它**临时置顶**（TOPMOST）再请求前台，最后恢复普通层级——
+/// 置顶不受前台锁限制，能保证窗口视觉上立刻出现在最前面。
 fn try_focus_hello_dialog_once() -> bool {
-    // Common class name for the PIN/Hello dialog host
+    // 凭据对话框的窗口类名
     let cls = to_wide("Credential Dialog Xaml Host");
     unsafe {
-        let hwnd = FindWindowW(
+        let hwnd = match FindWindowW(
             windows::core::PCWSTR(cls.as_ptr()),
             windows::core::PCWSTR::null(),
-        );
-        if let Ok(hwnd) = hwnd {
-            if IsIconic(hwnd).as_bool() {
-                let _ = ShowWindow(hwnd, SW_RESTORE);
-            }
-            let _ = BringWindowToTop(hwnd);
-            let _ = SetForegroundWindow(hwnd);
-            return true;
+        ) {
+            Ok(h) => h,
+            Err(_) => return false,
+        };
+
+        if IsIconic(hwnd).as_bool() {
+            let _ = ShowWindow(hwnd, SW_RESTORE);
         }
+
+        // 1) 临时置顶：绕过前台锁，确保用户立刻看见
+        let _ = SetWindowPos(
+            hwnd,
+            Some(HWND_TOPMOST),
+            0,
+            0,
+            0,
+            0,
+            SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW,
+        );
+        // 2) 请求前台（能成功就更好，键盘输入可直接用）
+        let _ = BringWindowToTop(hwnd);
+        let _ = SetForegroundWindow(hwnd);
+        // 3) 恢复普通层级，避免长期压住其他窗口
+        let _ = SetWindowPos(hwnd, Some(HWND_NOTOPMOST), 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+
+        // 只要它已经是前台窗口就算完成；否则下一轮继续尝试
+        GetForegroundWindow() == hwnd
     }
-    false
 }
 
-/// Focus the Hello dialog by retrying a few times in a helper thread.
+/// 持续尝试把 Hello 对话框提到前台，直到成功或超时。
+///
+/// - 旧实现只重试 5 次（约 1 秒）且在「第一次找到窗口」就退出，即使当时
+///   `SetForegroundWindow` 被前台锁拒绝；用户看到的就是「框弹了但在后面」。
+/// - 现在改为最多约 6 秒，**每轮都校验是否真的成了前台窗口**才罢手，
+///   因为对话框创建、获得焦点的时间点都不固定。
 fn nudge_hello_dialog_focus_async(retries: u32, delay_ms: u64) {
     std::thread::spawn(move || {
-        // 首次尽快尝试，缩短 Hello 弹窗获得焦点的延迟；
-        // 后续按 delay_ms 重试，覆盖弹窗尚未创建完成的场景。
         for i in 0..retries {
             if try_focus_hello_dialog_once() {
                 break;
@@ -120,10 +149,11 @@ fn auth_error(code: &str, message: &str) -> crate::Error {
 
 /// 触发一次 Windows Hello 用户验证（PIN / 指纹 / 面容）。
 ///
-/// 必须区分「用户主动取消」与「真正的认证失败/凭据失效」：
-/// 前者应静默返回（用户只是不想用，不应清除凭据或禁用入口），
-/// 后者才需要前端提示。此前把所有非成功状态一律当作失败，
-/// 导致用户在弹窗点「取消」就被判定为凭据不可用、按钮被永久禁用。
+/// 说明：解锁流程改为直接调用 `UserConsentVerifier::RequestVerificationAsync`
+/// （见 `get_data`），因为它每次都会弹框，而 `RequestSignAsync` 在部分环境下
+/// 会静默成功、不给用户任何提示。本函数保留给「需要签名而非仅确认」的场景，
+/// 当前未使用。
+#[allow(dead_code)]
 fn verify_user(domain: &str, credential: &KeyCredential) -> crate::Result<()> {
     let challenge_buffer = CryptographicBuffer::ConvertStringToBinary(
         &HSTRING::from(domain),
@@ -313,7 +343,8 @@ impl<R: Runtime> Biometry<R> {
     pub fn authenticate(&self, reason: String, _options: AuthOptions) -> crate::Result<()> {
         let result = UserConsentVerifier::RequestVerificationAsync(&HSTRING::from(reason))
             .and_then(|async_op| {
-                nudge_hello_dialog_focus_async(5, 250);
+                // 约 6 秒内持续尝试把对话框提到前台（详见该函数注释）
+                nudge_hello_dialog_focus_async(40, 150);
                 async_op.get()
             })
             .map_err(|e| {
@@ -415,6 +446,7 @@ impl<R: Runtime> Biometry<R> {
     pub fn get_data(&self, options: GetDataOptions) -> crate::Result<DataResponse> {
         let domain = options.domain.clone();
         let name = options.name.clone();
+        let reason = options.reason.clone();
 
         if domain.is_empty() || name.is_empty() {
             return Err(crate::Error::PluginInvoke(
@@ -444,13 +476,22 @@ impl<R: Runtime> Biometry<R> {
         })?;
 
         if status != KeyCredentialStatus::Success {
-            return Err(crate::Error::PluginInvoke(
-                PluginInvokeError::InvokeRejected(ErrorResponse {
+            // 区分「用户取消」与「凭据真的不存在」：OpenAsync 会弹出 Hello
+            // 授权框，用户点取消即返回 UserCanceled。若一律映射为
+            // credentialNotFound，前端会把「取消」误判为凭据失效。
+            return Err(match status {
+                KeyCredentialStatus::UserCanceled | KeyCredentialStatus::UserPrefersPassword => {
+                    auth_error("userCancel", "Authentication was canceled by the user")
+                }
+                KeyCredentialStatus::SecurityDeviceLocked => {
+                    auth_error("biometryLockout", "Too many failed attempts")
+                }
+                _ => crate::Error::PluginInvoke(PluginInvokeError::InvokeRejected(ErrorResponse {
                     code: Some("credentialNotFound".to_string()),
                     message: Some("Credential not available".to_string()),
                     data: (),
-                }),
-            ));
+                })),
+            });
         }
 
         // Access the PasswordVault
@@ -491,20 +532,16 @@ impl<R: Runtime> Biometry<R> {
             }))
         })?;
 
-        // 先完成一次 Windows Hello 用户验证（PIN / 指纹 / 面容）。
-        // 此处在返回 crate::Result 的主流程中调用，错误码可原样透传：
-        // 用户取消返回 userCancel（前端静默处理，不清除凭据、不禁用入口），
-        // 只有真正的凭据失效才提示重新绑定。
-        let credential_obj = credential_result.Credential().map_err(|e| {
-            crate::Error::PluginInvoke(PluginInvokeError::InvokeRejected(ErrorResponse {
-                code: Some("credentialNotFound".to_string()),
-                message: Some(format!("Failed to get credential: {:?}", e)),
-                data: (),
-            }))
-        })?;
-        verify_user(&domain, &credential_obj)?;
+        // 必须显式做一次「用户在场」验证再解密。
+        //
+        // 为什么不能用 RequestSignAsync 代替：实测在部分环境下它会**静默成功**
+        // （不弹任何框），而本插件的解密密钥由凭证公钥派生（公钥是公开信息），
+        // 于是「点一下就进程序」——生物识别形同虚设。
+        // UserConsentVerifier::RequestVerificationAsync 是系统提供的「请本人验证」
+        // 接口，每次都会弹出 Windows Hello 对话框，其结果才可作为授权依据。
+        self.authenticate(reason, AuthOptions::default())?;
 
-        // Decrypt the data（仅做解密，验证已在上方完成）
+        // Decrypt the data（授权已在上方完成）
         let decrypted_data = decrypt_data(&domain, &encrypted_data.to_string(), &credential_result)
             .map_err(|e| {
                 crate::Error::PluginInvoke(PluginInvokeError::InvokeRejected(ErrorResponse {

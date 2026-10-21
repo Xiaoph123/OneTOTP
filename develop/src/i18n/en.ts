@@ -17,10 +17,28 @@ export const en: Record<string, string> = {
   "添加": "Add",
   "知道了": "Got it",
   "关于": "About",
-  "关于 OneTotp": "About OneTotp",
+  "关于 OneTOTP": "About OneTOTP",
   "查看版本、运行平台与加密信息": "View version, platform and encryption info",
   "版本": "Version",
   "运行平台": "Platform",
+  "构建": "Build",
+  "隐私保护": "Privacy protection",
+  "防「被看见」：可多选，默认全部开启": "Protect against being seen — multi-select, all on by default",
+  "防「被看见」：可多选，默认全部开启（移动端部分项不适用）":
+    "Protect against being seen — multi-select, all on by default (some options do not apply on mobile)",
+  "截屏 / 录屏时隐藏内容": "Hide content from screenshots / recording",
+  "把窗口从系统截屏与录屏的捕获中剔除，画面呈黑屏":
+    "Excludes the window from system screenshot and recording capture; content appears black",
+  "截屏会失败，录屏、投屏与多任务预览均呈黑屏":
+    "Screenshots fail; recording, casting and the task switcher preview all appear black",
+  "远程会话时隐藏窗口": "Hide window during remote sessions",
+  "检测到远程桌面 / 远程协助时自动隐藏窗口":
+    "Hides the window automatically when a Remote Desktop / remote assistance session is detected",
+  "窗口失焦时遮挡验证码": "Mask codes when the window loses focus",
+  "离开窗口时模糊验证码数字，不锁定也不清空":
+    "Blurs the code digits when you leave the window — no locking, no clearing",
+  "全部开启": "All on",
+  "未开启": "None",
   "账户数量": "Accounts",
   "{n} 个": "{n}",
   "加密方式": "Encryption",
@@ -55,6 +73,7 @@ export const en: Record<string, string> = {
   // ── 导航 ──
   "主导航": "Main navigation",
   "验证码": "Codes",
+  "返回验证码": "Back to codes",
   "设置": "Settings",
 
   // ── 标题栏 ──
@@ -63,11 +82,13 @@ export const en: Record<string, string> = {
   "最小化": "Minimize",
 
   // ── 锁屏 ──
-  "正在打开 OneTotp": "Opening OneTotp",
-  "进入应用": "Enter app",
+  "重试": "Retry",
+  "无法打开保险库": "Cannot open vault",
+  "保险库已加密，但本机缺少匹配的解锁凭证或机器密钥。请检查应用数据目录下的 onetotp.lock.json 是否被删除；数据可用加密备份在其他设备恢复。":
+    "The vault is encrypted, but this machine has no matching unlock credential or machine key. Check whether onetotp.lock.json was deleted from the app data directory; the data can be restored on another device from an encrypted backup.",
   "密码错误，请重试": "Wrong password, please retry",
   "应用已锁定": "App Locked",
-  "请输入密码以解锁 OneTotp": "Enter your password to unlock OneTotp",
+  "请输入密码以解锁 OneTOTP": "Enter your password to unlock OneTOTP",
   "输入锁定密码": "Enter lock password",
   "正在验证…": "Verifying…",
   "生物识别尝试过多，请稍后再试": "Too many biometric attempts, please try again later",
@@ -153,18 +174,16 @@ export const en: Record<string, string> = {
     "One per line, e.g.\notpauth://totp/GitHub:wanghao@example.com?secret=JBSWY3DPEHPK3PXP&issuer=GitHub",
   "支持一次导入多条，逐行解析 otpauth 链接。": "Import multiple at once, one otpauth link per line.",
   "解析并导入": "Parse and import",
-  "请同时保存好恢复码，避免设备丢失后无法登录。":
-    "Also keep your recovery codes safe, in case you lose the device.",
+  "请定期导出加密备份；同时在各服务保存好备用恢复码，避免设备丢失后无法登录。":
+    "Export an encrypted backup regularly, and keep your service recovery codes safe in case you lose this device.",
   "保存修改": "Save changes",
   "保存账户": "Save account",
-  "保存并继续": "Save & continue",
   "请填写显示名称": "Please enter a display name",
   "请填写密钥": "Please enter the secret",
   "账户已更新": "Account updated",
   "账户已添加": "Account added",
   "已扫码添加账户": "Account added by scan",
   "二维码识别失败": "Failed to recognize QR code",
-  "解码：": "Decoder: ",
   "未授予相机权限，请在系统设置中开启后重试":
     "Camera permission not granted. Please enable it in system settings and retry.",
   "已取消扫码": "Scan cancelled",
@@ -204,8 +223,59 @@ export const en: Record<string, string> = {
   "应用配置": "App settings",
   "锁定、显示、备份等设置项": "Lock, display, backup and other settings",
   "导出应用配置": "Export app settings",
-  "生成并复制备份": "Generate & copy backup",
   "生成并保存备份": "Generate & save backup",
+  "默认导出位置": "Default export location",
+  "数据存储目录": "Data storage folder",
+  "账户、备份与密钥全部保存在此目录，更改后应用会自动重启":
+    "Accounts, backups and keys are all stored here. The app restarts after a change.",
+  "选择数据存储目录": "Choose data storage folder",
+  "恢复默认目录": "Restore default folder",
+  "更改数据存储目录": "Change data storage folder",
+  "恢复默认数据目录": "Restore default data folder",
+  "将把账户、备份与密钥迁移到 {dir}，完成后应用会自动重启。目标目录中的同名文件会被覆盖。":
+    "Accounts, backups and keys will be moved to {dir}, then the app restarts. Files with the same name in the target folder will be overwritten.",
+  "将把账户、备份与密钥迁回默认目录 {dir}，完成后应用会自动重启。":
+    "Accounts, backups and keys will be moved back to the default folder {dir}, then the app restarts.",
+  "迁移并重启": "Migrate & restart",
+  "正在迁移…": "Migrating…",
+  "切换数据目录失败：{msg}": "Failed to switch data folder: {msg}",
+  "正在读取…": "Loading…",
+  "允许空密码备份": "Allow backups without a password",
+  "开启后导出 / 导入备份可跳过密码；文件仅用公开口令加密，拿到文件即可解密":
+    "Lets you skip the password when exporting/importing; the file is encrypted with a public passphrase, so anyone with the file can decrypt it",
+  "开启后导出的备份文件仅用公开口令加密，任何拿到文件的人都能解密，不含真正的机密保护。请仅在可信设备之间使用。":
+    "Backups exported with this on are encrypted with a public passphrase only. Anyone with the file can decrypt it, so there is no real confidentiality. Use it only between trusted devices.",
+  "仍然开启": "Enable anyway",
+  "可留空直接导出（不推荐），或设置密码保护该备份文件。":
+    "Leave blank to export without a password (not recommended), or set one to protect this file.",
+  "可留空": "Leave blank",
+  "空密码备份仅用公开口令加密，任何人拿到文件都可解密。":
+    "A password-less backup uses a public passphrase; anyone with the file can decrypt it.",
+  "输入该备份导出时设置的密码；若导出时未设密码，可直接留空。":
+    "Enter the password set when this backup was exported, or leave it blank if none was set.",
+  "选择目录": "Choose folder",
+  "选择位置并导出": "Choose location & export",
+  "导出配置": "Export config",
+  "导入配置": "Import config",
+  "该密码用于加密备份文件，导入时必须输入同一密码，请务必记住。":
+    "This password encrypts the backup file. You must enter the same password when importing, so keep it safe.",
+  "再次输入密码": "Re-enter password",
+  "两次输入的密码不一致": "The two passwords do not match",
+  "正在生成备份…": "Generating backup…",
+  "输入备份密码": "Enter backup password",
+  "请输入该备份导出时设置的密码，用于解密备份内容。":
+    "Enter the password set when this backup was exported, to decrypt its contents.",
+  "请输入备份密码": "Please enter the backup password",
+  "正在导入…": "Importing…",
+  "指定后保存对话框会默认打开该目录，仍可在导出时临时更改":
+    "The save dialog will open in this folder by default; you can still change it when exporting",
+  "选择默认导出位置": "Choose default export location",
+  "默认导出位置已设为：{path}": "Default export location set to: {path}",
+  "选择目录失败：{msg}": "Failed to choose folder: {msg}",
+  "已取消默认导出位置，下次导出将询问保存位置":
+    "Default export location cleared; you will be asked where to save next time",
+  "保存加密备份": "Save encrypted backup",
+  "已取消保存": "Save cancelled",
   "加密备份已保存为文件，请妥善保管": "Encrypted backup saved as a file, keep it safe",
   "备份文件已生成": "Backup file created",
   "复制失败，请重试": "Copy failed, please retry",
@@ -214,15 +284,18 @@ export const en: Record<string, string> = {
   "备份文件过大（超过 10MB），请确认文件是否正确":
     "Backup file too large (over 10MB). Please verify the file",
   "{n} 个账户数据异常已跳过": "{n} invalid account(s) skipped",
+  "{n} 个账户与现有账户重复已跳过": "{n} duplicate account(s) skipped",
   "导入备份": "Import backup",
-  "备份内容": "Backup content",
-  "选择 JSON 文件，或直接粘贴由 OneTotp 导出的加密备份 JSON":
-    "Choose a JSON file, or paste the encrypted backup JSON exported by OneTotp",
-  "选择 JSON 文件": "Choose JSON file",
+  "选择备份文件后输入该文件的密码，账户与配置将合并到本机":
+    "Choose a backup file, then enter its password; accounts and settings are merged into this device",
+  "选择备份文件": "Choose backup file",
+  "选择文件失败：{msg}": "Failed to choose file: {msg}",
+  "所选文件不是有效的 OneTOTP 备份文件":
+    "The selected file is not a valid OneTOTP backup file",
   "备份密码": "Backup password",
   "导出时设置的密码": "The password set when exporting",
-  "备份包含全部密钥，请仅在可信设备间迁移，导出后及时删除明文副本。":
-    "The backup contains all secrets. Only migrate between trusted devices, and delete plaintext copies after exporting.",
+  "备份文件已加密，但仍可被密码解开；请仅在可信设备间迁移，并妥善保管文件与密码。":
+    "The backup file is encrypted but can still be unlocked with its password. Only migrate between trusted devices, and keep both the file and its password safe.",
   "本地备份记录": "Local backups",
   "保留 {n} 份": "Keeping {n}",
   "暂无备份快照": "No backup snapshots yet",
@@ -231,11 +304,6 @@ export const en: Record<string, string> = {
     "All data is stored only in the local app data directory; exports never pass through any server.",
   "请至少勾选一项要导出的内容": "Select at least one item to export",
   "导出密码长度至少 8 位": "Export password must be at least 8 characters",
-  "加密备份已复制到剪贴板，请妥善保存": "Encrypted backup copied to clipboard, keep it safe",
-  "备份已生成并复制到剪贴板": "Backup generated and copied to clipboard",
-  "已读取文件：{name}": "File loaded: {name}",
-  "读取文件失败": "Failed to read file",
-  "请先选择文件或粘贴备份内容": "Choose a file or paste the backup content first",
   "已覆盖应用配置": "app settings overwritten",
   "新增 {n} 个账户（备份共含 {total} 个）": "{n} account(s) added ({total} in the backup)",
   "导入完成：{detail}": "Import complete: {detail}",
@@ -243,7 +311,7 @@ export const en: Record<string, string> = {
   // ── 设置 ──
   "通用": "General",
   "开机自动启动": "Launch at startup",
-  "登录系统后自动打开 OneTotp": "Open OneTotp automatically after sign-in",
+  "登录系统后自动打开 OneTOTP": "Open OneTOTP automatically after sign-in",
   "复制后自动隐藏窗口": "Hide window after copy",
   "复制验证码后自动收起窗口": "Collapse the window after copying a code",
   "验证码显示分组": "Group code digits",
@@ -259,6 +327,8 @@ export const en: Record<string, string> = {
   "直接退出": "Quit app",
   "最小化到托盘": "Minimize to tray",
   "外观": "Appearance",
+  "验证码显示": "Code display",
+  "安全与账户": "Security & accounts",
   "字体大小": "Font size",
   "调整应用内文字的整体大小": "Adjust the overall text size in the app",
   "小": "Small",
@@ -293,13 +363,12 @@ export const en: Record<string, string> = {
   "通过加密文件在多台设备间迁移": "Migrate between devices via encrypted files",
   "安全与锁定": "Security & lock",
   "锁定密码与自动锁定策略": "Lock password and auto-lock policy",
-  "分类管理": "Categories",
+  "验证码分类": "Code categories",
   "创建分类、设置颜色与排序": "Create categories, set colors and order",
   "自动备份": "Auto backup",
   "修改账户后保留加密快照": "Keep encrypted snapshots after changes",
   "备份保留数量": "Backups to keep",
   "保留最近的本机快照，最多 {n} 个": "Keep recent local snapshots, up to {n}",
-  "保存设置": "Save settings",
   "已开启开机自动启动": "Launch at startup enabled",
   "已关闭开机自动启动": "Launch at startup disabled",
   "设置失败：{msg}": "Failed to apply: {msg}",
@@ -307,7 +376,6 @@ export const en: Record<string, string> = {
     "Failed to register the shortcut; it may be used by another program",
   "快捷键已设为 {key}": "Shortcut set to {key}",
   "已清除快捷键": "Shortcut cleared",
-  "设置已保存": "Settings saved",
   "保存失败：{msg}": "Save failed: {msg}",
   "语言": "Language",
   "自动": "Auto",
@@ -334,6 +402,13 @@ export const en: Record<string, string> = {
   "自动锁定时长": "Auto-lock after",
   "无操作超过该时长后锁定": "Lock after this much inactivity",
   "立即": "Immediately",
+  "立即（离开时锁定）": "Immediately (on leaving)",
+  "离开时锁定": "On leaving",
+  "30 秒": "30 seconds",
+  "仅在离开应用时锁定（不做空闲计时）": "Lock only when you leave the app (no idle timer)",
+  "不会因空闲自动锁定": "Never auto-lock when idle",
+  "空闲 {n} 秒后自动锁定": "Auto-lock after {n}s of inactivity",
+  "启用应用锁定后生效": "Takes effect once app lock is enabled",
   "1 分钟": "1 minute",
   "5 分钟": "5 minutes",
   "15 分钟": "15 minutes",
@@ -353,9 +428,16 @@ export const en: Record<string, string> = {
   "密码提示（可选）": "Password hint (optional)",
   "例如：常用的一串数字": "e.g. a string of numbers you use often",
   "修改密码": "Change password",
+  "重新加密保险库": "Re-encrypt vault",
+  "重新加密": "Re-encrypt",
+  "保险库已用新密钥重新加密": "Vault re-encrypted with a new key",
+  "用同一密码、全新的密钥重新加密本地数据。旧版本的锁定凭证文件曾以明文保存密钥，若该文件被复制或备份过，请执行一次本操作。":
+    "Re-encrypt local data with the same password but a brand-new key. Older versions stored the key in plaintext inside the lock credential file; if that file was ever copied or backed up, run this once.",
+  "请输入当前密码。将通过全新随机盐重新派生密钥并重写本地保险库，旧密钥随即失效。":
+    "Enter the current password. A fresh random salt is used to derive a new key and rewrite the local vault; the old key immediately stops working.",
   "启用锁定": "Enable lock",
   "指纹 / 面容解锁": "Fingerprint / Face unlock",
-  "验证身份以解锁 OneTotp": "Verify your identity to unlock OneTotp",
+  "验证身份以解锁 OneTOTP": "Verify your identity to unlock OneTOTP",
   "Windows Hello 解锁": "Windows Hello unlock",
   "调用系统指纹或面容快速解锁": "Use system fingerprint or face to unlock quickly",
   "使用系统指纹、人脸或 PIN 快速解锁": "Unlock quickly with system fingerprint, face or PIN",
@@ -369,6 +451,10 @@ export const en: Record<string, string> = {
   "生物识别启用失败，请重试": "Failed to enable biometric unlock, please retry",
   "请先输入当前密码以启用生物识别": "Enter your current password first to enable biometrics",
   "生物识别不可用，请使用密码解锁": "Biometrics unavailable, please unlock with password",
+  "生物识别不可用（{detail}），请使用密码解锁":
+    "Biometrics unavailable ({detail}), please unlock with password",
+  "本机生物识别凭据已失效，请在「安全与锁定」中关闭后重新开启该功能":
+    "The biometric credential on this device is no longer valid. Turn the feature off and on again in Security & Lock.",
   "需先在设置中启用": "Enable it in Settings first",
   "失败 5 次后清除剪贴板": "Clear clipboard after 5 failures",
   "防止暴力尝试，自动清空最近复制内容":
@@ -453,7 +539,7 @@ export const en: Record<string, string> = {
   "{n} 天前": "{n} d ago",
 
   // ── 应用外壳 ──
-  "正在启动 OneTotp…": "Starting OneTotp…",
-  "应用已在运行，请勿重复打开": "OneTotp is already running — please don't open it again",
+  "正在启动 OneTOTP…": "Starting OneTOTP…",
+  "应用已在运行，请勿重复打开": "OneTOTP is already running — please don't open it again",
   "账户不存在或已被删除": "The account does not exist or was deleted",
 };

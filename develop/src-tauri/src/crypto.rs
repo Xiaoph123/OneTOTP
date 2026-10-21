@@ -106,6 +106,45 @@ fn legacy_machine_key() -> [u8; KEY_LEN] {
     key
 }
 
+/// 口令校验值的派生上下文。
+///
+/// 旧实现直接把「保险库密钥的 base64」存进 lock 文件当校验值，等于把密钥
+/// 明文写在盘上：拿到 onetotp.lock.json 的人无需口令、也无需跑 Argon2，
+/// 直接 base64 解码就是 AES-256-GCM 的密钥，可以解开保险库。
+/// 现改为对密钥做一次带固定上下文的 HMAC-SHA256：验证方仍需用口令重新
+/// 派生密钥才能算出同样的校验值，而校验值本身无法反推出密钥。
+const VERIFIER_CONTEXT: &[u8] = b"onetotp.lock.verifier.v1";
+
+/// 由保险库密钥派生口令校验值（单向，不可反推密钥）
+pub fn derive_verifier(key: &[u8; KEY_LEN]) -> String {
+    use hmac::{Hmac, Mac};
+    use sha2::Sha256;
+
+    // Hmac::new_from_slice 接受任意长度密钥，对 32 字节输入不会失败
+    let mut mac = <Hmac<Sha256> as Mac>::new_from_slice(key)
+        .expect("HMAC 接受任意长度密钥，不应失败");
+    mac.update(VERIFIER_CONTEXT);
+    B64.encode(mac.finalize().into_bytes())
+}
+
+/// 旧格式校验值：直接是保险库密钥的 base64。
+/// **仅供兼容读取旧 lock 文件并在解锁成功后迁移**，新数据不再写入。
+pub fn legacy_verifier(key: &[u8; KEY_LEN]) -> String {
+    B64.encode(key)
+}
+
+/// 恒定时间比较，避免按字节提前返回造成的时序泄漏。
+pub fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+    let mut diff = 0u8;
+    for (x, y) in a.iter().zip(b.iter()) {
+        diff |= x ^ y;
+    }
+    diff == 0
+}
+
 /// 机器本地密钥文件：把随机生成的 32 字节密钥落盘到应用数据目录。
 ///
 /// 旧实现只按 OS+ARCH 派生，导致同平台所有设备密钥相同——拿到保险库文件即可解密。
@@ -149,4 +188,114 @@ pub fn validate_password(password: &str) -> Result<(), String> {
         return Err("密码长度至少 8 位".to_string());
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::{AppSettings, VaultPayload};
+
+    fn payload() -> VaultPayload {
+        VaultPayload {
+            accounts: Vec::new(),
+            settings: AppSettings::default(),
+            categories: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn encrypt_decrypt_roundtrip() {
+        let salt = new_salt();
+        let key = derive_key("correct horse battery", &salt).unwrap();
+        let file = encrypt_payload(&payload(), &key, &salt, false).unwrap();
+
+        // 落盘结构不包含明文密钥
+        assert_ne!(file.ciphertext, "");
+        assert_eq!(file.salt, B64.encode(&salt));
+        assert_eq!(file.version, VAULT_VERSION);
+
+        let restored = decrypt_payload(&file, &key).unwrap();
+        assert!(restored.accounts.is_empty());
+        assert_eq!(restored.settings.auto_lock_seconds, 60);
+    }
+
+    #[test]
+    fn decrypt_fails_with_wrong_key() {
+        let salt = new_salt();
+        let key = derive_key("right password", &salt).unwrap();
+        let other = derive_key("wrong password", &salt).unwrap();
+        let file = encrypt_payload(&payload(), &key, &salt, false).unwrap();
+        assert!(decrypt_payload(&file, &other).is_err());
+    }
+
+    #[test]
+    fn each_encryption_uses_fresh_nonce() {
+        let salt = new_salt();
+        let key = derive_key("same password", &salt).unwrap();
+        let a = encrypt_payload(&payload(), &key, &salt, false).unwrap();
+        let b = encrypt_payload(&payload(), &key, &salt, false).unwrap();
+        assert_ne!(a.nonce, b.nonce, "每次写入都必须使用新的 nonce");
+        assert_ne!(a.ciphertext, b.ciphertext);
+    }
+
+    /// 回归测试：校验值不得等于密钥本身。
+    /// 旧实现把 base64(key) 直接写进 lock 文件，等于把 AES 密钥明文存盘。
+    #[test]
+    fn verifier_does_not_reveal_the_key() {
+        let salt = new_salt();
+        let key = derive_key("hunter2hunter2", &salt).unwrap();
+        let verifier = derive_verifier(&key);
+
+        assert_ne!(verifier, legacy_verifier(&key));
+        assert_ne!(verifier, B64.encode(key));
+        // 也不应能反解出密钥
+        assert!(B64.decode(&verifier).map(|v| v != key).unwrap_or(true));
+        // 同一密钥必须稳定
+        assert_eq!(verifier, derive_verifier(&key));
+        // 不同密钥必须不同
+        let other = derive_key("hunter2hunter3", &salt).unwrap();
+        assert_ne!(verifier, derive_verifier(&other));
+    }
+
+    #[test]
+    fn constant_time_eq_behaves_like_equality() {
+        assert!(constant_time_eq(b"abc", b"abc"));
+        assert!(!constant_time_eq(b"abc", b"abd"));
+        assert!(!constant_time_eq(b"abc", b"ab"));
+        assert!(constant_time_eq(b"", b""));
+    }
+
+    #[test]
+    fn derive_key_is_deterministic_per_salt() {
+        let salt = new_salt();
+        let a = derive_key("passphrase", &salt).unwrap();
+        let b = derive_key("passphrase", &salt).unwrap();
+        assert_eq!(a, b);
+        // 换盐必须换出不同密钥，否则盐就失去意义
+        let other_salt = new_salt();
+        assert_ne!(a, derive_key("passphrase", &other_salt).unwrap());
+    }
+
+    #[test]
+    fn password_length_is_enforced() {
+        assert!(validate_password("1234567").is_err());
+        assert!(validate_password("12345678").is_ok());
+        // 按字符数而非字节数计算：4 个汉字也应视为不足 8 位
+        assert!(validate_password("密码密码密码").is_err());
+    }
+
+    /// 机器密钥必须落盘且可重复读取；文件长度不符时要重新生成
+    /// （重新生成会让旧保险库无法解密，因此写入必须是原子的）
+    #[test]
+    fn machine_key_persists_across_reads() {
+        let dir = std::env::temp_dir().join(format!("onetotp-test-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let first = load_or_create_machine_key(&dir).unwrap();
+        let second = load_or_create_machine_key(&dir).unwrap();
+        assert_eq!(first, second, "同一目录必须读回同一把机器密钥");
+        assert!(dir.join("onetotp.machine.key").exists());
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

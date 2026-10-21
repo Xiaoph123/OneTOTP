@@ -87,7 +87,7 @@
 | 加密 | **AES-256-GCM**（AEAD），每次写入生成 12 字节随机 nonce |
 | 落盘 | 仅密文 + salt + nonce + 元数据（JSON），无明文密钥 |
 | 运行期 | 解锁密钥仅存于内存（`Mutex<Option<[u8;32]>>`），锁定即清空 |
-| 口令校验 | 独立 verifier（对 salt 派生的哈希），与保险库密钥分离 |
+| 口令校验 | 独立 verifier：`HMAC-SHA256(保险库密钥, 固定上下文)`，与保险库密钥分离且不可反推 |
 | 无口令模式 | 由设备指纹 + 固定 salt 经 Argon2 确定性派生「机器本地密钥」，防止明文落盘被直接读取 |
 | 备份 | 导出时用**独立新口令**重新派生密钥加密，可跨设备迁移 |
 | 输入校验 | 密钥（Base32）、位数（6/7/8）、算法、周期（1~3600s）、分类名（≤20 字符）均在服务端二次校验 |
@@ -285,7 +285,7 @@ Built on the Volcengine **源力 (Yuanli)** design system: primary color `#1664F
 | Encryption | **AES-256-GCM** (AEAD), fresh 12-byte random nonce on every write |
 | At rest | Ciphertext + salt + nonce + metadata (JSON) only — no plaintext key |
 | Runtime | The unlock key lives in memory only (`Mutex<Option<[u8;32]>>`) and is cleared on lock |
-| Passphrase check | A separate verifier (hash derived from the salt), decoupled from the vault key |
+| Passphrase check | A separate verifier — `HMAC-SHA256(vault key, fixed context)` — decoupled from the vault key and not reversible |
 | No-passphrase mode | A deterministic "machine-local key" derived from the device fingerprint and a fixed salt via Argon2, to keep secrets from being stored as plaintext |
 | Backup | Exports are re-encrypted with a **separate passphrase**, so they can move across devices |
 | Input validation | Secret (Base32), digits (6/7/8), algorithm, period (1–3600s) and category name (≤20 chars) are all re-validated on the backend |

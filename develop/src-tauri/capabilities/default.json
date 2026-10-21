@@ -13,6 +13,10 @@
     "core:window:allow-show",
     "core:window:allow-set-size",
     "core:window:allow-set-content-protected",
+    "core:window:allow-is-focused",
+    "core:window:allow-is-visible",
+    "core:window:allow-is-minimized",
+    "core:window:allow-set-focus",
     "autostart:allow-enable",
     "autostart:allow-disable",
     "autostart:allow-is-enabled",
@@ -20,6 +24,8 @@
     "global-shortcut:allow-unregister",
     "global-shortcut:allow-is-registered",
     "opener:default",
+    "dialog:allow-save",
+    "dialog:allow-open",
     "clipboard-manager:allow-write-text",
     "clipboard-manager:allow-read-text"
   ]

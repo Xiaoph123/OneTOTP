@@ -29,6 +29,15 @@ export function useI18n(): I18nContextValue {
 
 const STORAGE_KEY = "onetotp.lang";
 
+/**
+ * 已告警过的缺失词条。
+ *
+ * 中文词典刻意留空（以中文原文为 key，缺 key 即回退原文），因此只有英文侧
+ * 存在「漏翻」风险——漏翻时界面会静默显示中文，用户不会报错、开发者也不会
+ * 察觉。开发期把缺失的 key 打出来，让漏翻在写代码时就暴露。
+ */
+const warnedMissingKeys = new Set<string>();
+
 /** 读取系统语言环境：中文返回 zh，其余一律返回 en */
 function detectSystemLang(): Language {
   if (typeof navigator === "undefined") return "en";
@@ -83,7 +92,15 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
   const t = useCallback(
     (key: string, params?: Params) => {
       const dict = lang === "en" ? en : zh;
-      let text = dict[key] ?? key;
+      let text = dict[key];
+      if (text === undefined) {
+        // 英文漏翻：开发期提示一次（生产环境保持静默回退，不影响使用）
+        if (lang === "en" && import.meta.env.DEV && !warnedMissingKeys.has(key)) {
+          warnedMissingKeys.add(key);
+          console.warn(`[i18n] 缺少英文译文：${key}`);
+        }
+        text = key;
+      }
       if (params) {
         for (const [k, v] of Object.entries(params)) {
           text = text.replace(new RegExp(`\\{${k}\\}`, "g"), String(v));

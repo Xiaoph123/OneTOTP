@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { AppProvider, useApp } from "./state/AppContext";
 import { useAutoLock } from "./state/useAutoLock";
-import { useScreenshotProtection } from "./state/useScreenshotProtection";
+import { usePrivacyProtection } from "./state/usePrivacyProtection";
 import { applyFontScale } from "./lib/fontScale";
 import { I18nProvider, useI18n } from "./i18n";
 import { ToastProvider, useToast } from "./components/Toast";
@@ -23,7 +23,8 @@ function Router() {
   const { t, setPref } = useI18n();
   const toast = useToast();
   useAutoLock();
-  useScreenshotProtection(settings?.hideOnScreenshot ?? false);
+  // 隐私保护：截屏/录屏剔除、远程会话隐藏、失焦遮挡（多选，互相独立）
+  usePrivacyProtection(settings ?? null);
 
   // 设置加载后同步语言偏好（auto 时由 Provider 跟随系统语言）
   useEffect(() => {
@@ -50,6 +51,11 @@ function Router() {
   // 移动端系统返回键桥接：Android 原生侧调用，返回 true 表示已处理（返回上一级）
   useEffect(() => {
     (window as unknown as { __handleAndroidBack?: () => boolean }).__handleAndroidBack = () => {
+      // 启动中 / 锁定页：返回键必须被吞掉。
+      // 原生侧约定「返回 false 即退出应用」，而锁定页没有可回退的路由，
+      // 若在此放行，用户在锁屏页按一次返回键应用就直接退出（表现为闪退），
+      // 且锁定越频繁越容易误触。锁定态下唯一出路是解锁。
+      if (phase !== "ready") return true;
       // 优先关闭正在进行的原生扫码（全屏相机覆盖层，应用 UI 不可见）
       const cancelScan = (
         window as unknown as { __cancelActiveScan?: () => Promise<void> }
@@ -64,7 +70,7 @@ function Router() {
     return () => {
       delete (window as unknown as { __handleAndroidBack?: () => boolean }).__handleAndroidBack;
     };
-  }, [goBack]);
+  }, [goBack, phase]);
 
   // 单实例：重复启动被拦截时提示「应用已在运行」
   useEffect(() => {
@@ -82,7 +88,7 @@ function Router() {
         <TitleBar />
         <div className="boot-screen">
           <OneTotpMarkLoading className="boot-logo" />
-          <span className="fs-lead">{t("正在启动 OneTotp…")}</span>
+          <span className="fs-lead">{t("正在启动 OneTOTP…")}</span>
         </div>
       </div>
     );

@@ -178,3 +178,145 @@ pub fn validate_account_input(
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// RFC 4226 / RFC 6238 使用的种子密钥：ASCII "12345678901234567890"
+    const RFC_SECRET: &str = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ";
+
+    fn account(otp_type: &str, algorithm: &str, digits: u32, period: u32) -> Account {
+        Account {
+            id: "test".to_string(),
+            issuer: "Test".to_string(),
+            account: "test".to_string(),
+            secret: RFC_SECRET.to_string(),
+            otp_type: otp_type.to_string(),
+            algorithm: algorithm.to_string(),
+            digits,
+            period,
+            counter: 0,
+            category_id: String::new(),
+            category: String::new(),
+            favorite: false,
+            created_at: 0,
+            last_used_at: 0,
+        }
+    }
+
+    /// RFC 4226 附录 D 的 HOTP 测试向量（6 位，SHA1）
+    #[test]
+    fn hotp_matches_rfc4226_vectors() {
+        let expected = [
+            "755224", "287082", "359152", "969429", "338314", "254676", "287922", "162583",
+            "399871", "520489",
+        ];
+        for (counter, want) in expected.iter().enumerate() {
+            let got = hotp_code(RFC_SECRET, counter as u64, "SHA1", 6).unwrap();
+            assert_eq!(&got, want, "counter={counter}");
+        }
+    }
+
+    /// RFC 6238 附录 B 的 TOTP 测试向量（8 位，SHA1，周期 30）
+    #[test]
+    fn totp_matches_rfc6238_vectors() {
+        let vectors: [(u64, &str); 6] = [
+            (59, "94287082"),
+            (1_111_111_109, "07081804"),
+            (1_111_111_111, "14050471"),
+            (1_234_567_890, "89005924"),
+            (2_000_000_000, "69279037"),
+            (20_000_000_000, "65353130"),
+        ];
+        let acc = account("totp", "SHA1", 8, 30);
+        for (time, want) in vectors {
+            let (code, remaining, _, next) = generate_code(&acc, time).unwrap();
+            assert_eq!(code, want, "unix={time}");
+            // 同一时刻再算一次必须稳定（不得依赖调用时机）
+            assert_eq!(generate_code(&acc, time).unwrap().0, want);
+            assert!(remaining >= 1 && remaining <= 30, "remaining={remaining}");
+            assert!(next.is_some(), "TOTP 应提供下一个验证码");
+        }
+    }
+
+    /// SHA256 / SHA512 与 7 位等组合能正常出码，且长度符合 digits
+    #[test]
+    fn other_algorithms_and_digits_produce_valid_codes() {
+        for alg in ["SHA1", "SHA256", "SHA512", "sha-256"] {
+            for digits in [6u32, 7, 8] {
+                let acc = account("totp", alg, digits, 30);
+                let code = generate_code(&acc, 1_700_000_000).unwrap().0;
+                assert_eq!(code.len(), digits as usize, "alg={alg} digits={digits}");
+                assert!(code.chars().all(|c| c.is_ascii_digit()));
+            }
+        }
+    }
+
+    /// HOTP 没有时间维度：remaining/progress 必须为 0，且不提供 next_code，
+    /// 同时计数器变化必须改变结果（否则「每用一次前进一位」就失去意义）
+    #[test]
+    fn hotp_has_no_time_semantics_and_advances_with_counter() {
+        let mut acc = account("hotp", "SHA1", 6, 30);
+        let (first, remaining, progress, next) = generate_code(&acc, 1_700_000_000).unwrap();
+        assert_eq!((remaining, progress), (0, 0));
+        assert!(next.is_none());
+        acc.counter = 1;
+        let second = generate_code(&acc, 1_700_000_000).unwrap().0;
+        assert_ne!(first, second);
+        assert_eq!(second, hotp_code(RFC_SECRET, 1, "SHA1", 6).unwrap());
+    }
+
+    #[test]
+    fn normalize_secret_strips_noise_and_uppercases() {
+        assert_eq!(normalize_secret(" gezd gnbv-gy3t=qojq "), "GEZDGNBVGY3TQOJQ");
+        assert!(validate_secret("gezdgnbvgy3tqojq").is_ok());
+        assert!(validate_secret("").is_err());
+        // '1' 不是 RFC 4648 字母表内字符
+        assert!(validate_secret("GEZDGNBVGY3TQOJ1").is_err());
+    }
+
+    #[test]
+    fn normalize_algorithm_accepts_aliases() {
+        assert_eq!(normalize_algorithm("sha-256"), "SHA256");
+        assert_eq!(normalize_algorithm(" SHA_512 "), "SHA512");
+        assert_eq!(normalize_algorithm("sha1"), "SHA1");
+        assert_eq!(normalize_algorithm(""), "SHA1");
+        assert_eq!(normalize_algorithm("md5"), "MD5");
+    }
+
+    #[test]
+    fn normalize_digits_rejects_unsupported_widths() {
+        for ok in [6u32, 7, 8] {
+            assert_eq!(normalize_digits(ok).unwrap(), ok);
+        }
+        for bad in [0u32, 5, 9, 10] {
+            assert!(normalize_digits(bad).is_err(), "digits={bad}");
+        }
+    }
+
+    #[test]
+    fn validate_account_input_enforces_ranges() {
+        assert!(validate_account_input("totp", "SHA1", 6, 30).is_ok());
+        assert!(validate_account_input("TOTP", "sha-256", 8, 1).is_ok());
+        // HOTP 忽略周期
+        assert!(validate_account_input("hotp", "SHA1", 6, 0).is_ok());
+        // TOTP 周期越界
+        assert!(validate_account_input("totp", "SHA1", 6, 0).is_err());
+        assert!(validate_account_input("totp", "SHA1", 6, 3601).is_err());
+        // 类型/算法/位数非法
+        assert!(validate_account_input("sms", "SHA1", 6, 30).is_err());
+        assert!(validate_account_input("totp", "MD5", 6, 30).is_err());
+        assert!(validate_account_input("totp", "SHA1", 5, 30).is_err());
+    }
+
+    /// 8 位码按 4+4 分组展示由前端负责，这里确认后端不做任何填充/截断
+    #[test]
+    fn truncate_keeps_leading_zeros() {
+        let digest = [0u8; 20];
+        // 摘要全零 → 二进制值 0 → 必须补足前导零
+        assert_eq!(truncate(&digest, 8).unwrap(), "00000000");
+        assert_eq!(truncate(&digest, 6).unwrap(), "000000");
+        assert!(truncate(&[], 6).is_err());
+    }
+}

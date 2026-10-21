@@ -108,8 +108,6 @@ export function AddAccountPage({ editing }: Props) {
   const [tokenNotice, setTokenNotice] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
   const [scanNotice, setScanNotice] = useState<string | null>(null);
-  // 诊断信息：当前解码路径与视频帧尺寸（用于排查移动端卡顿）
-  const [scanDiag, setScanDiag] = useState("");
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const rafRef = useRef<number | null>(null);
@@ -117,8 +115,6 @@ export function AddAccountPage({ editing }: Props) {
   const streamRef = useRef<MediaStream | null>(null);
   // 本次扫码是否走原生 BarcodeDetector 路径
   const nativeRef = useRef(false);
-  // 诊断用：解码累计次数与总耗时
-  const statRef = useRef({ frames: 0, decodeMs: 0 });
 
   /** 将解析出的账户信息填入表单 */
   const applyParsed = useCallback(
@@ -226,53 +222,6 @@ export function AddAccountPage({ editing }: Props) {
 
     let stopped = false;
 
-    // 实时指标采样：每 2 秒刷新一次诊断行，暴露 解码耗时/相机实际尺寸/
-    // 丢帧数/JS 堆/实测帧率 等客观数据，用于区分「解码过载」与「渲染层瓶颈」。
-    const track = stream.getVideoTracks()[0];
-    // 实测帧率计数器：相机出帧（rVFC）与 UI 渲染（rAF）分开统计
-    let camFrames = 0;
-    let uiFrames = 0;
-    let rvfcId: number | null = null;
-    const countCamFrame = () => {
-      camFrames += 1;
-      const v = videoRef.current;
-      if (v && typeof v.requestVideoFrameCallback === "function") {
-        rvfcId = v.requestVideoFrameCallback(countCamFrame);
-      }
-    };
-    if (typeof video.requestVideoFrameCallback === "function") {
-      rvfcId = video.requestVideoFrameCallback(countCamFrame);
-    }
-    let uiRafId: number | null = null;
-    const countUiFrame = () => {
-      uiFrames += 1;
-      uiRafId = requestAnimationFrame(countUiFrame);
-    };
-    uiRafId = requestAnimationFrame(countUiFrame);
-
-    const sampleTimer = window.setInterval(() => {
-      const v = videoRef.current;
-      if (!v) return;
-      const settings = track?.getSettings?.() ?? {};
-      const camSize =
-        settings.width && settings.height ? `${settings.width}×${settings.height}` : "?";
-      const camFpsSetting = settings.frameRate ? settings.frameRate.toFixed(0) : "?";
-      const camFps = (camFrames / 2).toFixed(1);
-      const uiFps = (uiFrames / 2).toFixed(0);
-      camFrames = 0;
-      uiFrames = 0;
-      const q = v.getVideoPlaybackQuality?.();
-      const dropped = q ? q.droppedVideoFrames : -1;
-      const heap = (performance as unknown as { memory?: { usedJSHeapSize: number } }).memory;
-      const heapMb = heap ? (heap.usedJSHeapSize / 1048576).toFixed(1) : "?";
-      const s = statRef.current;
-      const avgMs = s.frames > 0 ? (s.decodeMs / s.frames).toFixed(0) : "-";
-      const mode = nativeRef.current ? "native" : "jsQR";
-      setScanDiag(
-        `${mode} | 相机实${camFps}fps 设${camFpsSetting} UI${uiFps}fps 丢帧${dropped} | 帧${v.videoWidth}×${v.videoHeight} 采集${camSize} | 解码均${avgMs}ms(${s.frames}) | 堆${heapMb}MB`,
-      );
-    }, 2000);
-
     // 两条解码路径：
     //  1) 原生 BarcodeDetector：detect(video) 在原生侧完成，不做 GPU→CPU 回读。
     //  2) jsQR 降级：drawImage + getImageData 回读，移动端按固定帧率节流。
@@ -285,11 +234,8 @@ export function AddAccountPage({ editing }: Props) {
       const decodeOnce = async (): Promise<boolean> => {
         const v = videoRef.current;
         if (!v || v.readyState !== v.HAVE_ENOUGH_DATA) return false;
-        const t0 = performance.now();
         if (nativeRef.current) {
           const text = await detectNativeQr(v);
-          statRef.current.frames += 1;
-          statRef.current.decodeMs += performance.now() - t0;
           if (text) {
             handleDecoded(text);
             return true;
@@ -297,8 +243,6 @@ export function AddAccountPage({ editing }: Props) {
           return false;
         }
         const text = decodeQrFromImage(v, v.videoWidth, v.videoHeight, true, decodeMaxEdge);
-        statRef.current.frames += 1;
-        statRef.current.decodeMs += performance.now() - t0;
         if (text) {
           handleDecoded(text);
           return true;
@@ -335,15 +279,6 @@ export function AddAccountPage({ editing }: Props) {
 
     return () => {
       stopped = true;
-      window.clearInterval(sampleTimer);
-      if (rvfcId !== null) {
-        try {
-          video.cancelVideoFrameCallback?.(rvfcId);
-        } catch {
-          // 忽略
-        }
-      }
-      if (uiRafId !== null) cancelAnimationFrame(uiRafId);
       if (rafRef.current !== null) {
         cancelAnimationFrame(rafRef.current);
         rafRef.current = null;
@@ -417,8 +352,6 @@ export function AddAccountPage({ editing }: Props) {
    */
   const startCamera = async () => {
     setScanNotice(null);
-    setScanDiag("");
-    statRef.current = { frames: 0, decodeMs: 0 };
 
     if (isMobile()) {
       setScanning(true);
@@ -491,7 +424,7 @@ export function AddAccountPage({ editing }: Props) {
     }
   };
 
-  const handleSave = async (keepGoing: boolean) => {
+  const handleSave = async () => {
     setLocalError(null);
     setSaving(true);
     try {
@@ -516,20 +449,7 @@ export function AddAccountPage({ editing }: Props) {
         toast.success(t("账户已添加"));
       }
       await refreshAccounts();
-      if (keepGoing && !isEdit) {
-        setDisplayName("");
-        setAccount("");
-        setSecret("");
-        setToken("");
-        setOtpType("totp");
-        setAlgorithm("SHA1");
-        setDigits(6);
-        setPeriod(30);
-        setCounter(0);
-        setCategoryId("");
-      } else {
-        navigate({ name: "codes" });
-      }
+      navigate({ name: "codes" });
     } catch (e) {
       // 重复账户：后端返回 duplicate:{issuer}|{account}，给出明确提示
       const dup = parseDuplicateError(e);
@@ -541,7 +461,6 @@ export function AddAccountPage({ editing }: Props) {
             : t("该验证码已添加过：{name}，不能重复添加", { name: label });
         setLocalError(msg);
         toast.warning(msg);
-        // 进入编辑模式时无「继续添加」诉求，直接结束
         return;
       }
       const msg = String(e);
@@ -640,12 +559,6 @@ export function AddAccountPage({ editing }: Props) {
                 <div className="scan-caption-desc">
                   {t("支持摄像头实时扫码，或从本地图片识别（完全离线）")}
                 </div>
-                {/* 诊断行仅在桌面端（WebView 路径）显示 */}
-                {scanDiag && !isMobile() ? (
-                  <div className="scan-caption-diag">
-                    {t("解码：")}{scanDiag}
-                  </div>
-                ) : null}
               </div>
               <div className="scan-actions">
                 {/* 移动端原生扫描期间由系统取景页自行管理，不显示停止按钮 */}
@@ -903,7 +816,7 @@ export function AddAccountPage({ editing }: Props) {
         {!isEdit ? (
           <div className="notice notice-info mt-12">
             <Info className="icon-primary" />
-            {t("请同时保存好恢复码，避免设备丢失后无法登录。")}
+            {t("请定期导出加密备份；同时在各服务保存好备用恢复码，避免设备丢失后无法登录。")}
           </div>
         ) : null}
       </section>
@@ -916,15 +829,10 @@ export function AddAccountPage({ editing }: Props) {
             block
             disabled={saving}
             icon={<Check className="icon-14" />}
-            onClick={() => handleSave(false)}
+            onClick={() => handleSave()}
           >
             {isEdit ? t("保存修改") : t("保存账户")}
           </Button>
-          {!isEdit ? (
-            <Button disabled={saving} onClick={() => handleSave(true)}>
-              {t("保存并继续")}
-            </Button>
-          ) : null}
         </div>
       ) : null}
     </>

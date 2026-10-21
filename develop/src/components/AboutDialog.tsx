@@ -42,6 +42,8 @@ export function AboutDialog({ open, accountCount, version, onClose }: Props) {
 
   const rows: { label: string; value: string }[] = [
     { label: t("版本"), value: appVersion ? `v${appVersion}` : "—" },
+    // 构建标识：多个 beta 包并存时用于确认实际运行的是哪个构建
+    { label: t("构建"), value: __BUILD_STAMP__ },
     { label: t("运行平台"), value: `${platformName()} · ${isMobile() ? t("移动端") : t("桌面端")}` },
     { label: t("账户数量"), value: t("{n} 个", { n: accountCount }) },
     { label: t("加密方式"), value: "AES-256-GCM" },
@@ -55,14 +57,14 @@ export function AboutDialog({ open, accountCount, version, onClose }: Props) {
         className="modal-dialog about-dialog"
         role="dialog"
         aria-modal="true"
-        aria-label={t("关于 OneTotp")}
+        aria-label={t("关于 OneTOTP")}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="about-hero">
           <span className="about-logo">
             <OneTotpMark className="icon-34" />
           </span>
-          <div className="about-name">OneTotp</div>
+          <div className="about-name">OneTOTP</div>
           <div className="about-ver">{appVersion ? `v${appVersion}` : ""}</div>
           <div className="about-tagline">{t("离线双因素验证器")}</div>
         </div>

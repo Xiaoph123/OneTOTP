@@ -7,6 +7,8 @@
   "permissions": [
     "core:default",
     "opener:default",
+    "dialog:allow-save",
+    "dialog:allow-open",
     "clipboard-manager:allow-write-text",
     "clipboard-manager:allow-read-text",
     "barcode-scanner:default",

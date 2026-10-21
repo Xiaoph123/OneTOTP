@@ -83,7 +83,10 @@ pub struct AppSettings {
     /// 离开后台自动锁定
     #[serde(default = "default_true")]
     pub lock_on_blur: bool,
-    /// 自动锁定时长（秒），0 表示从不
+    /// 空闲自动锁定时长（秒）：
+    /// - `0`：不做空闲计时，仅靠「失焦 / 切到后台」锁定
+    /// - `999999`：从不因空闲而锁定
+    /// - 其他正数：空闲达到该秒数后锁定
     #[serde(default = "default_auto_lock")]
     pub auto_lock_seconds: u32,
     /// 复制后自动隐藏窗口
@@ -102,8 +105,16 @@ pub struct AppSettings {
     #[serde(default = "default_code_visibility")]
     pub code_visibility: String,
     /// 截图时隐藏窗口内容（防截屏）
-    #[serde(default)]
+    ///
+    /// 默认开启：安全优先，宁可多一层保护，用户觉得碍事可自行关闭。
+    #[serde(default = "default_true")]
     pub hide_on_screenshot: bool,
+    /// 检测到远程桌面会话时隐藏窗口
+    #[serde(default = "default_true")]
+    pub hide_on_remote: bool,
+    /// 窗口失去焦点时遮挡验证码数字（不清空、不锁定，仅视觉遮蔽）
+    #[serde(default = "default_true")]
+    pub hide_on_unfocused: bool,
     /// 自动备份
     #[serde(default = "default_true")]
     pub auto_backup: bool,
@@ -140,6 +151,13 @@ pub struct AppSettings {
     /// 解锁连续失败 5 次后自动清空剪贴板（防止暴力尝试期间泄露已复制验证码）
     #[serde(default = "default_true")]
     pub clear_clipboard_on_fail: bool,
+    /// 允许备份使用空密码（导出/导入不再强制设置密码）
+    ///
+    /// 默认关闭。开启后导出的备份文件仍为 AES-256-GCM 加密，但密钥由固定的
+    /// 公开口令派生，任何拿到文件的人都能解密——仅适合在完全可信的设备间
+    /// 反复迁移时图省事，界面需给出明确风险提示。
+    #[serde(default)]
+    pub allow_empty_backup_password: bool,
 }
 
 fn default_font_scale() -> String {
@@ -191,7 +209,9 @@ impl Default for AppSettings {
             expiry_highlight: true,
             click_to_copy: true,
             code_visibility: "never".to_string(),
-            hide_on_screenshot: false,
+            hide_on_screenshot: true,
+            hide_on_remote: true,
+            hide_on_unfocused: true,
             auto_backup: true,
             backup_keep: 3,
             password_hint: String::new(),
@@ -204,6 +224,7 @@ impl Default for AppSettings {
             window_size: "standard".to_string(),
             font_scale: "standard".to_string(),
             clear_clipboard_on_fail: true,
+            allow_empty_backup_password: false,
         }
     }
 }

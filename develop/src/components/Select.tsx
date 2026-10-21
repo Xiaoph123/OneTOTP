@@ -13,9 +13,16 @@ interface Props<T extends string | number> {
   onChange: (value: T) => void;
   placeholder?: string;
   disabled?: boolean;
-  /** 额外类名，用于指定固定宽度（如 w-124 / w-140），默认撑满父容器 */
+  /** 额外类名，用于指定宽度（如快捷键录制框对齐用的 control-w），默认撑满父容器 */
   className?: string;
   size?: "large" | "default" | "small" | "mini";
+  /**
+   * 外观变体：
+   * - `default`：带边框的输入框样式，用于表单字段
+   * - `ghost`：无边框，仅显示当前值 + 箭头，点击弹出浮层菜单。
+   *   用于设置行右侧，避免固定宽度浪费横向空间。
+   */
+  variant?: "default" | "ghost";
 }
 
 /** 源力设计系统 Select 选择器（单选） */
@@ -27,6 +34,7 @@ export function Select<T extends string | number>({
   disabled,
   className,
   size = "default",
+  variant = "default",
 }: Props<T>) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
@@ -51,17 +59,19 @@ export function Select<T extends string | number>({
   const current = options.find((o) => o.value === value);
   const isPlaceholder = current === undefined;
   const sizeClass = size === "default" ? "" : ` select-${size}`;
+  const variantClass = variant === "ghost" ? " select-ghost" : "";
 
   return (
     <div
       ref={ref}
-      className={`select${sizeClass}${open ? " focus" : ""}${disabled ? " disabled" : ""}${className ? ` ${className}` : ""}`}
+      className={`select${sizeClass}${variantClass}${open ? " focus" : ""}${disabled ? " disabled" : ""}${className ? ` ${className}` : ""}`}
     >
       <div
         className="select-trigger"
         role="combobox"
         aria-expanded={open}
         aria-haspopup="listbox"
+        title={isPlaceholder ? placeholder ?? t("请选择") : current!.label}
         tabIndex={disabled ? -1 : 0}
         onClick={() => !disabled && setOpen((v) => !v)}
         onKeyDown={(e) => {

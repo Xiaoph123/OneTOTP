@@ -1,15 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
-import { useApp } from "../state/AppContext";
+import { useApp, type CodesFilter } from "../state/AppContext";
 import { CodeCard } from "../components/CodeCard";
-import { TabBar, type TabKey } from "../components/TabBar";
+import { TabBar } from "../components/TabBar";
 import { Button } from "../components/Button";
 import { ColorDot } from "../components/ColorDot";
 import { ChevronDown, Grid, Info, Plus, Search } from "../components/icons";
 import { useI18n } from "../i18n";
 import { hexToRgbTriplet } from "../lib/utils";
+import { isDesktop } from "../lib/platform";
 import type { AccountView } from "../lib/api";
-
-type Filter2 = "all" | "favorite" | "recent";
 
 interface Group {
   /** 分类 id，空字符串代表「未分类」 */
@@ -20,9 +19,17 @@ interface Group {
 }
 
 export function CodesPage() {
-  const { accounts, categories, codes, settings, navigate } = useApp();
+  const { accounts, categories, codes, settings, navigate, codesFilter, setCodesFilter } = useApp();
   const { t } = useI18n();
-  const [filter, setFilter] = useState<Filter2>("all");
+  // 桌面端：筛选由顶部「全部 / 收藏 / 最近」分段控件控制，默认全部。
+  // 移动端：筛选由底部导航控制，与 TabBar 的四项一一对应。
+  const desktop = isDesktop();
+  const [desktopFilter, setDesktopFilter] = useState<CodesFilter>("all");
+  const filter: CodesFilter = desktop ? desktopFilter : codesFilter;
+  const setFilter = (next: CodesFilter) => {
+    if (desktop) setDesktopFilter(next);
+    else setCodesFilter(next);
+  };
   const [query, setQuery] = useState("");
   // 防抖后的查询词：输入框即时回显，过滤计算延迟 200ms，避免每次按键全量过滤
   const [debouncedQuery, setDebouncedQuery] = useState("");
@@ -76,10 +83,6 @@ export function CodesPage() {
     return result;
   }, [visible, categories, t]);
 
-  const onTabSelect = (key: TabKey) => {
-    if (key === "settings") navigate({ name: "settings" });
-  };
-
   const isEmpty = visible.length === 0;
   // 是否处于搜索状态：以「已生效的过滤条件」为准。
   // 若用输入框的实时 query 判断，防抖延迟的 200ms 内会出现
@@ -128,23 +131,26 @@ export function CodesPage() {
           </Button>
         </div>
 
-        <div className="segmented mb-12" role="tablist">
-          <button className={filter === "all" ? "active" : ""} onClick={() => setFilter("all")}>
-            {t("全部")}
-          </button>
-          <button
-            className={filter === "favorite" ? "active" : ""}
-            onClick={() => setFilter("favorite")}
-          >
-            {t("收藏")}
-          </button>
-          <button
-            className={filter === "recent" ? "active" : ""}
-            onClick={() => setFilter("recent")}
-          >
-            {t("最近")}
-          </button>
-        </div>
+        {/* 桌面端保留顶部分段筛选；移动端改用底部导航，这里不再重复 */}
+        {desktop ? (
+          <div className="segmented mb-12" role="tablist">
+            <button className={filter === "all" ? "active" : ""} onClick={() => setFilter("all")}>
+              {t("全部")}
+            </button>
+            <button
+              className={filter === "favorite" ? "active" : ""}
+              onClick={() => setFilter("favorite")}
+            >
+              {t("收藏")}
+            </button>
+            <button
+              className={filter === "recent" ? "active" : ""}
+              onClick={() => setFilter("recent")}
+            >
+              {t("最近")}
+            </button>
+          </div>
+        ) : null}
 
         {isEmpty ? (
           <div className="empty-state">
@@ -216,7 +222,7 @@ export function CodesPage() {
         </div>
       </section>
 
-      <TabBar active="codes" onSelect={onTabSelect} />
+      <TabBar active={filter === "all" ? "codes" : filter} />
     </>
   );
 }

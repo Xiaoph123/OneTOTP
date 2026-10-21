@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useApp } from "../state/AppContext";
 import { api, type AccountView } from "../lib/api";
-import { TabBar, type TabKey } from "../components/TabBar";
+import { TabBar } from "../components/TabBar";
 import { Button, IconButton } from "../components/Button";
 import { Select } from "../components/Select";
 import { ConfirmDialog } from "../components/Dialog";
@@ -19,11 +19,6 @@ export function DetailPage({ accountId }: { accountId: string }) {
   useEffect(() => {
     api.getAccountDetail(accountId).then(setAccount).catch(() => {});
   }, [accountId]);
-
-  const onTabSelect = (key: TabKey) => {
-    if (key === "settings") navigate({ name: "settings" });
-    else navigate({ name: "codes" });
-  };
 
   const handleToggleFavorite = async () => {
     await api.toggleFavorite(accountId);
@@ -96,7 +91,7 @@ export function DetailPage({ accountId }: { accountId: string }) {
               <div className="info-row info-row-select">
                 <span className="info-row-label">{t("分类")}</span>
                 <Select
-                  className="w-140"
+                  variant="ghost"
                   size="small"
                   value={account.categoryId}
                   onChange={handleChangeCategory}
@@ -145,7 +140,7 @@ export function DetailPage({ accountId }: { accountId: string }) {
         onCancel={() => setConfirmDelete(false)}
       />
 
-      <TabBar active="codes" onSelect={onTabSelect} />
+      <TabBar active="codes" />
     </>
   );
 }

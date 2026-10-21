@@ -1,15 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import { useApp } from "../state/AppContext";
-import { TabBar, type TabKey } from "../components/TabBar";
+import { TabBar } from "../components/TabBar";
 import { Switch } from "../components/Controls";
 import { Select } from "../components/Select";
 import { ShortcutRecorder } from "../components/ShortcutRecorder";
 import { useToast } from "../components/Toast";
-import { Button } from "../components/Button";
-import { api, type AppSettings, type StorageUsage } from "../lib/api";
+import { IconButton } from "../components/Button";
+import { api, type AppSettings, type DataDirInfo, type StorageUsage } from "../lib/api";
 import { getAutostart, setAutostart } from "../lib/autostart";
 import { applyToggleShortcut } from "../lib/shortcut";
-import { ChevronRight } from "../components/icons";
+import { ChevronRight, FolderOpen } from "../components/icons";
 import { ConfirmDialog } from "../components/Dialog";
 import { AboutDialog } from "../components/AboutDialog";
 import { formatBytes } from "../lib/utils";
@@ -50,6 +50,13 @@ export function SettingsPage() {
   const [usage, setUsage] = useState<StorageUsage | null>(null);
   const [clearOpen, setClearOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
+  // 数据存储目录（由后端决定，非应用配置项）
+  const [dataDir, setDataDir] = useState<DataDirInfo | null>(null);
+  // 切换目录的二次确认：迁移会覆盖目标目录中的同名文件，必须让用户明确同意
+  const [dirConfirm, setDirConfirm] = useState<{ mode: "change" | "reset"; dir: string } | null>(null);
+  const [dirBusy, setDirBusy] = useState(false);
+  // 开启「允许空密码备份」的二次确认
+  const [emptyPwdConfirm, setEmptyPwdConfirm] = useState(false);
 
   const loadUsage = () => {
     api.getStorageUsage().then(setUsage).catch(() => {});
@@ -60,6 +67,10 @@ export function SettingsPage() {
   }, []);
 
   useEffect(loadUsage, []);
+
+  useEffect(() => {
+    api.getDataDir().then(setDataDir).catch(() => {});
+  }, []);
 
   const handleClearBackups = async () => {
     setClearOpen(false);
@@ -99,7 +110,7 @@ export function SettingsPage() {
             <span className="empty-desc">{t("正在加载设置…")}</span>
           </div>
         </section>
-        <TabBar active="settings" onSelect={(k) => k === "codes" && navigate({ name: "codes" })} />
+        <TabBar active="settings" />
       </>
     );
   }
@@ -191,26 +202,55 @@ export function SettingsPage() {
     if (clamped !== draft.backupKeep) update("backupKeep", clamped);
   };
 
-  const persist = async () => {
+  /** 选择新的数据存储目录：迁移现有数据后应用自动重启 */
+  const chooseDataDir = async () => {
     try {
-      await saveSettings(draft);
-      toast.success(t("设置已保存"));
+      const { open } = await import("@tauri-apps/plugin-dialog");
+      const picked = await open({
+        directory: true,
+        multiple: false,
+        title: t("选择数据存储目录"),
+        defaultPath: dataDir?.current || undefined,
+      });
+      if (typeof picked !== "string") return;
+      if (picked === dataDir?.current) return;
+      setDirConfirm({ mode: "change", dir: picked });
     } catch (e) {
-      toast.error(t("保存失败：{msg}", { msg: String(e) }));
+      toast.error(t("选择目录失败：{msg}", { msg: String(e) }));
     }
   };
 
-  const onTabSelect = (key: TabKey) => {
-    if (key === "codes") navigate({ name: "codes" });
+  /** 确认切换目录：调用后端迁移并重启 */
+  const applyDataDir = async () => {
+    const pending = dirConfirm;
+    setDirConfirm(null);
+    if (!pending) return;
+    setDirBusy(true);
+    try {
+      if (pending.mode === "reset") {
+        await api.resetDataDir();
+      } else {
+        await api.setDataDir(pending.dir);
+      }
+      // 后端会重启应用，正常情况下不会执行到这里
+    } catch (e) {
+      toast.error(t("切换数据目录失败：{msg}", { msg: String(e) }));
+      setDirBusy(false);
+    }
+  };
+
+  /** 恢复默认数据目录 */
+  const resetDataDir = () => {
+    setDirConfirm({ mode: "reset", dir: dataDir?.defaultDir ?? "" });
   };
 
   return (
     <>
-      <section className="app-body">
+      <section className="app-body settings-page">
         <div className="s-group-title">{t("通用")}</div>
         <div className="panel">
           {desktop ? (
-            <Row title={t("开机自动启动")} desc={t("登录系统后自动打开 OneTotp")}>
+            <Row title={t("开机自动启动")} desc={t("登录系统后自动打开 OneTOTP")}>
               <Switch
                 checked={autostart}
                 disabled={autostartBusy}
@@ -220,28 +260,9 @@ export function SettingsPage() {
             </Row>
           ) : null}
           {desktop ? (
-            <Row title={t("复制后自动隐藏窗口")} desc={t("复制验证码后自动收起窗口")}>
-              <Switch checked={draft.autoHideAfterCopy} onChange={(v) => update("autoHideAfterCopy", v)} label={t("复制后自动隐藏窗口")} />
-            </Row>
-          ) : null}
-          <Row title={t("验证码显示分组")} desc={t("将 6 位验证码拆分为 3+3，8 位拆分为 4+4")}>
-            <Switch checked={draft.codeGrouping} onChange={(v) => update("codeGrouping", v)} label={t("验证码显示分组")} />
-          </Row>
-          <Row title={t("剩余时间不足时高亮")} desc={t("倒计时少于 5 秒时标红")}>
-            <Switch checked={draft.expiryHighlight} onChange={(v) => update("expiryHighlight", v)} label={t("剩余时间不足时高亮")} />
-          </Row>
-          <Row title={t("点击即复制")} desc={t("点击验证码卡片直接复制")}>
-            <Switch checked={draft.clickToCopy} onChange={(v) => update("clickToCopy", v)} label={t("点击即复制")} />
-          </Row>
-          {desktop ? (
-            <Row title={t("全局快捷键")} desc={t("按下组合键快速唤起或隐藏窗口")}>
-              <ShortcutRecorder value={draft.shortcutToggle} onChange={changeShortcut} className="control-w" />
-            </Row>
-          ) : null}
-          {desktop ? (
             <Row title={t("关闭按钮行为")} desc={t("点击标题栏关闭按钮时的处理方式")}>
               <Select
-                className="control-w"
+                variant="ghost"
                 value={draft.closeBehavior}
                 onChange={(v) => update("closeBehavior", v)}
                 options={[
@@ -251,6 +272,51 @@ export function SettingsPage() {
               />
             </Row>
           ) : null}
+          {desktop ? (
+            <Row title={t("全局快捷键")} desc={t("按下组合键快速唤起或隐藏窗口")}>
+              <ShortcutRecorder value={draft.shortcutToggle} onChange={changeShortcut} className="control-w" />
+            </Row>
+          ) : null}
+          {desktop ? (
+            <Row title={t("复制后自动隐藏窗口")} desc={t("复制验证码后自动收起窗口")}>
+              <Switch checked={draft.autoHideAfterCopy} onChange={(v) => update("autoHideAfterCopy", v)} label={t("复制后自动隐藏窗口")} />
+            </Row>
+          ) : null}
+        </div>
+
+        {/* 验证码显示：与卡片展示/复制相关的行为统一归到此处 */}
+        <div className="s-group-title mt-12">{t("验证码显示")}</div>
+        <div className="panel panel-clip">
+          <Row title={t("验证码显示分组")} desc={t("将 6 位验证码拆分为 3+3，8 位拆分为 4+4")}>
+            <Switch checked={draft.codeGrouping} onChange={(v) => update("codeGrouping", v)} label={t("验证码显示分组")} />
+          </Row>
+          <Row title={t("验证码可见性")} desc={t("控制验证码在卡片上的显示方式")}>
+            <Select
+              variant="ghost"
+              value={draft.codeVisibility}
+              onChange={(v) => update("codeVisibility", v)}
+              options={[
+                { value: "never" as const, label: t("不隐藏") },
+                { value: "always" as const, label: t("隐藏") },
+                { value: "hover" as const, label: t("悬停显示") },
+              ]}
+            />
+          </Row>
+          <Row title={t("剩余时间不足时高亮")} desc={t("倒计时少于 5 秒时标红")}>
+            <Switch checked={draft.expiryHighlight} onChange={(v) => update("expiryHighlight", v)} label={t("剩余时间不足时高亮")} />
+          </Row>
+          <Row title={t("点击即复制")} desc={t("点击验证码卡片直接复制")}>
+            <Switch checked={draft.clickToCopy} onChange={(v) => update("clickToCopy", v)} label={t("点击即复制")} />
+          </Row>
+          <button className="action-row" onClick={() => navigate({ name: "categories" })}>
+            <span>
+              <span className="s-title">{t("验证码分类")}</span>
+              <span className="s-desc s-desc-block">
+                {t("创建分类、设置颜色与排序")}
+              </span>
+            </span>
+            <ChevronRight className="chevron-muted" />
+          </button>
         </div>
 
         <div className="s-group-title mt-12">
@@ -259,7 +325,7 @@ export function SettingsPage() {
         <div className="panel">
           <Row title={t("语言")} desc={t("界面显示语言，自动将跟随系统语言环境")}>
             <Select
-              className="control-w"
+              variant="ghost"
               value={draft.language}
               onChange={(v) => changeLanguage(v)}
               options={[
@@ -271,7 +337,7 @@ export function SettingsPage() {
           </Row>
           <Row title={t("字体大小")} desc={t("调整应用内文字的整体大小")}>
             <Select
-              className="control-w"
+              variant="ghost"
               value={draft.fontScale}
               onChange={(v) => changeFontScale(v)}
               options={[
@@ -285,7 +351,7 @@ export function SettingsPage() {
           {desktop ? (
             <Row title={t("窗口尺寸")} desc={t("调整窗口宽度，紧凑 / 标准 / 宽松")}>
               <Select
-                className="control-w"
+                variant="ghost"
                 value={draft.windowSize}
                 onChange={(v) => changeWindowSize(v)}
                 options={[
@@ -298,8 +364,8 @@ export function SettingsPage() {
           ) : null}
           <Row title={t("主题外观")} desc={t("切换亮色 / 暗色，或跟随系统")}>
             <Select
+              variant="ghost"
               value={draft.theme}
-              className="control-w"
               onChange={(v) => changeTheme(v)}
               options={[
                 { value: "light" as const, label: t("亮色") },
@@ -308,30 +374,9 @@ export function SettingsPage() {
               ]}
             />
           </Row>
-          <Row title={t("验证码可见性")} desc={t("控制验证码在卡片上的显示方式")}>
-            <Select
-              className="control-w"
-              value={draft.codeVisibility}
-              onChange={(v) => update("codeVisibility", v)}
-              options={[
-                { value: "never" as const, label: t("不隐藏") },
-                { value: "always" as const, label: t("隐藏") },
-                { value: "hover" as const, label: t("悬停显示") },
-              ]}
-            />
-          </Row>
-          {desktop ? (
-            <Row title={t("截图时隐藏")} desc={t("截屏或录屏时以黑屏呈现，防止验证码泄露")}>
-              <Switch
-                checked={draft.hideOnScreenshot}
-                onChange={(v) => update("hideOnScreenshot", v)}
-                label={t("截图时隐藏")}
-              />
-            </Row>
-          ) : null}
           <Row title={t("卡片密度")} desc={t("控制卡片的疏密程度")}>
             <Select
-              className="control-w"
+              variant="ghost"
               value={draft.cardDensity}
               onChange={(v) => update("cardDensity", v)}
               options={[
@@ -342,7 +387,7 @@ export function SettingsPage() {
           </Row>
           <Row title={t("卡片细节")} desc={t("控制卡片展示的信息量")}>
             <Select
-              className="control-w"
+              variant="ghost"
               value={draft.cardDetail}
               onChange={(v) => update("cardDetail", v)}
               options={[
@@ -352,6 +397,61 @@ export function SettingsPage() {
               ]}
             />
           </Row>
+        </div>
+
+        {/* 隐私保护：独立小分类。
+            直接平铺三个开关，之前用多选下拉，长文案被裁切、状态还要展开才能看到；
+            平铺后每一项是否开启一眼可见，也不会有「看起来没生效」的错觉。 */}
+        <div className="s-group-title mt-12">{t("隐私保护")}</div>
+        <div className="panel panel-clip">
+          <Row
+            title={t("截屏 / 录屏时隐藏内容")}
+            desc={
+              desktop
+                ? t("把窗口从系统截屏与录屏的捕获中剔除，画面呈黑屏")
+                : t("截屏会失败，录屏、投屏与多任务预览均呈黑屏")
+            }
+          >
+            <Switch
+              checked={draft.hideOnScreenshot}
+              onChange={(v) => update("hideOnScreenshot", v)}
+              label={t("截屏 / 录屏时隐藏内容")}
+            />
+          </Row>
+          {/* 远程会话是桌面端概念（Windows 远程桌面 / 远程协助）。
+              移动端没有对应状态，投屏场景已由上面的 FLAG_SECURE 覆盖，
+              因此这一行在移动端不渲染，避免出现「开关存在但永远无效」。 */}
+          {desktop ? (
+            <Row
+              title={t("远程会话时隐藏窗口")}
+              desc={t("检测到远程桌面 / 远程协助时自动隐藏窗口")}
+            >
+              <Switch
+                checked={draft.hideOnRemote}
+                onChange={(v) => update("hideOnRemote", v)}
+                label={t("远程会话时隐藏窗口")}
+              />
+            </Row>
+          ) : null}
+          <Row
+            title={t("窗口失焦时遮挡验证码")}
+            desc={t("离开窗口时模糊验证码数字，不锁定也不清空")}
+          >
+            <Switch
+              checked={draft.hideOnUnfocused}
+              onChange={(v) => update("hideOnUnfocused", v)}
+              label={t("窗口失焦时遮挡验证码")}
+            />
+          </Row>
+          <button className="action-row" onClick={() => navigate({ name: "security" })}>
+            <span>
+              <span className="s-title">{t("安全与锁定")}</span>
+              <span className="s-desc s-desc-block">
+                {t("锁定密码与自动锁定策略")}
+              </span>
+            </span>
+            <ChevronRight className="chevron-muted" />
+          </button>
         </div>
 
         <div className="s-group-title mt-12">
@@ -367,24 +467,54 @@ export function SettingsPage() {
             </span>
             <ChevronRight className="chevron-muted" />
           </button>
-          <button className="action-row" onClick={() => navigate({ name: "security" })}>
-            <span>
-              <span className="s-title">{t("安全与锁定")}</span>
-              <span className="s-desc s-desc-block">
-                {t("锁定密码与自动锁定策略")}
-              </span>
-            </span>
-            <ChevronRight className="chevron-muted" />
-          </button>
-          <button className="action-row" onClick={() => navigate({ name: "categories" })}>
-            <span>
-              <span className="s-title">{t("分类管理")}</span>
-              <span className="s-desc s-desc-block">
-                {t("创建分类、设置颜色与排序")}
-              </span>
-            </span>
-            <ChevronRight className="chevron-muted" />
-          </button>
+          {/* 数据存储目录：整行独立布局，路径用只读输入框 + 内嵌图标按钮 */}
+          {desktop ? (
+            <div className="s-row s-row-block">
+              <div className="s-main">
+                <div className="s-title">{t("数据存储目录")}</div>
+                <div className="s-desc">
+                  {t("账户、备份与密钥全部保存在此目录，更改后应用会自动重启")}
+                </div>
+              </div>
+              <div className="dir-setting">
+                <div className="input-with-action">
+                  <input
+                    className="ui-input has-action dir-input"
+                    value={dataDir?.current ?? ""}
+                    readOnly
+                    title={dataDir?.current ?? ""}
+                    placeholder={t("正在读取…")}
+                  />
+                  <IconButton
+                    label={t("选择目录")}
+                    className="input-action"
+                    onClick={chooseDataDir}
+                  >
+                    <FolderOpen className="icon-16" />
+                  </IconButton>
+                </div>
+                {dataDir?.custom ? (
+                  <button className="link-btn" onClick={resetDataDir}>
+                    {t("恢复默认目录")}
+                  </button>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+          <Row
+            title={t("允许空密码备份")}
+            desc={t("开启后导出 / 导入备份可跳过密码；文件仅用公开口令加密，拿到文件即可解密")}
+          >
+            <Switch
+              checked={draft.allowEmptyBackupPassword}
+              onChange={(v) => {
+                // 开启属于降低安全等级的操作，先二次确认；关闭无需确认
+                if (v) setEmptyPwdConfirm(true);
+                else update("allowEmptyBackupPassword", false);
+              }}
+              label={t("允许空密码备份")}
+            />
+          </Row>
           <Row title={t("自动备份")} desc={t("修改账户后保留加密快照")}>
             <Switch checked={draft.autoBackup} onChange={(v) => update("autoBackup", v)} label={t("自动备份")} />
           </Row>
@@ -426,7 +556,7 @@ export function SettingsPage() {
         <div className="panel panel-clip">
           <button className="action-row" onClick={() => setAboutOpen(true)}>
             <span>
-              <span className="s-title">{t("关于 OneTotp")}</span>
+              <span className="s-title">{t("关于 OneTOTP")}</span>
               <span className="s-desc s-desc-block">
                 {t("查看版本、运行平台与加密信息")}
               </span>
@@ -434,15 +564,9 @@ export function SettingsPage() {
             <ChevronRight className="chevron-muted" />
           </button>
         </div>
-
-        <div className="btn-row mt-16">
-          <Button variant="primary" block onClick={persist}>
-            {t("保存设置")}
-          </Button>
-        </div>
       </section>
 
-      <TabBar active="settings" onSelect={onTabSelect} />
+      <TabBar active="settings" />
 
       <ConfirmDialog
         open={clearOpen}
@@ -454,6 +578,36 @@ export function SettingsPage() {
         danger
         onConfirm={handleClearBackups}
         onCancel={() => setClearOpen(false)}
+      />
+
+      <ConfirmDialog
+        open={emptyPwdConfirm}
+        title={t("允许空密码备份")}
+        description={t("开启后导出的备份文件仅用公开口令加密，任何拿到文件的人都能解密，不含真正的机密保护。请仅在可信设备之间使用。")}
+        confirmText={t("仍然开启")}
+        danger
+        onConfirm={() => {
+          setEmptyPwdConfirm(false);
+          update("allowEmptyBackupPassword", true);
+        }}
+        onCancel={() => setEmptyPwdConfirm(false)}
+      />
+
+      <ConfirmDialog
+        open={dirConfirm !== null}
+        title={dirConfirm?.mode === "reset" ? t("恢复默认数据目录") : t("更改数据存储目录")}
+        description={
+          dirConfirm?.mode === "reset"
+            ? t("将把账户、备份与密钥迁回默认目录 {dir}，完成后应用会自动重启。", {
+                dir: dirConfirm?.dir ?? "",
+              })
+            : t("将把账户、备份与密钥迁移到 {dir}，完成后应用会自动重启。目标目录中的同名文件会被覆盖。", {
+                dir: dirConfirm?.dir ?? "",
+              })
+        }
+        confirmText={dirBusy ? t("正在迁移…") : t("迁移并重启")}
+        onConfirm={applyDataDir}
+        onCancel={() => !dirBusy && setDirConfirm(null)}
       />
 
       <AboutDialog

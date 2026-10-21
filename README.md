@@ -10,9 +10,9 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Xiaoph123/OneTotp/releases/latest"><img src="https://img.shields.io/github/v/release/Xiaoph123/OneTotp?label=release&color=34D399" alt="Release"></a>
-  <a href="https://github.com/Xiaoph123/OneTotp/releases"><img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux%20%7C%20Android-1664FF" alt="Platform"></a>
-  <a href="https://github.com/Xiaoph123/OneTotp/blob/master/LICENSE"><img src="https://img.shields.io/badge/license-MIT-22D3EE" alt="License"></a>
+  <a href="https://github.com/Xiaoph123/OneTOTP/releases/latest"><img src="https://img.shields.io/github/v/release/Xiaoph123/OneTOTP?label=release&color=34D399" alt="Release"></a>
+  <a href="https://github.com/Xiaoph123/OneTOTP/releases"><img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux%20%7C%20Android-1664FF" alt="Platform"></a>
+  <a href="https://github.com/Xiaoph123/OneTOTP/blob/master/LICENSE"><img src="https://img.shields.io/badge/license-MIT-22D3EE" alt="License"></a>
   <img src="https://img.shields.io/badge/Tauri-2-6366F1" alt="Tauri 2">
   <img src="https://img.shields.io/badge/React-19-61DAFB" alt="React 19">
 </p>
@@ -105,7 +105,7 @@
 
 ### 下载
 
-前往 **[Releases](https://github.com/Xiaoph123/OneTotp/releases/latest)** 获取最新版本。命名规则为 `OneTOTP_{版本}_{系统}_{架构}-{类型}`。
+前往 **[Releases](https://github.com/Xiaoph123/OneTOTP/releases/latest)** 获取最新版本。命名规则为 `OneTOTP_{版本}_{系统}_{架构}-{类型}`。
 
 | 平台 | 架构 | 产物 | 说明 |
 | --- | --- | --- | --- |
@@ -235,7 +235,7 @@ OneTOTP/
 
 ### 反馈
 
-欢迎通过 [GitHub Issues](https://github.com/Xiaoph123/OneTotp/issues) 提交问题与建议。反馈时请注明系统平台、架构与 OneTOTP 版本号。
+欢迎通过 [GitHub Issues](https://github.com/Xiaoph123/OneTOTP/issues) 提交问题与建议。反馈时请注明系统平台、架构与 OneTOTP 版本号。
 
 <p align="right"><a href="#english">English →</a></p>
 
@@ -325,7 +325,7 @@ Built on the Volcengine **源力 (Yuanli)** design system: primary color `#1664F
 
 ### Download
 
-Grab the latest build from **[Releases](https://github.com/Xiaoph123/OneTotp/releases/latest)**. Artifacts follow `OneTOTP_{version}_{os}_{arch}-{type}`.
+Grab the latest build from **[Releases](https://github.com/Xiaoph123/OneTOTP/releases/latest)**. Artifacts follow `OneTOTP_{version}_{os}_{arch}-{type}`.
 
 | Platform | Arch | Artifact | Notes |
 | --- | --- | --- | --- |
@@ -455,6 +455,6 @@ Standard `otpauth://` links, either a single one or one per line for bulk import
 
 ### Feedback
 
-Questions and suggestions are welcome via [GitHub Issues](https://github.com/Xiaoph123/OneTotp/issues). Please include your OS, architecture, and OneTOTP version.
+Questions and suggestions are welcome via [GitHub Issues](https://github.com/Xiaoph123/OneTOTP/issues). Please include your OS, architecture, and OneTOTP version.
 
 <p align="right"><a href="#简体中文">↑ 简体中文</a></p>

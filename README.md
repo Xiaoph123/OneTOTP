@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="develop/src-tauri/app-icon.svg" width="112" height="112" alt="OneTotp" />
+  <img src="develop/src-tauri/app-icon.svg" width="112" height="112" alt="OneTOTP" />
 </p>
 
-<h1 align="center">OneTotp</h1>
+<h1 align="center">OneTOTP</h1>
 
 <p align="center">
   <strong>纯离线身份验证器 · TOTP / HOTP</strong><br>
@@ -36,7 +36,7 @@
 
 - ❌ **不联网**：无云端同步、无账号登录、无崩溃上报、无使用统计。
 - ❌ **不托管密钥**：密钥不经过任何第三方，也不写入日志。
-- ❌ **不申请多余权限**：Android 端仅申请相机（扫码）与网络（WebView 本地资源），相机权限为可选。
+- ❌ **不申请多余权限**：Android 端仅申请相机（扫码）、生物识别（解锁）与网络（WebView 本地资源），相机与生物识别权限均为可选。
 
 ### 功能
 
@@ -46,18 +46,22 @@
 | **验证码位数与周期** | 支持 6 / 7 / 8 位；TOTP 周期 1~3600 秒可配（默认 30）；8 位验证码按 4+4 分组显示 |
 | **实时进度环** | 卡片展示当前周期的剩余时间与进度，末 5 秒验证码转红提示，并预览「下一个验证码」 |
 | **一键复制** | 点击卡片复制验证码，复制后短暂反馈；支持全局快捷键唤起主窗口 |
-| **扫码录入** | 摄像头扫描二维码（`jsqr` 本地解析）或粘贴 `otpauth://` 链接，支持批量文本导入 |
+| **扫码录入** | Android 使用 CameraX + ZXing 原生解码（零 GMS 依赖、完全离线）；桌面端用 `jsqr` 本地解析；也可粘贴 `otpauth://` 链接或批量文本导入 |
+| **重复账户检测** | 以密钥为唯一标识，重复添加时明确提示并拒绝 |
 | **分类管理** | 自建分类，每个分类可指定主题色；折叠时按分类色淡色高亮，账户可在分类间移动 |
-| **搜索与收藏** | 按服务名 / 账户标识实时过滤；收藏账户优先排序 |
+| **搜索与收藏** | 按服务名 / 账户标识实时过滤（200ms 防抖）；收藏账户优先排序 |
 | **加密保险库** | AES-256-GCM 加密落盘，密钥由 Argon2id 从口令派生（16 字节随机 salt + 12 字节随机 nonce） |
 | **锁定密码** | 可选启用解锁口令（至少 8 位），支持密码提示；也可仅靠机器本地密钥保护 |
-| **自动锁定** | 空闲超时自动锁定；支持「仅启动时锁定」策略 |
-| **加密备份** | 导出为独立口令加密的备份串（可选仅账户 / 仅配置）；导入时按 id 去重合并，不会覆盖已有账户 |
-| **自动备份快照** | 每次写盘自动留存时间戳快照，可配置保留份数（最多 10 份），支持一键清理 |
-| **截屏保护** | 桌面端启用后阻止窗口被截屏 / 录屏捕获 |
-| **托盘与自启** | 桌面端支持最小化到托盘、关闭行为可选（退出 / 托盘）、开机自启 |
+| **生物识别解锁** | Windows Hello、macOS Touch ID、Android / iOS 指纹或面容；Android 侧用 Keystore AES-256-GCM，密钥由系统瞬时生成 |
+| **自动锁定** | 离开应用即锁定，或空闲 30 秒 / 1 / 5 / 15 分钟后锁定，也可设为从不 |
+| **重新加密保险库** | 用全新随机盐重新派生密钥并重写本地数据，使旧密钥立即作废 |
+| **加密备份** | 导出为独立口令加密的 JSON 文件（可选仅账户 / 仅配置），经系统文件管理器选择保存位置；导入时先选文件再输密码，按密钥去重合并 |
+| **自动备份快照** | 每次写盘自动留存时间戳快照，可配置保留份数（默认 3，最多 10），支持一键清理 |
+| **隐私保护** | 截屏 / 录屏时隐藏内容（Windows / macOS / Android `FLAG_SECURE`）、远程会话时隐藏窗口（桌面）、窗口失焦时遮挡验证码 |
+| **数据存储目录** | 账户、备份与密钥可迁移到自定义目录，切换后自动重启生效 |
+| **托盘与自启** | 桌面端支持最小化到托盘、关闭行为可选（退出 / 托盘）、开机自启，托盘菜单可直接进入设置 |
 | **主题与语言** | 浅色 / 深色 / 跟随系统；界面字体缩放；中文 / English 双语 |
-| **移动端适配** | 独立移动布局（`data-platform` 钩子），触控尺寸与交互按移动端重新校准 |
+| **移动端适配** | 独立移动布局（`data-platform` 钩子），底部四项导航（验证码 / 收藏 / 最近 / 设置），触控尺寸按移动端重新校准 |
 
 **状态细节**
 
@@ -88,9 +92,12 @@
 | 落盘 | 仅密文 + salt + nonce + 元数据（JSON），无明文密钥 |
 | 运行期 | 解锁密钥仅存于内存（`Mutex<Option<[u8;32]>>`），锁定即清空 |
 | 口令校验 | 独立 verifier：`HMAC-SHA256(保险库密钥, 固定上下文)`，与保险库密钥分离且不可反推 |
-| 无口令模式 | 由设备指纹 + 固定 salt 经 Argon2 确定性派生「机器本地密钥」，防止明文落盘被直接读取 |
+| 无口令模式 | 首次使用时生成 32 字节随机「机器本地密钥」并原子落盘（`onetotp.machine.key`），与设备绑定；旧版按 OS + ARCH 派生的密钥仅用于兼容读取旧数据 |
+| 生物识别 | 凭据由系统安全模块保管：Windows Hello / macOS Keychain / Android Keystore（AES-256-GCM），应用侧不接触原始生物特征 |
 | 备份 | 导出时用**独立新口令**重新派生密钥加密，可跨设备迁移 |
+| 截屏保护 | Windows `WDA_EXCLUDEFROMCAPTURE` / macOS 内容保护 / Android `FLAG_SECURE` |
 | 输入校验 | 密钥（Base32）、位数（6/7/8）、算法、周期（1~3600s）、分类名（≤20 字符）均在服务端二次校验 |
+| 文件读写 | 导出仅允许 `.json` / `.txt` 后缀；导入导出均限制 10MB；Android `content://` URI 经 ContentResolver 打开，不接受前端任意构造的地址 |
 | 颜色注入 | 分类色经正则规范化，非法值回退主题蓝，杜绝越界输入 |
 
 > [!NOTE]
@@ -145,6 +152,16 @@ npm run tauri android init   # 首次生成工程
 npm run tauri android build -- --apk --target aarch64
 ```
 
+> [!TIP]
+> Windows 上 `tauri android build` 会在 Rust 编译完成后失败——Tauri 需要在 `jniLibs/<abi>/` 下创建符号链接，而 Windows 默认不允许（未开启开发者模式）。此时可用仓库内的一键脚本绕过该限制，它手工完成「编译 Rust → 放置 `.so` → 同步前端 → gradle 打包 → 签名」全流程，并自动递增 `versionCode`：
+>
+> ```powershell
+> cd develop
+> pwsh -File scripts/build-android-apk.ps1 -Label beta
+> ```
+>
+> 详细说明见 [android-release-build.md](develop/docs/android-release-build.md)。
+
 **全端自动构建**
 
 仓库内置 [GitHub Actions](.github/workflows/release.yml)，推送 `v*` 标签即触发矩阵构建，覆盖 Windows / macOS / Linux / Android 多架构，并自动创建 Release。iOS 任务在配置 Apple 证书 Secrets 后自动启用，未配置时静默跳过。
@@ -156,20 +173,24 @@ OneTotp/
 ├─ .github/workflows/
 │  └─ release.yml          # 全端构建矩阵
 ├─ develop/
+│  ├─ docs/                # 构建与发布说明
+│  ├─ scripts/             # Android 一键打包、本地数据重置
+│  ├─ tests/               # 自动锁定判定单元测试
 │  ├─ src/                 # React 前端
 │  │  ├─ components/       # 通用组件（标题栏、按钮、弹窗、Toast…）
 │  │  ├─ pages/            # 页面（验证码、详情、设置、安全、导入导出…）
-│  │  ├─ state/            # 应用状态、自动锁定、截屏保护
-│  │  ├─ lib/              # API 封装、主题、平台、二维码、快捷键
+│  │  ├─ state/            # 应用状态、自动锁定、隐私保护
+│  │  ├─ lib/              # API 封装、主题、平台、二维码、快捷键、生物识别
 │  │  ├─ i18n/             # 中英文案
 │  │  └─ styles/           # 设计 token 与样式
 │  └─ src-tauri/           # Rust 后端
 │     ├─ src/
 │     │  ├─ crypto.rs      # Argon2id 派生 + AES-256-GCM 加解密
 │     │  ├─ totp.rs        # RFC 4226 / RFC 6238 算法实现
-│     │  ├─ store.rs       # 保险库读写、备份、otpauth 解析
+│     │  ├─ store.rs       # 保险库读写、备份、数据目录迁移
 │     │  ├─ commands.rs    # Tauri 命令（账户 / 分类 / 设置 / 备份）
 │     │  └─ models.rs      # 数据模型
+│     ├─ plugins/          # 内置插件（生物识别、原生扫码）
 │     └─ tauri.conf.json
 └─ Design/                 # 设计稿
 ```
@@ -182,7 +203,8 @@ OneTotp/
 | 前端 | **React 19** + **TypeScript** + **Vite 8** |
 | 加密 | `aes-gcm` · `argon2` · `rand` |
 | OTP 算法 | `hmac` · `sha1` · `sha2` · `base32` |
-| 扫码 | `jsqr`（本地解析） |
+| 扫码 | Android：CameraX + ZXing（原生）；桌面：`jsqr`（本地解析） |
+| 生物识别 | `tauri-plugin-biometry`（Windows Hello / Touch ID / Android Keystore） |
 | 设计系统 | 火山引擎源力（Volcengine） |
 
 ### 常见问题
@@ -193,11 +215,11 @@ OneTotp/
 
 **换电脑怎么办？**
 
-用「导出」功能生成加密备份串（**用独立口令加密**），在新设备「导入」即可。备份串可选只导出账户或只导出配置，导入按账户 id 去重，不会覆盖目标设备已有账户。
+用「导出配置」生成加密备份文件（**用独立口令加密**），在新设备「导入配置」即可。备份可选只导出账户或只导出配置，导入按密钥去重，不会覆盖目标设备已有账户。
 
 **忘记解锁口令了？**
 
-无法找回。密钥由口令经 Argon2id 派生，口令即密钥，没有任何后门或重置通道——这是安全设计的必然代价。建议启用自动备份并异地保存。
+无法找回。密钥由口令经 Argon2id 派生，口令即密钥，没有任何后门或重置通道——这是安全设计的必然代价。建议启用自动备份并异地保存；若设置过密码提示，锁屏页会显示该提示。
 
 **支持哪些导入格式？**
 
@@ -234,7 +256,7 @@ A desktop and mobile app that does two-factor authentication properly: collect `
 
 - ❌ **No networking**: no cloud sync, no sign-in, no crash reporting, no usage analytics.
 - ❌ **No secret hosting**: secrets never pass through any third party and are never written to logs.
-- ❌ **No unnecessary permissions**: on Android only camera (for QR scanning) and network (for local WebView assets) are requested; the camera permission is optional.
+- ❌ **No unnecessary permissions**: on Android only camera (QR scanning), biometrics (unlock) and network (local WebView assets) are requested; camera and biometrics are optional.
 
 ### Features
 
@@ -244,18 +266,22 @@ A desktop and mobile app that does two-factor authentication properly: collect `
 | **Digits & period** | 6 / 7 / 8 digits; TOTP period configurable from 1 to 3600 seconds (default 30); 8-digit codes are shown as 4+4 groups |
 | **Live progress ring** | Each card shows the remaining time and progress of the current period, turns red in the last 5 seconds, and previews the next code |
 | **One-tap copy** | Click a card to copy the code, with brief feedback; a global shortcut can bring up the main window |
-| **QR scanning** | Scan QR codes with the camera (`jsqr`, parsed locally) or paste `otpauth://` links; supports bulk text import |
+| **QR scanning** | Android uses native CameraX + ZXing decoding (zero GMS dependency, fully offline); desktop uses `jsqr` locally; you can also paste `otpauth://` links or import bulk text |
+| **Duplicate detection** | The secret is the unique key — duplicates are rejected with a clear message |
 | **Categories** | Create your own categories, each with a theme color; collapsed groups are tinted with the category color; accounts can be moved between categories |
-| **Search & favorites** | Live filtering by issuer / account label; favorites are sorted first |
+| **Search & favorites** | Live filtering by issuer / account label (200 ms debounce); favorites are sorted first |
 | **Encrypted vault** | AES-256-GCM encryption at rest; key derived from your passphrase with Argon2id (16-byte random salt + 12-byte random nonce) |
 | **Lock passphrase** | Optional unlock passphrase (at least 8 characters) with a hint; or rely on the machine-local key alone |
-| **Auto-lock** | Locks automatically after an idle timeout; supports a "lock only on start" policy |
-| **Encrypted backup** | Export a backup string encrypted with a separate passphrase (accounts only / settings only); import merges by id without overwriting existing accounts |
-| **Automatic snapshots** | A timestamped snapshot is kept on every write; retention is configurable (up to 10) with one-tap cleanup |
-| **Screenshot protection** | On desktop, prevents the window from being captured by screen recorders |
-| **Tray & autostart** | On desktop, minimize to tray, choose close behavior (quit / tray), and start on login |
+| **Biometric unlock** | Windows Hello, macOS Touch ID, Android / iOS fingerprint or face; on Android the credential is an AES-256-GCM key in Keystore, generated instantly by the system |
+| **Auto-lock** | Lock on leaving the app, or after 30 s / 1 / 5 / 15 minutes idle, or never |
+| **Re-encrypt vault** | Re-derive the key with a fresh random salt and rewrite local data, invalidating the old key immediately |
+| **Encrypted backup** | Export a JSON file encrypted with a separate passphrase (accounts only / settings only) via the system file picker; import picks the file first, then asks for the password, and merges by secret |
+| **Automatic snapshots** | A timestamped snapshot is kept on every write; retention is configurable (default 3, up to 10) with one-tap cleanup |
+| **Privacy protection** | Hide content from screenshots / recording (Windows / macOS / Android `FLAG_SECURE`), hide the window during remote sessions (desktop), mask codes when the window loses focus |
+| **Data directory** | Move accounts, backups and keys to a custom folder; the app restarts automatically after the change |
+| **Tray & autostart** | On desktop, minimize to tray, choose close behavior (quit / tray), start on login, and jump to Settings from the tray menu |
 | **Theme & language** | Light / dark / follow system; UI font scaling; Chinese / English |
-| **Mobile layout** | A dedicated mobile layout (`data-platform` hook) with touch-calibrated sizing and interactions |
+| **Mobile layout** | A dedicated mobile layout (`data-platform` hook) with a four-item bottom bar (codes / favorites / recent / settings) and touch-calibrated sizing |
 
 **Behavior notes**
 
@@ -286,9 +312,12 @@ Built on the Volcengine **源力 (Yuanli)** design system: primary color `#1664F
 | At rest | Ciphertext + salt + nonce + metadata (JSON) only — no plaintext key |
 | Runtime | The unlock key lives in memory only (`Mutex<Option<[u8;32]>>`) and is cleared on lock |
 | Passphrase check | A separate verifier — `HMAC-SHA256(vault key, fixed context)` — decoupled from the vault key and not reversible |
-| No-passphrase mode | A deterministic "machine-local key" derived from the device fingerprint and a fixed salt via Argon2, to keep secrets from being stored as plaintext |
+| No-passphrase mode | A 32-byte random "machine-local key" generated on first use and written atomically (`onetotp.machine.key`), bound to the device; the legacy OS + ARCH derived key is only used to read old data |
+| Biometrics | Credentials are held by the OS secure module: Windows Hello / macOS Keychain / Android Keystore (AES-256-GCM); the app never touches raw biometric data |
 | Backup | Exports are re-encrypted with a **separate passphrase**, so they can move across devices |
+| Screenshot protection | Windows `WDA_EXCLUDEFROMCAPTURE` / macOS content protection / Android `FLAG_SECURE` |
 | Input validation | Secret (Base32), digits (6/7/8), algorithm, period (1–3600s) and category name (≤20 chars) are all re-validated on the backend |
+| File I/O | Exports are limited to `.json` / `.txt`; both import and export cap at 10 MB; Android `content://` URIs are opened through ContentResolver and never accepted as arbitrary frontend-supplied paths |
 | Color injection | Category colors are normalized by regex; invalid values fall back to the theme blue |
 
 > [!NOTE]
@@ -343,6 +372,16 @@ npm run tauri android init   # generate the project once
 npm run tauri android build -- --apk --target aarch64
 ```
 
+> [!TIP]
+> On Windows, `tauri android build` fails after the Rust build — Tauri needs to create a symlink under `jniLibs/<abi>/`, which Windows disallows by default (unless Developer Mode is on). Use the bundled script to work around it; it performs the whole flow manually (build Rust → place `.so` → sync frontend → gradle package → sign) and bumps `versionCode` automatically:
+>
+> ```powershell
+> cd develop
+> pwsh -File scripts/build-android-apk.ps1 -Label beta
+> ```
+>
+> See [android-release-build.md](develop/docs/android-release-build.md) for details.
+
 **Automated all-platform builds**
 
 The repo ships a [GitHub Actions workflow](.github/workflows/release.yml). Pushing a `v*` tag triggers a build matrix covering Windows / macOS / Linux / Android across architectures and creates a Release automatically. The iOS job turns on once Apple certificate secrets are configured, and is skipped silently otherwise.
@@ -354,20 +393,24 @@ OneTotp/
 ├─ .github/workflows/
 │  └─ release.yml          # all-platform build matrix
 ├─ develop/
+│  ├─ docs/                # build & release notes
+│  ├─ scripts/             # Android one-shot packaging, local data reset
+│  ├─ tests/               # auto-lock decision unit tests
 │  ├─ src/                 # React frontend
 │  │  ├─ components/       # shared UI (title bar, buttons, dialogs, toast…)
 │  │  ├─ pages/            # screens (codes, detail, settings, security, import/export…)
-│  │  ├─ state/            # app state, auto-lock, screenshot protection
-│  │  ├─ lib/              # API wrapper, theme, platform, QR, shortcuts
+│  │  ├─ state/            # app state, auto-lock, privacy protection
+│  │  ├─ lib/              # API wrapper, theme, platform, QR, shortcuts, biometrics
 │  │  ├─ i18n/             # Chinese / English strings
 │  │  └─ styles/           # design tokens and styles
 │  └─ src-tauri/           # Rust backend
 │     ├─ src/
 │     │  ├─ crypto.rs      # Argon2id derivation + AES-256-GCM
 │     │  ├─ totp.rs        # RFC 4226 / RFC 6238 implementation
-│     │  ├─ store.rs       # vault I/O, backups, otpauth parsing
+│     │  ├─ store.rs       # vault I/O, backups, data directory migration
 │     │  ├─ commands.rs    # Tauri commands (accounts / categories / settings / backup)
 │     │  └─ models.rs      # data models
+│     ├─ plugins/          # bundled plugins (biometrics, native QR scanner)
 │     └─ tauri.conf.json
 └─ Design/                 # design sources
 ```
@@ -380,7 +423,8 @@ OneTotp/
 | Frontend | **React 19** + **TypeScript** + **Vite 8** |
 | Cryptography | `aes-gcm` · `argon2` · `rand` |
 | OTP algorithms | `hmac` · `sha1` · `sha2` · `base32` |
-| QR scanning | `jsqr` (parsed locally) |
+| QR scanning | Android: CameraX + ZXing (native); desktop: `jsqr` (parsed locally) |
+| Biometrics | `tauri-plugin-biometry` (Windows Hello / Touch ID / Android Keystore) |
 | Design system | Volcengine Yuanli |
 
 ### FAQ
@@ -391,11 +435,11 @@ No. OneTotp has no server. You can use it fully offline with identical functiona
 
 **How do I move to another computer?**
 
-Use Export to generate an encrypted backup string (**encrypted with a separate passphrase**) and Import it on the new device. You can export accounts only or settings only; import merges by account id and never overwrites existing accounts.
+Use Export to generate an encrypted backup file (**encrypted with a separate passphrase**) and Import it on the new device. You can export accounts only or settings only; import merges by secret and never overwrites existing accounts.
 
 **I forgot my unlock passphrase.**
 
-It cannot be recovered. The key is derived from the passphrase via Argon2id — the passphrase *is* the key, and there is no backdoor or reset path. That is the necessary cost of the security design. Keep automatic backups off-site.
+It cannot be recovered. The key is derived from the passphrase via Argon2id — the passphrase *is* the key, and there is no backdoor or reset path. That is the necessary cost of the security design. Keep automatic backups off-site; if you set a password hint, the lock screen will show it.
 
 **Which import formats are supported?**
 

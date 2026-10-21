@@ -406,6 +406,8 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
+
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         continue-on-error: true
@@ -416,8 +418,38 @@ jobs:
       - name: List collected artifacts
         run: ls -R release || echo "no artifacts"
 
+      # 从 更新日志.md 中截取当前 tag 对应版本的段落作为 Release 正文。
+      # 找不到对应版本时回退为空，由 generate_release_notes 兜底。
+      - name: Extract changelog for this tag
+        id: changelog
+        shell: bash
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          VER="${TAG#v}"
+          FILE="更新日志.md"
+          if [ ! -f "$FILE" ]; then
+            echo "changelog file not found"
+            exit 0
+          fi
+          # 从「## ... vX.Y.Z」标题开始，截到下一个「## 」标题之前
+          BODY=$(awk -v ver="$VER" '
+            $0 ~ "^## .*v" ver "([^0-9.]|$)" { found=1; next }
+            found && /^## / { exit }
+            found { print }
+          ' "$FILE")
+          if [ -z "$(echo "$BODY" | tr -d '[:space:]')" ]; then
+            echo "no changelog section for $VER"
+            exit 0
+          fi
+          {
+            echo "body<<__CHANGELOG_EOF__"
+            echo "$BODY"
+            echo "__CHANGELOG_EOF__"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: release/**/*
-          generate_release_notes: true
+          body: ${{ steps.changelog.outputs.body }}
+          generate_release_notes: ${{ steps.changelog.outputs.body == '' }}

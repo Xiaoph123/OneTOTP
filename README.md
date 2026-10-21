@@ -26,7 +26,7 @@
 ## 简体中文
 
 > [!IMPORTANT]
-> **离线是设计前提，不是可选项。** OneTotp 不发起任何网络请求、不接入云端同步、不含遥测与统计。你的账户密钥从头到尾只存在于本机，加密后落盘，解密只在内存中发生。
+> **离线是设计前提，不是可选项。** OneTOTP 不发起任何网络请求、不接入云端同步、不含遥测与统计。你的账户密钥从头到尾只存在于本机，加密后落盘，解密只在内存中发生。
 
 ### 它是什么
 
@@ -105,7 +105,7 @@
 
 ### 下载
 
-前往 **[Releases](https://github.com/Xiaoph123/OneTotp/releases/latest)** 获取最新版本。命名规则为 `OneTotp_{版本}_{系统}_{架构}-{类型}`。
+前往 **[Releases](https://github.com/Xiaoph123/OneTotp/releases/latest)** 获取最新版本。命名规则为 `OneTOTP_{版本}_{系统}_{架构}-{类型}`。
 
 | 平台 | 架构 | 产物 | 说明 |
 | --- | --- | --- | --- |
@@ -121,7 +121,7 @@
 
 **首次安装提示**
 
-- **macOS**：未签名分发包首次打开需右键 →「打开」，或执行 `xattr -dr com.apple.quarantine OneTotp.app`。
+- **macOS**：未签名分发包首次打开需右键 →「打开」，或执行 `xattr -dr com.apple.quarantine OneTOTP.app`。
 - **Windows**：SmartScreen 可能提示未知发布者，选择「更多信息 → 仍要运行」。
 - **Android**：需在系统设置中允许安装来自该来源的应用。
 
@@ -169,7 +169,7 @@ npm run tauri android build -- --apk --target aarch64
 ### 项目结构
 
 ```text
-OneTotp/
+OneTOTP/
 ├─ .github/workflows/
 │  └─ release.yml          # 全端构建矩阵
 ├─ develop/
@@ -211,7 +211,7 @@ OneTotp/
 
 **会不会把我的密钥上传到服务器？**
 
-不会。OneTotp 没有服务器。你可以断网使用，功能完全一致——这是验证「纯离线」最直接的方式。
+不会。OneTOTP 没有服务器。你可以断网使用，功能完全一致——这是验证「纯离线」最直接的方式。
 
 **换电脑怎么办？**
 
@@ -235,7 +235,7 @@ OneTotp/
 
 ### 反馈
 
-欢迎通过 [GitHub Issues](https://github.com/Xiaoph123/OneTotp/issues) 提交问题与建议。反馈时请注明系统平台、架构与 OneTotp 版本号。
+欢迎通过 [GitHub Issues](https://github.com/Xiaoph123/OneTotp/issues) 提交问题与建议。反馈时请注明系统平台、架构与 OneTOTP 版本号。
 
 <p align="right"><a href="#english">English →</a></p>
 
@@ -246,7 +246,7 @@ OneTotp/
 <p align="right"><a href="#简体中文">← 简体中文</a></p>
 
 > [!IMPORTANT]
-> **Offline by design, not by option.** OneTotp makes no network requests, has no cloud sync, and contains no telemetry or analytics. Your account secrets never leave your device — they are encrypted at rest and decrypted only in memory.
+> **Offline by design, not by option.** OneTOTP makes no network requests, has no cloud sync, and contains no telemetry or analytics. Your account secrets never leave your device — they are encrypted at rest and decrypted only in memory.
 
 ### What it is
 
@@ -325,7 +325,7 @@ Built on the Volcengine **源力 (Yuanli)** design system: primary color `#1664F
 
 ### Download
 
-Grab the latest build from **[Releases](https://github.com/Xiaoph123/OneTotp/releases/latest)**. Artifacts follow `OneTotp_{version}_{os}_{arch}-{type}`.
+Grab the latest build from **[Releases](https://github.com/Xiaoph123/OneTotp/releases/latest)**. Artifacts follow `OneTOTP_{version}_{os}_{arch}-{type}`.
 
 | Platform | Arch | Artifact | Notes |
 | --- | --- | --- | --- |
@@ -341,7 +341,7 @@ Grab the latest build from **[Releases](https://github.com/Xiaoph123/OneTotp/rel
 
 **First-run notes**
 
-- **macOS**: an unsigned build must be opened via right-click → Open, or run `xattr -dr com.apple.quarantine OneTotp.app`.
+- **macOS**: an unsigned build must be opened via right-click → Open, or run `xattr -dr com.apple.quarantine OneTOTP.app`.
 - **Windows**: SmartScreen may warn about an unknown publisher — choose "More info → Run anyway".
 - **Android**: allow installing apps from this source in system settings.
 
@@ -389,7 +389,7 @@ The repo ships a [GitHub Actions workflow](.github/workflows/release.yml). Pushi
 ### Project layout
 
 ```text
-OneTotp/
+OneTOTP/
 ├─ .github/workflows/
 │  └─ release.yml          # all-platform build matrix
 ├─ develop/
@@ -431,7 +431,7 @@ OneTotp/
 
 **Does it upload my secrets anywhere?**
 
-No. OneTotp has no server. You can use it fully offline with identical functionality — the simplest way to verify the "offline" claim.
+No. OneTOTP has no server. You can use it fully offline with identical functionality — the simplest way to verify the "offline" claim.
 
 **How do I move to another computer?**
 
@@ -455,6 +455,6 @@ Standard `otpauth://` links, either a single one or one per line for bulk import
 
 ### Feedback
 
-Questions and suggestions are welcome via [GitHub Issues](https://github.com/Xiaoph123/OneTotp/issues). Please include your OS, architecture, and OneTotp version.
+Questions and suggestions are welcome via [GitHub Issues](https://github.com/Xiaoph123/OneTotp/issues). Please include your OS, architecture, and OneTOTP version.
 
 <p align="right"><a href="#简体中文">↑ 简体中文</a></p>

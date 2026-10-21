@@ -4,15 +4,15 @@ name: Release
 #   1. 推送版本 tag（如 v0.1.0）自动构建并发布 Release
 #   2. 在 GitHub Actions 页面手动运行（workflow_dispatch）
 #
-# 产物命名规范：OneTotp_{版本}_{系统}_{架构}-{类型}.{后缀}
-#   例：OneTotp_0.1.0_windows_x64-setup.exe
-#       OneTotp_0.1.0_windows_x64-portable.exe
-#       OneTotp_0.1.0_windows_arm64-setup.exe
-#       OneTotp_0.1.0_macos_x64.dmg / _arm64.dmg / _universal.dmg
-#       OneTotp_0.1.0_linux_x86_64.deb / .rpm / .AppImage
-#       OneTotp_0.1.0_linux_arm64.deb / .rpm / .AppImage
-#       OneTotp_0.1.0_android_arm64.apk / _armv7.apk / _x86.apk / _x86_64.apk
-#       OneTotp_0.1.0_ios.ipa
+# 产物命名规范：OneTOTP_{版本}_{系统}_{架构}-{类型}.{后缀}
+#   例：OneTOTP_0.1.0_windows_x64-setup.exe
+#       OneTOTP_0.1.0_windows_x64-portable.exe
+#       OneTOTP_0.1.0_windows_arm64-setup.exe
+#       OneTOTP_0.1.0_macos_x64.dmg / _arm64.dmg / _universal.dmg
+#       OneTOTP_0.1.0_linux_x86_64.deb / .rpm / .AppImage
+#       OneTOTP_0.1.0_linux_arm64.deb / .rpm / .AppImage
+#       OneTOTP_0.1.0_android_arm64.apk / _armv7.apk / _x86.apk / _x86_64.apk
+#       OneTOTP_0.1.0_ios.ipa
 #
 # 说明：Tauri 2 不支持 32 位 Windows（i686），故 Windows 仅出 x64 / arm64。
 on:
@@ -79,8 +79,8 @@ jobs:
           $ver = node -p "require('./develop/package.json').version"
           $dir = "develop/src-tauri/target/${{ matrix.triple }}/release"
           New-Item -ItemType Directory -Force -Path artifacts | Out-Null
-          Copy-Item "$dir/bundle/nsis/*-setup.exe" "artifacts/OneTotp_${ver}_windows_${{ matrix.arch }}-setup.exe"
-          Copy-Item "$dir/onetotp.exe"           "artifacts/OneTotp_${ver}_windows_${{ matrix.arch }}-portable.exe"
+          Copy-Item "$dir/bundle/nsis/*-setup.exe" "artifacts/OneTOTP_${ver}_windows_${{ matrix.arch }}-setup.exe"
+          Copy-Item "$dir/onetotp.exe"           "artifacts/OneTOTP_${ver}_windows_${{ matrix.arch }}-portable.exe"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -141,9 +141,9 @@ jobs:
           ver=$(node -p "require('./develop/package.json').version")
           dir="develop/src-tauri/target/${{ matrix.triple }}/release/bundle"
           mkdir -p artifacts
-          cp "$dir"/deb/*.deb           "artifacts/OneTotp_${ver}_linux_${{ matrix.arch }}.deb"
-          cp "$dir"/rpm/*.rpm           "artifacts/OneTotp_${ver}_linux_${{ matrix.arch }}.rpm"
-          cp "$dir"/appimage/*.AppImage "artifacts/OneTotp_${ver}_linux_${{ matrix.arch }}.AppImage"
+          cp "$dir"/deb/*.deb           "artifacts/OneTOTP_${ver}_linux_${{ matrix.arch }}.deb"
+          cp "$dir"/rpm/*.rpm           "artifacts/OneTOTP_${ver}_linux_${{ matrix.arch }}.rpm"
+          cp "$dir"/appimage/*.AppImage "artifacts/OneTOTP_${ver}_linux_${{ matrix.arch }}.AppImage"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -193,7 +193,7 @@ jobs:
           ver=$(node -p "require('./develop/package.json').version")
           mkdir -p artifacts
           cp develop/src-tauri/target/${{ matrix.triple }}/release/bundle/dmg/*.dmg \
-             "artifacts/OneTotp_${ver}_macos_${{ matrix.arch }}.dmg"
+             "artifacts/OneTOTP_${ver}_macos_${{ matrix.arch }}.dmg"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -293,9 +293,9 @@ jobs:
             --v2-signing-enabled true \
             --v3-signing-enabled true \
             --v4-signing-enabled false \
-            --out "artifacts/OneTotp_${ver}_android_${{ matrix.name }}.apk" \
+            --out "artifacts/OneTOTP_${ver}_android_${{ matrix.name }}.apk" \
             "$UNSIGNED"
-          "$APKSIGNER" verify --verbose "artifacts/OneTotp_${ver}_android_${{ matrix.name }}.apk"
+          "$APKSIGNER" verify --verbose "artifacts/OneTOTP_${ver}_android_${{ matrix.name }}.apk"
 
       - name: Collect unsigned APK
         if: env.KEYSTORE_BASE64 == ''
@@ -304,7 +304,7 @@ jobs:
           ver=$(node -p "require('./develop/package.json').version")
           APK=$(find develop/src-tauri/gen/android/app/build/outputs/apk -name '*.apk' | head -n 1)
           rm -rf artifacts && mkdir -p artifacts
-          cp "$APK" "artifacts/OneTotp_${ver}_android_${{ matrix.name }}-unsigned.apk"
+          cp "$APK" "artifacts/OneTOTP_${ver}_android_${{ matrix.name }}-unsigned.apk"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -390,7 +390,7 @@ jobs:
           mkdir -p artifacts
           IPA=$(find develop/src-tauri/gen/apple -name '*.ipa' | head -n 1)
           test -n "$IPA"
-          cp "$IPA" "artifacts/OneTotp_${ver}_ios.ipa"
+          cp "$IPA" "artifacts/OneTOTP_${ver}_ios.ipa"
 
       - uses: actions/upload-artifact@v4
         with:

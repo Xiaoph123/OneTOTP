@@ -37,5 +37,8 @@ keystore.properties
 # 本地预览页（设计稿对比用，临时产物，不入库）
 /.preview/
 
+# 设计产物（图标 / logo / 设计稿源文件，仅本地保留，不入库）
+/Design/
+
 # Android 打包脚本的本地 versionCode 计数器（每台机器各自递增，不入库）
 develop/src-tauri/gen/android/.versioncode

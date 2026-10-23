@@ -104,7 +104,25 @@ interface RawCodeResult {
 }
 
 export type ThemeMode = "light" | "dark" | "system";
+
+/**
+ * 开屏动画样式：
+ * - `draw`：盾牌轮廓逐笔描出，随后渐变填充与数字淡入
+ * - `pop`：盾牌弹性放大，随后高光扫过
+ * - `ring`：盾牌呼吸 + 外圈环形进度条走满
+ * - `dots`：光点从四周向中心汇聚，随后盾牌弹出（默认）
+ */
+export type SplashAnimation = "draw" | "pop" | "ring" | "dots";
+
 export type CodeVisibility = "never" | "always" | "hover";
+
+/**
+ * 首页分类分组的展开策略：
+ * - `expand`：始终自动展开
+ * - `collapse`：始终不自动展开（全部收起）
+ * - `remember`：按上次的展开状态还原
+ */
+export type CategoryExpandMode = "expand" | "collapse" | "remember";
 export type CardDensity = "compact" | "standard";
 export type CardDetail = "minimal" | "standard" | "detailed";
 export type CloseBehavior = "quit" | "tray";
@@ -118,6 +136,8 @@ export interface AppSettings {
   expiryHighlight: boolean;
   clickToCopy: boolean;
   codeVisibility: CodeVisibility;
+  /** 首页分类分组的展开策略 */
+  categoryExpandMode: CategoryExpandMode;
   hideOnScreenshot: boolean;
   /** 远程桌面会话时隐藏窗口 */
   hideOnRemote: boolean;
@@ -127,6 +147,8 @@ export interface AppSettings {
   backupKeep: number;
   passwordHint: string;
   theme: ThemeMode;
+  /** 开屏动画样式 */
+  splashAnimation: SplashAnimation;
   cardDensity: CardDensity;
   cardDetail: CardDetail;
   closeBehavior: CloseBehavior;
@@ -136,6 +158,8 @@ export interface AppSettings {
   fontScale: FontScale;
   /** 解锁连续失败 5 次后清空剪贴板 */
   clearClipboardOnFail: boolean;
+  /** 复制验证码后自动清空剪贴板的秒数，0=不自动清除 */
+  clipboardClearSeconds: number;
   /** 允许备份使用空密码（导出/导入都不再强制密码） */
   allowEmptyBackupPassword: boolean;
 }
@@ -154,6 +178,7 @@ interface RawSettings {
   expiry_highlight: boolean;
   click_to_copy: boolean;
   code_visibility: string;
+  category_expand_mode: string;
   hide_on_screenshot: boolean;
   hide_on_remote: boolean;
   hide_on_unfocused: boolean;
@@ -161,6 +186,7 @@ interface RawSettings {
   backup_keep: number;
   password_hint: string;
   theme: string;
+  splash_animation: string;
   card_density: string;
   card_detail: string;
   close_behavior: string;
@@ -169,6 +195,7 @@ interface RawSettings {
   window_size: string;
   font_scale: string;
   clear_clipboard_on_fail: boolean;
+  clipboard_clear_seconds: number;
   allow_empty_backup_password: boolean;
 }
 
@@ -182,6 +209,7 @@ function mapSettings(raw: RawSettings): AppSettings {
     expiryHighlight: raw.expiry_highlight,
     clickToCopy: raw.click_to_copy,
     codeVisibility: (raw.code_visibility as CodeVisibility) || "never",
+    categoryExpandMode: (raw.category_expand_mode as CategoryExpandMode) || "expand",
     hideOnScreenshot: raw.hide_on_screenshot,
     hideOnRemote: raw.hide_on_remote ?? true,
     hideOnUnfocused: raw.hide_on_unfocused ?? true,
@@ -189,6 +217,7 @@ function mapSettings(raw: RawSettings): AppSettings {
     backupKeep: raw.backup_keep,
     passwordHint: raw.password_hint,
     theme: (raw.theme as ThemeMode) || "light",
+    splashAnimation: (raw.splash_animation as SplashAnimation) || "dots",
     cardDensity: (raw.card_density as CardDensity) || "standard",
     cardDetail: (raw.card_detail as CardDetail) || "standard",
     closeBehavior: (raw.close_behavior as CloseBehavior) || "quit",
@@ -197,6 +226,7 @@ function mapSettings(raw: RawSettings): AppSettings {
     windowSize: (raw.window_size as WindowSize) || "standard",
     fontScale: (raw.font_scale as FontScale) || "standard",
     clearClipboardOnFail: raw.clear_clipboard_on_fail ?? true,
+    clipboardClearSeconds: raw.clipboard_clear_seconds ?? 30,
     allowEmptyBackupPassword: raw.allow_empty_backup_password ?? false,
   };
 }
@@ -211,6 +241,7 @@ function toRawSettings(s: AppSettings): RawSettings {
     expiry_highlight: s.expiryHighlight,
     click_to_copy: s.clickToCopy,
     code_visibility: s.codeVisibility,
+    category_expand_mode: s.categoryExpandMode,
     hide_on_screenshot: s.hideOnScreenshot,
     hide_on_remote: s.hideOnRemote,
     hide_on_unfocused: s.hideOnUnfocused,
@@ -218,6 +249,7 @@ function toRawSettings(s: AppSettings): RawSettings {
     backup_keep: s.backupKeep,
     password_hint: s.passwordHint,
     theme: s.theme,
+    splash_animation: s.splashAnimation,
     card_density: s.cardDensity,
     card_detail: s.cardDetail,
     close_behavior: s.closeBehavior,
@@ -226,16 +258,40 @@ function toRawSettings(s: AppSettings): RawSettings {
     window_size: s.windowSize,
     font_scale: s.fontScale,
     clear_clipboard_on_fail: s.clearClipboardOnFail,
+    clipboard_clear_seconds: s.clipboardClearSeconds,
     allow_empty_backup_password: s.allowEmptyBackupPassword,
   };
 }
 
+/** 数据目录指针不可用的原因（与后端 store::DataDirIssueCode 一一对应） */
+export type DataDirIssueCode =
+  | "unreadable"
+  | "invalid_json"
+  | "missing_field"
+  | "empty_path"
+  | "not_absolute"
+  | "network_path"
+  | "not_found";
+
+export interface DataDirIssue {
+  code: DataDirIssueCode;
+  /** 涉及的路径：能解析出目标目录时为其路径，否则为空串 */
+  path: string;
+}
 export interface StatusView {
   hasVault: boolean;
   hasLock: boolean;
   locked: boolean;
   passwordHint: string;
   lockOnlyOnStart: boolean;
+  /** 保险库仍使用较弱的旧 KDF 参数（建议执行一次「重新加密保险库」） */
+  kdfLegacy: boolean;
+  /** 当前实际使用的数据目录 */
+  dataDir: string;
+  /** 是否来自自定义目录指针 */
+  dataDirFromPointer: boolean;
+  /** 指针存在但不可用时的原因（此时正使用默认目录）；文案由前端按 code 本地化 */
+  dataDirIssue: DataDirIssue | null;
 }
 
 interface RawStatus {
@@ -244,6 +300,10 @@ interface RawStatus {
   locked: boolean;
   password_hint: string;
   lock_only_on_start: boolean;
+  kdf_legacy: boolean;
+  data_dir: string;
+  data_dir_from_pointer: boolean;
+  data_dir_issue: { code: string; path: string } | null;
 }
 
 export interface BackupView {
@@ -369,6 +429,12 @@ export const api = {
       locked: raw.locked,
       passwordHint: raw.password_hint,
       lockOnlyOnStart: raw.lock_only_on_start,
+      kdfLegacy: raw.kdf_legacy ?? false,
+      dataDir: raw.data_dir ?? "",
+      dataDirFromPointer: raw.data_dir_from_pointer ?? false,
+      dataDirIssue: raw.data_dir_issue
+        ? { code: raw.data_dir_issue.code as DataDirIssueCode, path: raw.data_dir_issue.path ?? "" }
+        : null,
     };
   },
 
@@ -391,9 +457,12 @@ export const api = {
   /**
    * 重新加密保险库：同一口令 + 全新 salt，重新派生密钥并重写本地数据。
    * 用于让曾经以明文写在锁定凭证文件里的旧密钥彻底作废。
+   *
+   * 返回 `staleBackups`：换密钥后，此前的快照已无法解密，建议提示用户清理。
    */
-  rotateVaultKey(password: string): Promise<void> {
-    return invoke("rotate_vault_key", { password });
+  async rotateVaultKey(password: string): Promise<{ staleBackups: number }> {
+    const raw = await invoke<{ stale_backups: number }>("rotate_vault_key", { password });
+    return { staleBackups: raw.stale_backups };
   },
 
   async listAccounts(): Promise<AccountView[]> {
@@ -476,8 +545,21 @@ export const api = {
     return { added, skipped };
   },
 
-  deleteAccount(id: string): Promise<void> {
-    return invoke("delete_account", { id });
+  /**
+   * 删除账户。
+   *
+   * `purgeBackups` 默认 true：历史快照与主库共用同一把密钥，若不清理，
+   * 被删账户的密钥仍能从快照里解出（等于「删除了但没撤销」）。
+   */
+  async deleteAccount(
+    id: string,
+    purgeBackups = true,
+  ): Promise<{ purgedBackups: number; staleBackups: number }> {
+    const raw = await invoke<{ purged_backups: number; stale_backups: number }>(
+      "delete_account",
+      { id, purgeBackups },
+    );
+    return { purgedBackups: raw.purged_backups, staleBackups: raw.stale_backups };
   },
 
   toggleFavorite(id: string): Promise<boolean> {

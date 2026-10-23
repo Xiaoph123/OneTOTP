@@ -314,7 +314,14 @@ export const en: Record<string, string> = {
   "登录系统后自动打开 OneTOTP": "Open OneTOTP automatically after sign-in",
   "复制后自动隐藏窗口": "Hide window after copy",
   "复制验证码后自动收起窗口": "Collapse the window after copying a code",
+  "复制验证码后自动切到后台": "Send the app to the background after copying a code",
   "验证码显示分组": "Group code digits",
+  "分类自动展开": "Auto-expand categories",
+  "首页分类分组打开应用时的展开方式":
+    "How category groups are expanded when the app opens",
+  "自动展开": "Always expand",
+  "不自动展开": "Never expand",
+  "按上次状态": "Remember last state",
   "将 6 位验证码拆分为 3+3，8 位拆分为 4+4": "Split a 6-digit code as 3+3 and an 8-digit code as 4+4",
   "剩余时间不足时高亮": "Highlight when expiring",
   "倒计时少于 5 秒时标红": "Turn red when fewer than 5 seconds remain",
@@ -338,6 +345,12 @@ export const en: Record<string, string> = {
   "调整窗口宽度，紧凑 / 标准 / 宽松": "Adjust window width: Compact / Standard / Roomy",
   "宽松": "Roomy",
   "主题外观": "Theme",
+  "开屏动画": "Splash animation",
+  "启动应用时播放的加载动画样式": "Loading animation played when the app starts",
+  "描边绘制": "Outline draw",
+  "弹入光扫": "Pop & shine",
+  "环形进度": "Ring progress",
+  "光点聚合": "Dot converge",
   "切换亮色 / 暗色，或跟随系统": "Light / dark, or follow the system",
   "亮色": "Light",
   "暗色": "Dark",
@@ -435,6 +448,8 @@ export const en: Record<string, string> = {
     "Re-encrypt local data with the same password but a brand-new key. Older versions stored the key in plaintext inside the lock credential file; if that file was ever copied or backed up, run this once.",
   "请输入当前密码。将通过全新随机盐重新派生密钥并重写本地保险库，旧密钥随即失效。":
     "Enter the current password. A fresh random salt is used to derive a new key and rewrite the local vault; the old key immediately stops working.",
+  "当前保险库仍在使用旧版密钥派生参数（强度较低）。点上方「重新加密保险库」即可升级到更强的参数，密码无需更改。":
+    "This vault still uses the older key-derivation parameters (weaker). Use \"Re-encrypt vault\" above to upgrade — your password stays the same.",
   "启用锁定": "Enable lock",
   "指纹 / 面容解锁": "Fingerprint / Face unlock",
   "验证身份以解锁 OneTOTP": "Verify your identity to unlock OneTOTP",
@@ -460,6 +475,11 @@ export const en: Record<string, string> = {
   "防止暴力尝试，自动清空最近复制内容":
     "Prevent brute-force attempts by clearing recently copied content",
   "失败清除剪贴板": "Clear clipboard on failure",
+  "复制后自动清除剪贴板": "Clear clipboard after copying",
+  "验证码留在剪贴板里可能被其他程序读到":
+    "A copied code stays on the clipboard and may be read by other programs",
+  "15 秒": "15 seconds",
+  "不自动清除": "Never auto-clear",
   "已连续失败 {n} 次，剪贴板已清空":
     "Failed {n} times in a row, clipboard cleared",
   "忘记密码将无法恢复，只能通过事先导出的加密备份在新设备恢复账户。":
@@ -542,4 +562,34 @@ export const en: Record<string, string> = {
   "正在启动 OneTOTP…": "Starting OneTOTP…",
   "应用已在运行，请勿重复打开": "OneTOTP is already running — please don't open it again",
   "账户不存在或已被删除": "The account does not exist or was deleted",
-};
+  "已删除账户，并从 {n} 份历史快照中清除了它的密钥":
+    "Account deleted, and its key was purged from {n} historical snapshot(s).",
+  "已删除账户，但有 {n} 份旧快照无法清理（由旧密钥加密），建议在设置中清理全部快照":
+    "Account deleted, but {n} older snapshot(s) could not be cleaned (encrypted with an old key). Consider clearing all snapshots in Settings.",
+  "同时从历史快照中清除该账户（推荐）":
+    "Also purge this account from historical snapshots (recommended)",
+  "关闭此项后，该账户的密钥可能仍保留在本机历史快照中。":
+    "If unchecked, this account's key may remain in local historical snapshots.",
+  "调用系统指纹或面容快速解锁（便捷优先，不额外增加抗本机攻击能力）":
+    "Unlock quickly with the system fingerprint or face (for convenience; adds no protection against local attackers)",
+  "移除已保存的生物识别凭据": "Remove saved biometric credential",
+  "删除本机保存的解锁凭据；下次使用需重新输入密码登记":
+    "Deletes the unlock credential stored on this device; you must enter your password again to enroll later",
+  "移除": "Remove",
+  "已移除本机保存的生物识别凭据": "Removed the biometric credential stored on this device",
+  "移除失败：{msg}": "Removal failed: {msg}",
+  "{n} 份旧加密快照已失效（使用旧密钥），建议在设置中清理":
+    "{n} older snapshot(s) are no longer readable (old key). Consider clearing them in Settings.",
+  "自定义数据目录不可用": "Custom data directory unavailable",
+  "当前正使用默认目录。你的数据仍在原目录中，可修正路径或恢复默认设置。":
+    "The default directory is in use. Your data is still in the original directory; fix the path or reset to defaults.",  "指针文件存在但无法读取（权限不足或被占用）":
+    "The pointer file exists but cannot be read (insufficient permissions or locked)",
+  "指针文件内容不是合法 JSON": "The pointer file is not valid JSON",
+  "指针文件缺少 data_dir 字段": "The pointer file is missing the data_dir field",
+  "指针文件中的目录为空": "The pointer file contains an empty directory",
+  "数据目录不是绝对路径：{path}": "The data directory is not an absolute path: {path}",
+  "数据目录位于网络位置（不支持）：{path}":
+    "The data directory is on a network location (unsupported): {path}",
+  "数据目录不存在或不可访问：{path}":
+    "The data directory does not exist or is inaccessible: {path}",
+  "数据目录配置异常": "Data directory configuration error",};

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useApp } from "../state/AppContext";
 import { api, type AccountView } from "../lib/api";
 import { TabBar } from "../components/TabBar";
+import { useToast } from "../components/Toast";
 import { Button, IconButton } from "../components/Button";
 import { Select } from "../components/Select";
 import { ConfirmDialog } from "../components/Dialog";
@@ -12,8 +13,10 @@ import { useI18n } from "../i18n";
 export function DetailPage({ accountId }: { accountId: string }) {
   const { navigate, goBack, categories, refreshAccounts } = useApp();
   const { t } = useI18n();
-  const [account, setAccount] = useState<AccountView | null>(null);
+  const toast = useToast();  const [account, setAccount] = useState<AccountView | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  // 是否同时清除历史快照中的该账户（默认开启：删除就该是删除）
+  const [purgeBackups, setPurgeBackups] = useState(true);
   const avatar = avatarOf(account?.issuer ?? "");
 
   useEffect(() => {
@@ -34,8 +37,18 @@ export function DetailPage({ accountId }: { accountId: string }) {
   };
 
   const handleDelete = async () => {
-    await api.deleteAccount(accountId);
+    const result = await api.deleteAccount(accountId, purgeBackups);
     await refreshAccounts();
+    // 如实回报快照清理结果：无法清理的快照多为旧密钥加密，需要用户手动清理
+    if (result.staleBackups > 0) {
+      toast.warning(
+        t("已删除账户，但有 {n} 份旧快照无法清理（由旧密钥加密），建议在设置中清理全部快照", {
+          n: result.staleBackups,
+        }),
+      );
+    } else if (result.purgedBackups > 0) {
+      toast.success(t("已删除账户，并从 {n} 份历史快照中清除了它的密钥", { n: result.purgedBackups }));
+    }
     navigate({ name: "codes" });
   };
 
@@ -134,7 +147,23 @@ export function DetailPage({ accountId }: { accountId: string }) {
         open={confirmDelete}
         danger
         title={t("删除账户")}
-        description={t("删除后该账户的验证码将立即失效且无法恢复，请确认已在服务端保留其他登录方式。")}
+        description={
+          <>
+            <div>{t("删除后该账户的验证码将立即失效且无法恢复，请确认已在服务端保留其他登录方式。")}</div>
+            {/* 快照与主库共用同一把密钥：不清理的话，删掉的账户仍能从历史快照里解出 */}
+            <label className="modal-check">
+              <input
+                type="checkbox"
+                checked={purgeBackups}
+                onChange={(e) => setPurgeBackups(e.target.checked)}
+              />
+              <span>{t("同时从历史快照中清除该账户（推荐）")}</span>
+            </label>
+            <div className="modal-desc-sub">
+              {t("关闭此项后，该账户的密钥可能仍保留在本机历史快照中。")}
+            </div>
+          </>
+        }
         confirmText={t("确认删除")}
         onConfirm={handleDelete}
         onCancel={() => setConfirmDelete(false)}

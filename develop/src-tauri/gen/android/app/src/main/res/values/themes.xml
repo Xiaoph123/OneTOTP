@@ -1,6 +1,14 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
     <!-- Base application theme. -->
     <style name="Theme.onetotp" parent="Theme.Material3.DayNight.NoActionBar">
-        <!-- Customize your theme here. -->
+        <!--
+          启动窗口（starting window）底色。
+
+          这是系统在 Activity 创建**之前**画出来的那一层，也是「冷启动闪白」
+          最后可能的来源：它由主题决定，此时 Kotlin 与页面 CSS 都还没运行。
+          取色与前端 splash.css / tokens.css 的 color-bg-2（前端 CSS 变量） 完全一致：
+          亮 #FCFDFE / 暗 #141619（见 values-night）。
+        -->
+        <item name="android:windowBackground">@color/onetotp_startup_background</item>
     </style>
 </resources>

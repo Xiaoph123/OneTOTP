@@ -32,6 +32,46 @@ export async function clearClipboard(): Promise<void> {
   }
 }
 
+/** 待执行的剪贴板自动清除定时器（新的复制会替换旧的） */
+let clipboardClearTimer: number | undefined;
+
+/**
+ * 复制文本，并在 `clearAfterSeconds` 秒后自动清除剪贴板。
+ *
+ * 为什么需要：验证码被复制后会一直留在系统剪贴板里，任何后续程序
+ * （输入法、历史记录、其他应用）都可能读到它。同类产品的通行做法是
+ * 复制后定时清除。
+ *
+ * 安全细节：清除前先**读一次剪贴板**，只有内容仍是我们写入的那段才清空——
+ * 否则用户在这几秒内复制了别的内容，会被我们误删。
+ * 读不到剪贴板时保守跳过（宁可留着验证码，也不误清用户的东西）。
+ */
+export async function copyTextAutoClear(
+  text: string,
+  clearAfterSeconds: number,
+): Promise<void> {
+  await copyText(text);
+
+  if (clipboardClearTimer !== undefined) {
+    window.clearTimeout(clipboardClearTimer);
+    clipboardClearTimer = undefined;
+  }
+  if (!Number.isFinite(clearAfterSeconds) || clearAfterSeconds <= 0) return;
+
+  clipboardClearTimer = window.setTimeout(() => {
+    clipboardClearTimer = undefined;
+    void (async () => {
+      try {
+        const { readText } = await import("@tauri-apps/plugin-clipboard-manager");
+        const current = await readText();
+        if (current === text) await clearClipboard();
+      } catch {
+        // 读取失败（权限/平台限制）：不动剪贴板
+      }
+    })();
+  }, clearAfterSeconds * 1000);
+}
+
 /**
  * 解析「重复账户」错误。
  * 后端在检测到密钥已存在时，返回 `duplicate:{issuer}|{account}` 格式的错误串。

@@ -1,6 +1,7 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
-    <!-- Base application theme. -->
+    <!-- Base application theme（系统深色模式）。 -->
     <style name="Theme.onetotp" parent="Theme.Material3.DayNight.NoActionBar">
-        <!-- Customize your theme here. -->
+        <!-- 启动窗口底色：与前端暗色 color-bg-2（前端 CSS 变量） 一致，避免冷启动闪白 -->
+        <item name="android:windowBackground">@color/onetotp_startup_background</item>
     </style>
 </resources>

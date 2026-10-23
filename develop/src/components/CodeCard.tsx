@@ -10,7 +10,7 @@ import {
 import { CountdownRing } from "./Controls";
 import { MoreHorizontal } from "./icons";
 import { useToast } from "./Toast";
-import { avatarOf, copyText, formatCode } from "../lib/utils";
+import { avatarOf, copyTextAutoClear, formatCode } from "../lib/utils";
 import { hideWindow } from "../state/useAutoLock";
 import { useApp } from "../state/AppContext";
 import { isMobile } from "../lib/platform";
@@ -43,7 +43,7 @@ export function CodeCard({
 }: Props) {
   const { t } = useI18n();
   const toast = useToast();
-  const { refreshAccounts } = useApp();
+  const { refreshAccounts, settings } = useApp();
   const mobile = isMobile();
   // 桌面 hover 模式下由悬停控制显示；移动端无 hover，改为点击揭示
   const [hovering, setHovering] = useState(false);
@@ -74,7 +74,8 @@ export function CodeCard({
   const handleCopy = async () => {
     if (!code) return;
     try {
-      await copyText(code.code);
+      // 复制后按设置自动清除剪贴板（默认 30 秒，0 表示不自动清除）
+      await copyTextAutoClear(code.code, settings?.clipboardClearSeconds ?? 30);
     } catch {
       // 写入剪贴板失败时不能再提示成功，否则用户会误以为已复制
       toast.error(t("复制失败，请重试"));

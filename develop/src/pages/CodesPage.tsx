@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useApp, type CodesFilter } from "../state/AppContext";
 import { CodeCard } from "../components/CodeCard";
 import { TabBar } from "../components/TabBar";
@@ -16,6 +16,45 @@ interface Group {
   name: string;
   color: string;
   accounts: AccountView[];
+}
+
+/** 分类折叠状态的本机缓存键（remember 模式使用） */
+const COLLAPSED_CACHE_KEY = "onetotp.collapsedCategories";
+
+/**
+ * 读取上次的分类折叠状态。
+ *
+ * 为什么放 localStorage 而不是设置项：折叠状态是高频变化的临时视图状态，
+ * 每次点击都写保险库会带来不必要的磁盘写入与加密开销；
+ * 且它不含敏感信息，本机缓存即可。
+ */
+function readCollapsedState(): Record<string, boolean> {
+  try {
+    const raw = localStorage.getItem(COLLAPSED_CACHE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== "object") return {};
+    const out: Record<string, boolean> = {};
+    for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
+      if (v === true) out[k] = true;
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+/** 写入分类折叠状态（只记录被收起的分类，展开的不占空间） */
+function writeCollapsedState(state: Record<string, boolean>): void {
+  try {
+    const onlyCollapsed: Record<string, boolean> = {};
+    for (const [k, v] of Object.entries(state)) {
+      if (v) onlyCollapsed[k] = true;
+    }
+    localStorage.setItem(COLLAPSED_CACHE_KEY, JSON.stringify(onlyCollapsed));
+  } catch {
+    // localStorage 不可用（隐私模式等）时忽略，仅失去记忆能力
+  }
 }
 
 export function CodesPage() {
@@ -37,8 +76,39 @@ export function CodesPage() {
     const timer = window.setTimeout(() => setDebouncedQuery(query), 200);
     return () => window.clearTimeout(timer);
   }, [query]);
-  // 折叠状态：记录被收起的分类 id
+  // 折叠状态：记录被收起的分类 id。
+  // 初始值由设置项 categoryExpandMode 决定（见下方 effect）：
+  // - expand：全部展开
+  // - collapse：全部收起
+  // - remember：从 localStorage 还原上次状态
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const expandMode = settings?.categoryExpandMode ?? "expand";
+  // 只在「分类集合首次就绪」时应用一次初始策略，
+  // 之后用户的点击不应被设置项反复覆盖。
+  const appliedModeRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (categories.length === 0) return;
+    if (appliedModeRef.current === expandMode) return;
+    appliedModeRef.current = expandMode;
+    if (expandMode === "expand") {
+      setCollapsed({});
+    } else if (expandMode === "collapse") {
+      const next: Record<string, boolean> = {};
+      for (const c of categories) next[c.id] = true;
+      setCollapsed(next);
+    } else {
+      setCollapsed(readCollapsedState());
+    }
+  }, [expandMode, categories]);
+
+  /** 切换某个分类的折叠状态；remember 模式下同步写入本机缓存 */
+  const toggleCollapsed = (id: string, next: boolean) => {
+    setCollapsed((prev) => {
+      const merged = { ...prev, [id]: next };
+      if (expandMode === "remember") writeCollapsedState(merged);
+      return merged;
+    });
+  };
 
   const visible = useMemo(() => {
     let list = accounts;
@@ -182,9 +252,7 @@ export function CodesPage() {
                 <div key={g.id || "__uncat__"} className="otp-group">
                   <button
                     className={`otp-group-head${isCollapsed ? " is-collapsed" : ""}`}
-                    onClick={() =>
-                      setCollapsed((prev) => ({ ...prev, [g.id]: !isCollapsed }))
-                    }
+                    onClick={() => toggleCollapsed(g.id, !isCollapsed)}
                     aria-expanded={!isCollapsed}
                     ref={(el) => {
                       // 通过 CSSOM 写入分类色变量（CSP 收紧后不允许行内 style）

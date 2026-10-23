@@ -181,9 +181,22 @@ export function useAutoLock() {
   }, [phase, hasLock, settings, lockApp, syncLockedState]);
 }
 
-/** 隐藏当前窗口（复制后自动隐藏使用，仅桌面端有窗口概念） */
+/**
+ * 隐藏当前窗口（复制后自动隐藏使用）。
+ *
+ * - 桌面端：隐藏窗口，用户从托盘或快捷键唤起。
+ * - 移动端：没有窗口概念，改为把应用切到后台（等价于按 Home 键），
+ *   用户从最近任务切回即可继续使用。
+ */
 export async function hideWindow() {
-  if (!isDesktop() || !isTauri()) return;
+  if (!isTauri()) return;
+  if (!isDesktop()) {
+    // Android 原生桥：moveTaskToBack(true)
+    const bridge = (window as unknown as { OneTotpNative?: { moveToBackground?: () => void } })
+      .OneTotpNative;
+    bridge?.moveToBackground?.();
+    return;
+  }
   try {
     // 打个标记：这次隐藏是「复制后自动隐藏」的正常流程，
     // 不应被自动锁定当成「用户离开」而立刻弹锁屏。

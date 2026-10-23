@@ -39,6 +39,20 @@ export function SecurityPage() {
   const [showPwd, setShowPwd] = useState(false);
   const [message, setMessage] = useState<{ type: "ok" | "err"; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  // 保险库是否仍使用较弱的旧 KDF 参数（提示用户点「重新加密保险库」升级）
+  const [kdfLegacy, setKdfLegacy] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    api
+      .getStatus()
+      .then((s) => {
+        if (alive) setKdfLegacy(s.kdfLegacy);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
   const [biometric, setBiometric] = useState(false);
   const [bioBusy, setBioBusy] = useState(false);
   // 生物识别能力：支持平台 + 是否已录入指纹/面容
@@ -85,7 +99,23 @@ export function SecurityPage() {
   }, []);
 
   /** 切换生物识别：关闭时直接清除；开启时弹窗收集密码后完成绑定 */
-  const handleBiometricChange = async (enabled: boolean) => {
+  /** 移除本机保存的生物识别凭据（不影响锁定密码） */
+const handleRemoveBiometric = async () => {
+  if (bioBusy) return;
+  setBioBusy(true);
+  try {
+    await clearBiometric();
+    setBiometric(false);
+    setBioEnrolled(false);
+    toast.success(t("已移除本机保存的生物识别凭据"));
+  } catch (e) {
+    toast.error(t("移除失败：{msg}", { msg: String(e) }));
+  } finally {
+    setBioBusy(false);
+  }
+};
+
+const handleBiometricChange = async (enabled: boolean) => {
     if (bioBusy) return;
     if (!enabled) {
       await clearBiometric();
@@ -239,12 +269,20 @@ export function SecurityPage() {
     }
     setDlgBusy(true);
     try {
-      await api.rotateVaultKey(dlgPwd);
+      const rotated = await api.rotateVaultKey(dlgPwd);
       // 口令未变，生物识别里保存的口令仍然有效，无需重新登记
       setPwdDialog(null);
       setDlgPwd("");
       setMessage({ type: "ok", text: t("保险库已用新密钥重新加密") });
       toast.success(t("保险库已用新密钥重新加密"));
+      // 换过密钥后，旧快照已无法解密（既解不开也无法清理其中的账户）
+      if (rotated.staleBackups > 0) {
+        toast.warning(
+          t("{n} 份旧加密快照已失效（使用旧密钥），建议在设置中清理", {
+            n: rotated.staleBackups,
+          }),
+        );
+      }
     } catch (e) {
       setDlgError(String(e));
     } finally {
@@ -296,6 +334,7 @@ export function SecurityPage() {
   };
 
   const strength = passwordStrength(next);
+  const pwdHints = passwordHints(next);
 
   /**
    * 「自动锁定时长」当前**实际**会怎么锁。
@@ -317,7 +356,7 @@ export function SecurityPage() {
   const bioHint = !bioAvailable
     ? t("当前平台不支持生物识别解锁")
     : bioEnrolled
-      ? t("调用系统指纹或面容快速解锁")
+      ? t("调用系统指纹或面容快速解锁（便捷优先，不额外增加抗本机攻击能力）")
       : !lockEnabled
         ? t("请先启用应用锁定")
         : t("点击开启后可绑定本机指纹或面容");
@@ -399,6 +438,19 @@ export function SecurityPage() {
               label={biometricLabel(t)}
             />
           </div>
+          {bioEnrolled ? (
+            <div className="s-row">
+              <div className="s-main">
+                <div className="s-title">{t("移除已保存的生物识别凭据")}</div>
+                <div className="s-desc">
+                  {t("删除本机保存的解锁凭据；下次使用需重新输入密码登记")}
+                </div>
+              </div>
+              <Button variant="text" disabled={bioBusy} onClick={handleRemoveBiometric}>
+                {t("移除")}
+              </Button>
+            </div>
+          ) : null}
         </div>
 
         {/* 密码管理面板：仅在已启用锁定时显示（用于修改密码）。
@@ -451,6 +503,17 @@ export function SecurityPage() {
                   />
                 ))}
               </div>
+              {/* 即时建议：只提示「能改进什么」，不阻断提交。
+                  是否可用由后端权威校验决定（含弱口令黑名单）。 */}
+              {pwdHints.length > 0 ? (
+                <div className="pwd-hints">
+                  {pwdHints.map((h) => (
+                    <span key={h} className="pwd-hint">
+                      · {t(h)}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
             </div>
             <div className="field">
               <label className="field-label">{t("确认新密码")}</label>
@@ -501,6 +564,11 @@ export function SecurityPage() {
           <div className="block-desc pwd-panel-desc">
             {t("用同一密码、全新的密钥重新加密本地数据。旧版本的锁定凭证文件曾以明文保存密钥，若该文件被复制或备份过，请执行一次本操作。")}
           </div>
+          {kdfLegacy ? (
+            <div className="notice notice-warn mt-12">
+              {t("当前保险库仍在使用旧版密钥派生参数（强度较低）。点上方「重新加密保险库」即可升级到更强的参数，密码无需更改。")}
+            </div>
+          ) : null}
         </div>
         ) : null}
 
@@ -519,6 +587,28 @@ export function SecurityPage() {
                 await saveSettings(nextDraft);
               }}
               label={t("失败清除剪贴板")}
+            />
+          </div>
+          {/* 复制后自动清除：验证码留在剪贴板里，任何后续程序都可能读到 */}
+          <div className="s-row">
+            <div className="s-main">
+              <div className="s-title">{t("复制后自动清除剪贴板")}</div>
+              <div className="s-desc">{t("验证码留在剪贴板里可能被其他程序读到")}</div>
+            </div>
+            <Select
+              variant="ghost"
+              value={draft.clipboardClearSeconds}
+              onChange={async (v) => {
+                const nextDraft = { ...draft, clipboardClearSeconds: v };
+                setDraft(nextDraft);
+                await saveSettings(nextDraft);
+              }}
+              options={[
+                { value: 15, label: t("15 秒") },
+                { value: 30, label: t("30 秒") },
+                { value: 60, label: t("1 分钟") },
+                { value: 0, label: t("不自动清除") },
+              ]}
             />
           </div>
         </div>
@@ -671,11 +761,39 @@ export function SecurityPage() {
   );
 }
 
+/**
+ * 口令强度评分（0~4）：以**长度**为主，字符种类只作为次要加分。
+ *
+ * 不采用「必须含大写+数字+符号」的组合评分：那会暗示用户
+ * `Password1!` 就很安全。真正决定性的是长度与可预测性
+ * （黑名单/常见词由后端权威判定，这里只做即时提示）。
+ */
 function passwordStrength(pwd: string): number {
+  if (!pwd) return 0;
+  const len = pwd.length;
   let score = 0;
-  if (pwd.length >= 8) score += 1;
-  if (/[a-z]/.test(pwd) && /[A-Z]/.test(pwd)) score += 1;
-  if (/\d/.test(pwd)) score += 1;
-  if (/[^A-Za-z0-9]/.test(pwd)) score += 1;
-  return score;
+  if (len >= 8) score += 1;
+  if (len >= 12) score += 1;
+  if (len >= 16) score += 1;
+  // 字符种类只作轻微加成（≥3 类才加），且不用于「必须满足」的校验
+  const classes = [/[a-z]/, /[A-Z]/, /\d/, /[^A-Za-z0-9]/].filter((r) => r.test(pwd)).length;
+  if (classes >= 3 && len >= 10) score += 1;
+  return Math.min(score, 4);
+}
+
+/**
+ * 口令改进提示（即时、非阻断）。
+ * 只给出可执行的建议，不重复后端的黑名单判定——那由后端权威校验并在提交时报错。
+ */
+function passwordHints(pwd: string): string[] {
+  if (!pwd) return [];
+  const hints: string[] = [];
+  if (pwd.length < 8) hints.push("至少 8 位");
+  else if (pwd.length < 12) hints.push("再长一点更安全（12 位以上）");
+  if (/^\d+$/.test(pwd)) hints.push("纯数字容易被猜中，建议加入字母");
+  if (/^(.)\1+$/.test(pwd)) hints.push("不要用重复的同一个字符");
+  if (/^(\d)\1*$/.test(pwd) || /^(0123456789|1234567890)/.test(pwd)) {
+    hints.push("避免连续数字");
+  }
+  return hints;
 }

@@ -6,7 +6,13 @@ import { Select } from "../components/Select";
 import { ShortcutRecorder } from "../components/ShortcutRecorder";
 import { useToast } from "../components/Toast";
 import { IconButton } from "../components/Button";
-import { api, type AppSettings, type DataDirInfo, type StorageUsage } from "../lib/api";
+import {
+  api,
+  type AppSettings,
+  type DataDirInfo,
+  type DataDirIssue,
+  type StorageUsage,
+} from "../lib/api";
 import { getAutostart, setAutostart } from "../lib/autostart";
 import { applyToggleShortcut } from "../lib/shortcut";
 import { ChevronRight, FolderOpen } from "../components/icons";
@@ -18,6 +24,30 @@ import { useI18n } from "../i18n";
 
 const MAX_BACKUP_KEEP = 10;
 
+/** 把后端的数据目录异常错误码翻译成当前语言（文案在前端，随语言切换） */
+function dataDirIssueText(
+  t: (key: string, params?: Record<string, string | number>) => string,
+  issue: DataDirIssue,
+): string {
+  switch (issue.code) {
+    case "unreadable":
+      return t("指针文件存在但无法读取（权限不足或被占用）");
+    case "invalid_json":
+      return t("指针文件内容不是合法 JSON");
+    case "missing_field":
+      return t("指针文件缺少 data_dir 字段");
+    case "empty_path":
+      return t("指针文件中的目录为空");
+    case "not_absolute":
+      return t("数据目录不是绝对路径：{path}", { path: issue.path });
+    case "network_path":
+      return t("数据目录位于网络位置（不支持）：{path}", { path: issue.path });
+    case "not_found":
+      return t("数据目录不存在或不可访问：{path}", { path: issue.path });
+    default:
+      return t("数据目录配置异常");
+  }
+}
 export function SettingsPage() {
   const { settings, saveSettings, navigate, accounts } = useApp();
   const toast = useToast();
@@ -52,6 +82,8 @@ export function SettingsPage() {
   const [aboutOpen, setAboutOpen] = useState(false);
   // 数据存储目录（由后端决定，非应用配置项）
   const [dataDir, setDataDir] = useState<DataDirInfo | null>(null);
+  // 数据目录指针存在但不可用时的原因：后端会回退默认目录，必须让用户看见
+  const [dirIssue, setDirIssue] = useState<DataDirIssue | null>(null);
   // 切换目录的二次确认：迁移会覆盖目标目录中的同名文件，必须让用户明确同意
   const [dirConfirm, setDirConfirm] = useState<{ mode: "change" | "reset"; dir: string } | null>(null);
   const [dirBusy, setDirBusy] = useState(false);
@@ -70,6 +102,12 @@ export function SettingsPage() {
 
   useEffect(() => {
     api.getDataDir().then(setDataDir).catch(() => {});
+    // 指针非法时后端会回退默认目录；这里把原因取回来在界面上明示，
+    // 否则用户会以为「数据没了」
+    api
+      .getStatus()
+      .then((s) => setDirIssue(s.dataDirIssue))
+      .catch(() => {});
   }, []);
 
   const handleClearBackups = async () => {
@@ -173,6 +211,24 @@ export function SettingsPage() {
     await saveSettings(next);
   };
 
+  /**
+   * 开屏动画切换：立即写入本机缓存。
+   *
+   * 启动画面在 React 挂载前就要渲染，那时保险库还没解密、读不到设置项，
+   * 只能靠 localStorage 里的镜像值决定用哪种动画（见 theme-boot.js）。
+   * 因此这里必须同步写缓存，否则要等下次启动才生效。
+   */
+  const changeSplashAnimation = async (splashAnimation: typeof draft.splashAnimation) => {
+    const next = { ...draft, splashAnimation };
+    setDraft(next);
+    try {
+      localStorage.setItem("onetotp.splashAnimation", splashAnimation);
+    } catch {
+      // 缓存写入失败只影响下次启动的动画选择，不影响设置本身
+    }
+    await saveSettings(next);
+  };
+
   /** 语言切换需立即生效并保存（App 层监听 settings.language 同步 setLang） */
   const changeLanguage = async (language: typeof draft.language) => {
     const next = { ...draft, language };
@@ -247,46 +303,44 @@ export function SettingsPage() {
   return (
     <>
       <section className="app-body settings-page">
-        <div className="s-group-title">{t("通用")}</div>
-        <div className="panel">
-          {desktop ? (
-            <Row title={t("开机自动启动")} desc={t("登录系统后自动打开 OneTOTP")}>
-              <Switch
-                checked={autostart}
-                disabled={autostartBusy}
-                onChange={toggleAutostart}
-                label={t("开机自动启动")}
-              />
-            </Row>
-          ) : null}
-          {desktop ? (
-            <Row title={t("关闭按钮行为")} desc={t("点击标题栏关闭按钮时的处理方式")}>
-              <Select
-                variant="ghost"
-                value={draft.closeBehavior}
-                onChange={(v) => update("closeBehavior", v)}
-                options={[
-                  { value: "quit" as const, label: t("直接退出") },
-                  { value: "tray" as const, label: t("最小化到托盘") },
-                ]}
-              />
-            </Row>
-          ) : null}
-          {desktop ? (
-            <Row title={t("全局快捷键")} desc={t("按下组合键快速唤起或隐藏窗口")}>
-              <ShortcutRecorder value={draft.shortcutToggle} onChange={changeShortcut} className="control-w" />
-            </Row>
-          ) : null}
-          {desktop ? (
-            <Row title={t("复制后自动隐藏窗口")} desc={t("复制验证码后自动收起窗口")}>
-              <Switch checked={draft.autoHideAfterCopy} onChange={(v) => update("autoHideAfterCopy", v)} label={t("复制后自动隐藏窗口")} />
-            </Row>
-          ) : null}
-        </div>
+        {/* 通用分组下的三项（开机自启、关闭按钮行为、全局快捷键）
+            全部是桌面端专属能力，移动端没有对应概念。整组在移动端不渲染，
+            否则会留下一个只有标题的空面板。 */}
+        {desktop ? (
+          <>
+            <div className="s-group-title">{t("通用")}</div>
+            <div className="panel">
+              <Row title={t("开机自动启动")} desc={t("登录系统后自动打开 OneTOTP")}>
+                <Switch
+                  checked={autostart}
+                  disabled={autostartBusy}
+                  onChange={toggleAutostart}
+                  label={t("开机自动启动")}
+                />
+              </Row>
+              <Row title={t("关闭按钮行为")} desc={t("点击标题栏关闭按钮时的处理方式")}>
+                <Select
+                  variant="ghost"
+                  value={draft.closeBehavior}
+                  onChange={(v) => update("closeBehavior", v)}
+                  options={[
+                    { value: "quit" as const, label: t("直接退出") },
+                    { value: "tray" as const, label: t("最小化到托盘") },
+                  ]}
+                />
+              </Row>
+              <Row title={t("全局快捷键")} desc={t("按下组合键快速唤起或隐藏窗口")}>
+                <ShortcutRecorder value={draft.shortcutToggle} onChange={changeShortcut} className="control-w" />
+              </Row>
+            </div>
+          </>
+        ) : null}
 
-        {/* 验证码显示：与卡片展示/复制相关的行为统一归到此处 */}
+        {/* 验证码显示：与卡片展示/复制相关的行为统一归到此处。
+            注意：本 panel 内有两个下拉框，不能使用 panel-clip（overflow:hidden），
+            否则下拉浮层会被裁掉、选项点不到。 */}
         <div className="s-group-title mt-12">{t("验证码显示")}</div>
-        <div className="panel panel-clip">
+        <div className="panel">
           <Row title={t("验证码显示分组")} desc={t("将 6 位验证码拆分为 3+3，8 位拆分为 4+4")}>
             <Switch checked={draft.codeGrouping} onChange={(v) => update("codeGrouping", v)} label={t("验证码显示分组")} />
           </Row>
@@ -302,11 +356,34 @@ export function SettingsPage() {
               ]}
             />
           </Row>
+          <Row title={t("分类自动展开")} desc={t("首页分类分组打开应用时的展开方式")}>
+            <Select
+              variant="ghost"
+              value={draft.categoryExpandMode}
+              onChange={(v) => update("categoryExpandMode", v)}
+              options={[
+                { value: "expand" as const, label: t("自动展开") },
+                { value: "collapse" as const, label: t("不自动展开") },
+                { value: "remember" as const, label: t("按上次状态") },
+              ]}
+            />
+          </Row>
           <Row title={t("剩余时间不足时高亮")} desc={t("倒计时少于 5 秒时标红")}>
             <Switch checked={draft.expiryHighlight} onChange={(v) => update("expiryHighlight", v)} label={t("剩余时间不足时高亮")} />
           </Row>
           <Row title={t("点击即复制")} desc={t("点击验证码卡片直接复制")}>
             <Switch checked={draft.clickToCopy} onChange={(v) => update("clickToCopy", v)} label={t("点击即复制")} />
+          </Row>
+          {/* 复制后自动隐藏：桌面端隐藏窗口，移动端切到后台，两端语义一致 */}
+          <Row
+            title={t("复制后自动隐藏窗口")}
+            desc={desktop ? t("复制验证码后自动收起窗口") : t("复制验证码后自动切到后台")}
+          >
+            <Switch
+              checked={draft.autoHideAfterCopy}
+              onChange={(v) => update("autoHideAfterCopy", v)}
+              label={t("复制后自动隐藏窗口")}
+            />
           </Row>
           <button className="action-row" onClick={() => navigate({ name: "categories" })}>
             <span>
@@ -371,6 +448,19 @@ export function SettingsPage() {
                 { value: "light" as const, label: t("亮色") },
                 { value: "dark" as const, label: t("暗色") },
                 { value: "system" as const, label: t("跟随系统") },
+              ]}
+            />
+          </Row>
+          <Row title={t("开屏动画")} desc={t("启动应用时播放的加载动画样式")}>
+            <Select
+              variant="ghost"
+              value={draft.splashAnimation}
+              onChange={(v) => changeSplashAnimation(v)}
+              options={[
+                { value: "dots" as const, label: t("光点聚合") },
+                { value: "draw" as const, label: t("描边绘制") },
+                { value: "pop" as const, label: t("弹入光扫") },
+                { value: "ring" as const, label: t("环形进度") },
               ]}
             />
           </Row>
@@ -499,6 +589,21 @@ export function SettingsPage() {
                   </button>
                 ) : null}
               </div>
+            </div>
+          ) : null}
+          {/* 指针非法时后端会静默回退默认目录——不提示的话用户会以为数据丢了 */}
+          {dirIssue ? (
+            <div className="notice notice-warn settings-inline-notice">
+              <div>
+                <b>{t("自定义数据目录不可用")}</b>
+                <div className="mt-6">{dataDirIssueText(t, dirIssue)}</div>
+                <div className="mt-6">
+                  {t("当前正使用默认目录。你的数据仍在原目录中，可修正路径或恢复默认设置。")}
+                </div>
+              </div>
+              <button className="link-btn" onClick={resetDataDir}>
+                {t("恢复默认目录")}
+              </button>
             </div>
           ) : null}
           <Row

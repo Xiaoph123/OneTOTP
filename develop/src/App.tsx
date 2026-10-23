@@ -48,6 +48,20 @@ function Router() {
     applyFontScale(size);
   }, [settings?.fontScale]);
 
+  // 设置加载后同步开屏动画到本机缓存。
+  // 启动画面在 React 挂载前就要渲染，那时读不到加密保险库里的设置，
+  // 只能靠 localStorage 镜像值决定动画样式（见 theme-boot.js）。
+  // 这里兜住「导入备份」「首次启动」等设置被外部改写的场景。
+  useEffect(() => {
+    const anim = settings?.splashAnimation;
+    if (!anim) return;
+    try {
+      localStorage.setItem("onetotp.splashAnimation", anim);
+    } catch {
+      // 缓存不可用时忽略，下次启动回退到默认动画
+    }
+  }, [settings?.splashAnimation]);
+
   // 移动端系统返回键桥接：Android 原生侧调用，返回 true 表示已处理（返回上一级）
   useEffect(() => {
     (window as unknown as { __handleAndroidBack?: () => boolean }).__handleAndroidBack = () => {

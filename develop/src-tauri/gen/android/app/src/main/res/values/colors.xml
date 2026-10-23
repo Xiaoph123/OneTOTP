@@ -7,4 +7,6 @@
     <color name="teal_700">#FF018786</color>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+    <!-- 启动窗口底色（亮色）：与前端 color-bg-2（前端 CSS 变量） 一致 -->
+    <color name="onetotp_startup_background">#FCFDFE</color>
 </resources>

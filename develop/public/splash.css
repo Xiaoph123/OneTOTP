@@ -1,12 +1,28 @@
 /* 首屏防白闪与静态启动画面样式。
    独立成文件而非 index.html 内联 <style>：收紧 CSP 到 style-src 'self' 后，
-   内联样式块会被拦截（不依赖运行时是否注入 nonce 更稳妥）。 */
+   内联样式块会被拦截（不依赖运行时是否注入 nonce 更稳妥）。
+
+   开屏动画有 4 种样式，由 <html data-splash="draw|pop|ring|dots"> 切换，
+   该属性由 theme-boot.js 从 localStorage 读取（设置项在「外观」分组）。
+   四种样式的 DOM 全部预置在 index.html 中，CSS 只显示匹配的那一个，
+   避免启动阶段还要等 JS 拼 DOM。 */
 
 html {
   background: #fcfdfe;
 }
 html[data-theme="dark"] {
   background: #141619;
+}
+/* 兜底：万一 theme-boot.js 未能执行（脚本被禁、存储异常等），
+   也要跟随系统明暗，避免深色系统上闪一帧白。
+   放在 [data-theme="dark"] 之后，属性已存在时以显式设置为准。 */
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]) {
+    background: #141619;
+  }
+  html:not([data-theme="light"]) #app-splash {
+    background: #141619;
+  }
 }
 body {
   margin: 0;
@@ -22,42 +38,374 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 16px;
+  gap: 18px;
   background: #fcfdfe;
-  transition: opacity 200ms ease;
+  /* 明暗模式下的启动画面配色：暗色下文字与环形进度都要跟着变，
+     否则会出现「深色背景 + 亮白文字/亮蓝环」的刺眼组合。 */
+  --splash-text: #a9aeb6;
+  --splash-ring: #1664ff;
+  --splash-dot: #1664ff;
 }
 html[data-theme="dark"] #app-splash {
   background: #141619;
+  --splash-text: #6b7280;
+  --splash-ring: #4080ff;
+  --splash-dot: #4080ff;
 }
-#app-splash.is-hidden {
-  opacity: 0;
-  pointer-events: none;
+
+/* ── 触屏设备（Android / iOS）：首屏底色交给原生窗口 ──
+   实测 Android 冷启动时序为「黑（原生窗口底色，正确）→ 白（WebView 自行绘制）
+   → 暗（React 就绪）」。白色这一帧的成因是：WebView 在首帧时刻尚未完成深色
+   模式初始化，脚本与 CSS 都拿不到可靠的系统明暗，于是按默认亮色绘制。
+
+   因此 html / body 保持透明，显示的是原生窗口底色——那一层已由主题资源
+   （windowBackground / windowSplashScreenBackground，见 res/values-night）
+   按系统明暗设为正确的深色。
+
+   **但启动画面本身必须不透明**：它要停留 1 秒，期间 React 已经把首页渲染
+   出来了，若启动画面也透明，首页内容会直接透出来（表现为「加载动画浮在
+   首页上」）。启动画面的底色由 data-theme 决定，而 theme-boot.js 是同步
+   脚本、在 body 绘制前就已写入该属性，因此不会出现明暗错配。 */
+@media (pointer: coarse) {
+  html,
+  html[data-theme="light"],
+  html[data-theme="dark"],
+  body {
+    /* !important 用于覆盖 main.tsx 引入的 app.css 里的 body 背景
+       （JS 注入的样式表更晚生效，靠权重压不住）。应用自身由 .app-window
+       绘制背景，因此 body 透明不影响界面观感。 */
+    background: transparent !important;
+  }
 }
+
 #app-splash svg {
-  width: 72px;
-  height: 72px;
   display: block;
+}
+/* 渐变定义容器：不占布局，仅承载 defs */
+#app-splash .splash-defs {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
 }
 #app-splash .splash-text {
   font-family: "PingFang SC", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
   font-size: 13px;
-  color: #a9aeb6;
+  color: var(--splash-text);
+  letter-spacing: 0.5px;
 }
-#app-splash .onetotp-shine {
-  animation: onetotp-shine-sweep 1.8s ease-in-out infinite;
-  will-change: transform;
+
+/* ── 四种样式的显隐：只显示与 data-splash 匹配的那一个 ── */
+#app-splash .splash-variant {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
 }
-@keyframes onetotp-shine-sweep {
+html[data-splash="draw"] #app-splash .splash-draw,
+html[data-splash="pop"] #app-splash .splash-pop,
+html[data-splash="ring"] #app-splash .splash-ring,
+html[data-splash="dots"] #app-splash .splash-dots {
+  display: flex;
+}
+/* 属性缺失或值非法时回退到 dots，保证任何情况下都有画面 */
+html:not([data-splash]) #app-splash .splash-dots {
+  display: flex;
+}
+
+/* ══════════ A · 描边绘制 ══════════ */
+.splash-draw svg {
+  width: 76px;
+  height: 76px;
+}
+.splash-draw .a-outline {
+  fill: none;
+  stroke: url(#splash-grad);
+  stroke-width: 1.6;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  stroke-dasharray: 62;
+  stroke-dashoffset: 62;
+  animation: splash-a-draw 620ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+.splash-draw .a-fill {
+  opacity: 0;
+  animation: splash-a-fade 380ms ease 480ms forwards;
+}
+.splash-draw .a-mark {
+  opacity: 0;
+  animation: splash-a-fade 300ms ease 700ms forwards;
+}
+@keyframes splash-a-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes splash-a-fade {
+  to {
+    opacity: 1;
+  }
+}
+
+/* ══════════ B · 弹入光扫 ══════════ */
+.splash-pop .b-wrap {
+  opacity: 0;
+  transform: scale(0.55);
+  animation: splash-b-pop 560ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+.splash-pop svg {
+  width: 76px;
+  height: 76px;
+}
+.splash-pop .b-shine {
+  transform: translateX(-14px);
+  animation: splash-b-sweep 900ms cubic-bezier(0.4, 0, 0.2, 1) 260ms forwards;
+}
+@keyframes splash-b-pop {
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes splash-b-sweep {
+  to {
+    transform: translateX(34px);
+  }
+}
+
+/* ══════════ C · 环形进度 ══════════ */
+.splash-ring .c-stage {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 108px;
+  height: 108px;
+}
+.splash-ring .c-ring {
+  position: absolute;
+  inset: 0;
+  width: 108px;
+  height: 108px;
+}
+.splash-ring .c-ring circle {
+  fill: none;
+  stroke: var(--splash-ring);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-dasharray: 314;
+  stroke-dashoffset: 314;
+  transform: rotate(-90deg);
+  transform-origin: 50% 50%;
+  animation: splash-c-progress 1000ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+.splash-ring .c-mark {
+  width: 64px;
+  height: 64px;
+  animation: splash-c-breathe 1400ms ease-in-out infinite;
+}
+@keyframes splash-c-progress {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes splash-c-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+}
+
+/* ══════════ D · 光点聚合 ══════════ */
+.splash-dots .d-stage {
+  position: relative;
+  width: 76px;
+  height: 76px;
+}
+.splash-dots .d-dot {
+  position: absolute;
+  left: 35px;
+  top: 35px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--splash-dot);
+  opacity: 0;
+  animation: splash-d-converge 620ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+/* 8 个光点均匀分布在半径 46px 的圆上，依次延迟 22ms 出发 */
+.splash-dots .d-dot-1 { --dx: 46px;    --dy: 0px;     animation-delay: 0ms; }
+.splash-dots .d-dot-2 { --dx: 32.5px;  --dy: 32.5px;  animation-delay: 22ms; }
+.splash-dots .d-dot-3 { --dx: 0px;     --dy: 46px;    animation-delay: 44ms; }
+.splash-dots .d-dot-4 { --dx: -32.5px; --dy: 32.5px;  animation-delay: 66ms; }
+.splash-dots .d-dot-5 { --dx: -46px;   --dy: 0px;     animation-delay: 88ms; }
+.splash-dots .d-dot-6 { --dx: -32.5px; --dy: -32.5px; animation-delay: 110ms; }
+.splash-dots .d-dot-7 { --dx: 0px;     --dy: -46px;   animation-delay: 132ms; }
+.splash-dots .d-dot-8 { --dx: 32.5px;  --dy: -32.5px; animation-delay: 154ms; }
+.splash-dots .d-mark {
+  position: absolute;
+  inset: 0;
+  width: 76px;
+  height: 76px;
+  opacity: 0;
+  animation: splash-d-appear 420ms cubic-bezier(0.34, 1.4, 0.64, 1) 480ms forwards;
+}
+@keyframes splash-d-converge {
   0% {
-    transform: translateX(-10px);
+    opacity: 0;
+    transform: translate(var(--dx), var(--dy)) scale(0.4);
+  }
+  35% {
+    opacity: 0.9;
   }
   100% {
-    transform: translateX(30px);
+    opacity: 0;
+    transform: translate(0, 0) scale(0.2);
   }
 }
+@keyframes splash-d-appear {
+  from {
+    opacity: 0;
+    transform: scale(0.7);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* ══════════ 退出动画（按样式区分） ══════════ */
+#app-splash.is-hidden {
+  pointer-events: none;
+}
+html[data-splash="draw"] #app-splash.is-hidden {
+  animation: splash-exit-zoom 320ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+html[data-splash="pop"] #app-splash.is-hidden {
+  animation: splash-exit-shrink 300ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+html[data-splash="ring"] #app-splash.is-hidden {
+  animation: splash-exit-fade 300ms ease forwards;
+}
+html[data-splash="dots"] #app-splash.is-hidden,
+html:not([data-splash]) #app-splash.is-hidden {
+  animation: splash-exit-blur 340ms ease forwards;
+}
+@keyframes splash-exit-zoom {
+  to {
+    opacity: 0;
+    transform: scale(1.06);
+  }
+}
+@keyframes splash-exit-shrink {
+  to {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+}
+@keyframes splash-exit-fade {
+  to {
+    opacity: 0;
+  }
+}
+@keyframes splash-exit-blur {
+  to {
+    opacity: 0;
+    filter: blur(6px);
+  }
+}
+
+/* ══════════ 首页入场动画（按样式区分） ══════════ */
+/* 由 main.tsx 在启动画面退出的同时给 #root 加 is-entering 类 */
+html[data-splash="draw"] #root.is-entering {
+  animation: splash-home-rise 380ms cubic-bezier(0.2, 0.8, 0.3, 1) forwards;
+}
+html[data-splash="pop"] #root.is-entering {
+  animation: splash-home-zoom 380ms cubic-bezier(0.2, 0.8, 0.3, 1) forwards;
+}
+html[data-splash="ring"] #root.is-entering {
+  animation: splash-home-slide 400ms cubic-bezier(0.2, 0.8, 0.3, 1) forwards;
+}
+html[data-splash="dots"] #root.is-entering,
+html:not([data-splash]) #root.is-entering {
+  animation: splash-home-unblur 420ms cubic-bezier(0.2, 0.8, 0.3, 1) forwards;
+}
+@keyframes splash-home-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes splash-home-zoom {
+  from {
+    opacity: 0;
+    transform: scale(0.965);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes splash-home-slide {
+  from {
+    opacity: 0;
+    transform: translateX(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+@keyframes splash-home-unblur {
+  from {
+    opacity: 0;
+    filter: blur(8px);
+    transform: scale(1.02);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+    transform: scale(1);
+  }
+}
+
+/* ── 减少动态效果：全部动画降级为纯淡入淡出 ── */
 @media (prefers-reduced-motion: reduce) {
-  #app-splash .onetotp-shine {
+  #app-splash .a-outline {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+  #app-splash .a-fill,
+  #app-splash .a-mark,
+  #app-splash .b-wrap,
+  #app-splash .d-mark {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+  #app-splash .b-shine,
+  #app-splash .d-dot {
     animation: none;
     opacity: 0;
+  }
+  #app-splash .c-ring circle {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+  #app-splash .c-mark {
+    animation: none;
+  }
+  #app-splash.is-hidden {
+    animation: splash-exit-fade 200ms ease forwards !important;
+  }
+  #root.is-entering {
+    animation: splash-exit-fade 200ms ease reverse forwards !important;
   }
 }

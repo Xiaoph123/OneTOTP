@@ -16,8 +16,10 @@
   </head>
 
   <body>
+    <!-- 启动画面：四种动画样式的 DOM 全部预置，由 splash.css 按
+         <html data-splash> 只显示匹配的那一个。这样启动阶段无需等 JS 拼 DOM。 -->
     <div id="app-splash" aria-hidden="true">
-      <svg viewBox="0 0 24 24" fill="none">
+      <svg class="splash-defs" width="0" height="0">
         <defs>
           <linearGradient id="splash-grad" x1="0" y1="0" x2="1" y2="1">
             <stop offset="0" stop-color="#34D399" />
@@ -33,26 +35,93 @@
             <path d="M12 2.2 3.8 5.9v6.2c0 4.9 3.5 8.6 8.2 10 4.7-1.4 8.2-5.1 8.2-10V5.9L12 2.2z" />
           </clipPath>
         </defs>
-        <path
-          d="M12 2.2 3.8 5.9v6.2c0 4.9 3.5 8.6 8.2 10 4.7-1.4 8.2-5.1 8.2-10V5.9L12 2.2z"
-          fill="url(#splash-grad)"
-        />
-        <path d="M10.1 9.3 12.4 7.6V15.6" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-        <path d="M10.3 15.6h4" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" />
-        <path d="M10.1 9.3h1.3" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" />
-        <g clip-path="url(#splash-clip)">
-          <g transform="skewX(-20)">
-            <rect class="onetotp-shine" x="0" y="-2" width="6" height="28" fill="url(#splash-shine)" />
-          </g>
-        </g>
-        <path
-          d="M12 2.2 3.8 5.9v6.2c0 4.9 3.5 8.6 8.2 10 4.7-1.4 8.2-5.1 8.2-10V5.9L12 2.2z"
-          stroke="url(#splash-grad)"
-          stroke-width="1.2"
-          stroke-linejoin="round"
-        />
       </svg>
-      <div class="splash-text">正在启动 OneTOTP…</div>
+
+      <!-- A · 描边绘制 -->
+      <div class="splash-variant splash-draw">
+        <svg viewBox="0 0 24 24">
+          <path
+            class="a-outline"
+            d="M12 2.2 3.8 5.9v6.2c0 4.9 3.5 8.6 8.2 10 4.7-1.4 8.2-5.1 8.2-10V5.9L12 2.2z"
+          />
+          <g class="a-fill">
+            <path
+              d="M12 2.2 3.8 5.9v6.2c0 4.9 3.5 8.6 8.2 10 4.7-1.4 8.2-5.1 8.2-10V5.9L12 2.2z"
+              fill="url(#splash-grad)"
+            />
+            <g class="a-mark">
+              <path d="M10.1 9.3 12.4 7.6V15.6" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+              <path d="M10.3 15.6h4" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" />
+              <path d="M10.1 9.3h1.3" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" />
+            </g>
+          </g>
+        </svg>
+        <div class="splash-text">正在启动 OneTOTP…</div>
+      </div>
+
+      <!-- B · 弹入光扫 -->
+      <div class="splash-variant splash-pop">
+        <div class="b-wrap">
+          <svg viewBox="0 0 24 24">
+            <path
+              d="M12 2.2 3.8 5.9v6.2c0 4.9 3.5 8.6 8.2 10 4.7-1.4 8.2-5.1 8.2-10V5.9L12 2.2z"
+              fill="url(#splash-grad)"
+            />
+            <path d="M10.1 9.3 12.4 7.6V15.6" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+            <path d="M10.3 15.6h4" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" />
+            <path d="M10.1 9.3h1.3" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" />
+            <g clip-path="url(#splash-clip)">
+              <g transform="skewX(-20)">
+                <rect class="b-shine" x="0" y="-2" width="6" height="28" fill="url(#splash-shine)" />
+              </g>
+            </g>
+          </svg>
+        </div>
+        <div class="splash-text">正在启动 OneTOTP…</div>
+      </div>
+
+      <!-- C · 环形进度 -->
+      <div class="splash-variant splash-ring">
+        <div class="c-stage">
+          <svg class="c-ring" viewBox="0 0 108 108">
+            <circle cx="54" cy="54" r="50" />
+          </svg>
+          <svg class="c-mark" viewBox="0 0 24 24">
+            <path
+              d="M12 2.2 3.8 5.9v6.2c0 4.9 3.5 8.6 8.2 10 4.7-1.4 8.2-5.1 8.2-10V5.9L12 2.2z"
+              fill="url(#splash-grad)"
+            />
+            <path d="M10.1 9.3 12.4 7.6V15.6" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+            <path d="M10.3 15.6h4" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" />
+            <path d="M10.1 9.3h1.3" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" />
+          </svg>
+        </div>
+        <div class="splash-text">正在启动 OneTOTP…</div>
+      </div>
+
+      <!-- D · 光点聚合 -->
+      <div class="splash-variant splash-dots">
+        <div class="d-stage">
+          <div class="d-dot d-dot-1"></div>
+          <div class="d-dot d-dot-2"></div>
+          <div class="d-dot d-dot-3"></div>
+          <div class="d-dot d-dot-4"></div>
+          <div class="d-dot d-dot-5"></div>
+          <div class="d-dot d-dot-6"></div>
+          <div class="d-dot d-dot-7"></div>
+          <div class="d-dot d-dot-8"></div>
+          <svg class="d-mark" viewBox="0 0 24 24">
+            <path
+              d="M12 2.2 3.8 5.9v6.2c0 4.9 3.5 8.6 8.2 10 4.7-1.4 8.2-5.1 8.2-10V5.9L12 2.2z"
+              fill="url(#splash-grad)"
+            />
+            <path d="M10.1 9.3 12.4 7.6V15.6" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+            <path d="M10.3 15.6h4" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" />
+            <path d="M10.1 9.3h1.3" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" />
+          </svg>
+        </div>
+        <div class="splash-text">正在启动 OneTOTP…</div>
+      </div>
     </div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>

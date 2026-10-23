@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useI18n } from "../i18n";
+import { estimateDropdownHeight, shouldDropup } from "../lib/selectPlacement";
 
 export interface SelectOption<T extends string | number> {
   value: T;
@@ -38,7 +39,38 @@ export function Select<T extends string | number>({
 }: Props<T>) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
+  /** 浮层是否需要向上弹出（空间不足时） */
+  const [dropup, setDropup] = useState(false);
   const ref = useRef<HTMLDivElement | null>(null);
+
+  /**
+   * 打开浮层前先判断可用空间（判定逻辑见 `lib/selectPlacement.ts`，有单测）。
+   *
+   * 为什么不总是向下弹：设置项位于页面底部时（如「复制后自动清除剪贴板」），
+   * 向下展开会超出滚动容器或窗口底部被裁切，用户看不到也点不到。
+   */
+  const openMenu = () => {
+    const rect = ref.current?.getBoundingClientRect();
+    if (rect) {
+      setDropup(
+        shouldDropup({
+          triggerTop: rect.top,
+          triggerBottom: rect.bottom,
+          dropdownHeight: estimateDropdownHeight(options.length),
+          viewportHeight: window.innerHeight,
+        }),
+      );
+    }
+    setOpen(true);
+  };
+
+  const toggleMenu = () => {
+    if (open) {
+      setOpen(false);
+    } else {
+      openMenu();
+    }
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -64,7 +96,7 @@ export function Select<T extends string | number>({
   return (
     <div
       ref={ref}
-      className={`select${sizeClass}${variantClass}${open ? " focus" : ""}${disabled ? " disabled" : ""}${className ? ` ${className}` : ""}`}
+      className={`select${sizeClass}${variantClass}${open ? " focus" : ""}${open && dropup ? " select-dropup" : ""}${disabled ? " disabled" : ""}${className ? ` ${className}` : ""}`}
     >
       <div
         className="select-trigger"
@@ -73,12 +105,12 @@ export function Select<T extends string | number>({
         aria-haspopup="listbox"
         title={isPlaceholder ? placeholder ?? t("请选择") : current!.label}
         tabIndex={disabled ? -1 : 0}
-        onClick={() => !disabled && setOpen((v) => !v)}
+        onClick={() => !disabled && toggleMenu()}
         onKeyDown={(e) => {
           if (disabled) return;
           if (e.key === "Enter" || e.key === " ") {
             e.preventDefault();
-            setOpen((v) => !v);
+            toggleMenu();
           }
         }}
       >

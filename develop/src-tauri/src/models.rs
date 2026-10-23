@@ -104,6 +104,12 @@ pub struct AppSettings {
     /// 验证码可见性：never（不隐藏）| always（始终隐藏）| hover（悬停显示）
     #[serde(default = "default_code_visibility")]
     pub code_visibility: String,
+    /// 首页分类分组的展开策略：
+    /// - `expand`：始终自动展开
+    /// - `collapse`：始终不自动展开（全部收起）
+    /// - `remember`：按上次的展开状态还原
+    #[serde(default = "default_category_expand_mode")]
+    pub category_expand_mode: String,
     /// 截图时隐藏窗口内容（防截屏）
     ///
     /// 默认开启：安全优先，宁可多一层保护，用户觉得碍事可自行关闭。
@@ -127,6 +133,9 @@ pub struct AppSettings {
     /// 主题：light | dark | system
     #[serde(default = "default_theme")]
     pub theme: String,
+    /// 开屏动画样式：draw（描边绘制）| pop（弹入光扫）| ring（环形进度）| dots（光点聚合）
+    #[serde(default = "default_splash_animation")]
+    pub splash_animation: String,
     /// 卡片密度：compact（紧凑）| standard（标准）
     #[serde(default = "default_card_density")]
     pub card_density: String,
@@ -151,6 +160,9 @@ pub struct AppSettings {
     /// 解锁连续失败 5 次后自动清空剪贴板（防止暴力尝试期间泄露已复制验证码）
     #[serde(default = "default_true")]
     pub clear_clipboard_on_fail: bool,
+    /// 复制验证码后自动清空剪贴板的秒数；`0` 表示不自动清除（默认 30 秒）
+    #[serde(default = "default_clipboard_clear")]
+    pub clipboard_clear_seconds: u32,
     /// 允许备份使用空密码（导出/导入不再强制设置密码）
     ///
     /// 默认关闭。开启后导出的备份文件仍为 AES-256-GCM 加密，但密钥由固定的
@@ -184,12 +196,22 @@ fn default_close_behavior() -> String {
 fn default_code_visibility() -> String {
     "never".to_string()
 }
+fn default_category_expand_mode() -> String {
+    "expand".to_string()
+}
 fn default_theme() -> String {
     "light".to_string()
+}
+fn default_splash_animation() -> String {
+    "dots".to_string()
 }
 
 fn default_true() -> bool {
     true
+}
+/// 复制验证码后默认 30 秒自动清空剪贴板
+fn default_clipboard_clear() -> u32 {
+    30
 }
 fn default_auto_lock() -> u32 {
     60
@@ -209,6 +231,7 @@ impl Default for AppSettings {
             expiry_highlight: true,
             click_to_copy: true,
             code_visibility: "never".to_string(),
+            category_expand_mode: "expand".to_string(),
             hide_on_screenshot: true,
             hide_on_remote: true,
             hide_on_unfocused: true,
@@ -216,6 +239,7 @@ impl Default for AppSettings {
             backup_keep: 3,
             password_hint: String::new(),
             theme: "light".to_string(),
+            splash_animation: "dots".to_string(),
             card_density: "standard".to_string(),
             card_detail: "standard".to_string(),
             close_behavior: "quit".to_string(),
@@ -224,6 +248,7 @@ impl Default for AppSettings {
             window_size: "standard".to_string(),
             font_scale: "standard".to_string(),
             clear_clipboard_on_fail: true,
+            clipboard_clear_seconds: 30,
             allow_empty_backup_password: false,
         }
     }
@@ -256,6 +281,11 @@ pub struct VaultFile {
     /// 备份范围标记（明文，便于导入时判断合并哪些部分）
     #[serde(default)]
     pub scope: BackupScope,
+    /// 本次加密所用的 Argon2id 参数。
+    /// 旧文件没有该字段 → 回落为 [`crate::crypto::KdfParams::LEGACY`]，
+    /// 从而保证老保险库仍按旧参数解开。
+    #[serde(default)]
+    pub kdf: crate::crypto::KdfParams,
 }
 
 /// 备份包含的内容范围

@@ -25,8 +25,7 @@ pub struct AppState {
     /// TOTP 验证码缓存：key = 账户 id，value = (周期序号, 当前码, 下一个码)。
     /// 同一周期内复用 HMAC 结果，仅在跨周期（或账户变更）时重算。
     pub code_cache: Mutex<std::collections::HashMap<String, (u64, String, Option<String>)>>,
-    /// 解锁失败次数与最近一次失败时间：用于抵御脚本爆破（指数退避）
-    pub unlock_failures: Mutex<(u32, std::time::Instant)>,
+
 }
 
 impl AppState {
@@ -38,7 +37,7 @@ impl AppState {
             payload: Mutex::new(None),
             close_behavior: Mutex::new("quit".to_string()),
             code_cache: Mutex::new(std::collections::HashMap::new()),
-            unlock_failures: Mutex::new((0, std::time::Instant::now())),
+
         }
     }
 
@@ -77,16 +76,38 @@ impl AppState {
     /// `reason` 会写入锁定事件日志，用于排查「为什么没有锁」：
     /// 日志里没有记录 = 前端根本没发起锁定；有记录 = 已锁定、问题在界面同步。
     pub fn lock_now(&self, reason: &str) {
+        use zeroize::Zeroize;
+
+        // 主密钥：先按字节覆写，再丢弃引用。
+        // 只是 `*guard = None` 的话堆上那 32 字节仍然留在内存里，可能被同用户进程
+        // 读到（甚至被换页到磁盘），所以这里显式擦除。
         if let Ok(mut guard) = self.key.lock() {
-            *guard = None;
+            if let Some(mut key) = guard.take() {
+                key.zeroize();
+            }
         }
+
+        // 载荷：擦除每个账户的 Base32 密钥与明文密码提示后再释放
         if let Ok(mut guard) = self.payload.lock() {
-            *guard = None;
+            if let Some(mut payload) = guard.take() {
+                for account in payload.accounts.iter_mut() {
+                    account.secret.zeroize();
+                }
+                payload.settings.password_hint.zeroize();
+            }
         }
-        // 锁定后不应在内存中残留任何有效验证码
+
+        // 验证码缓存：擦除缓存的验证码字符串
         if let Ok(mut cache) = self.code_cache.lock() {
+            for (_, code, next) in cache.values_mut() {
+                code.zeroize();
+                if let Some(n) = next {
+                    n.zeroize();
+                }
+            }
             cache.clear();
         }
+
         store::append_lock_log(&self.app_dir, reason);
     }
 
@@ -138,15 +159,17 @@ impl AppState {
         let payload = guard.as_ref().ok_or_else(|| "应用未解锁".to_string())?;
 
         let existing = store::read_vault(&self.app_dir).ok();
-        let (salt, uses_machine_key) = match existing {
+        // 重写时必须沿用**原文件记录的** KDF 参数与盐：
+        // 密钥已由解锁流程按该参数派生，换参数会让本次写出的数据再也解不开。
+        let (salt, uses_machine_key, kdf) = match existing {
             Some(f) => {
                 let salt = crypto::decode_salt(&f)?;
-                (salt, f.uses_machine_key)
+                (salt, f.uses_machine_key, f.kdf)
             }
-            None => (crypto::new_salt(), true),
+            None => (crypto::new_salt(), true, crypto::KdfParams::CURRENT),
         };
 
-        let file = crypto::encrypt_payload(payload, &key, &salt, uses_machine_key)?;
+        let file = crypto::encrypt_payload(payload, &key, &salt, uses_machine_key, kdf)?;
         store::write_vault(&self.app_dir, &file)?;
 
         // 数据已变更：清空验证码缓存，确保下次取码按最新账户/密钥重算
@@ -171,6 +194,14 @@ pub struct StatusView {
     pub locked: bool,
     pub password_hint: String,
     pub lock_only_on_start: bool,
+    /// 保险库是否仍在使用较弱的旧 KDF 参数（提示用户执行一次「重新加密」升级）
+    pub kdf_legacy: bool,
+    /// 当前实际使用的数据目录
+    pub data_dir: String,
+    /// 是否来自自定义目录指针（而非默认目录）
+    pub data_dir_from_pointer: bool,
+    /// 指针存在但不可用时的原因（此时正使用默认目录）
+    pub data_dir_issue: Option<store::DataDirIssue>,
 }
 
 #[tauri::command]
@@ -189,12 +220,33 @@ pub fn get_status(state: State<AppState>) -> Result<StatusView, String> {
         .and_then(|p| p.as_ref().map(|v| v.settings.clone()))
         .unwrap_or_default();
 
+    // 以锁定凭证记录的参数为准（它派生出的就是保险库密钥）；无凭证时看保险库文件。
+    //
+    // 必须排除「机器密钥」模式：该模式不做口令派生（密钥是随机落盘的 32 字节），
+    // Argon2 参数完全不参与运算，此时提示「参数强度较低」是误报。
+    let kdf_legacy = match store::read_vault(&state.app_dir) {
+        Ok(file) => {
+            if file.uses_machine_key {
+                false
+            } else {
+                let params = lock.as_ref().map(|l| l.kdf).unwrap_or(file.kdf);
+                let cur = crypto::KdfParams::CURRENT;
+                params.m_cost < cur.m_cost || params.t_cost < cur.t_cost
+            }
+        }
+        Err(_) => false,
+    };
+
     Ok(StatusView {
         has_vault,
         has_lock: lock.is_some(),
         locked,
         password_hint: lock.map(|l| l.hint).unwrap_or_default(),
         lock_only_on_start: settings.lock_enabled,
+        kdf_legacy,
+        data_dir: state.app_dir.to_string_lossy().to_string(),
+        data_dir_from_pointer: state.app_dir != state.default_dir,
+        data_dir_issue: store::data_dir_pointer_issue(&state.default_dir),
     })
 }
 
@@ -237,37 +289,59 @@ pub fn initialize_vault(state: State<AppState>) -> Result<(), String> {
     Ok(())
 }
 
+/// 连续失败次数对应的退避时长（毫秒）。纯函数，便于测试。
+///
+/// 指数增长：200ms × 2^(n-1)，封顶 3 秒。
+/// 计数为 0 表示没有失败历史，不退避。
+pub fn unlock_backoff_ms(fail_count: u32) -> u64 {
+    if fail_count == 0 {
+        return 0;
+    }
+    200u64
+        .saturating_mul(1u64 << (fail_count.min(5) - 1))
+        .min(3_000)
+}
+
+/// 记录一次解锁失败：**写入凭证文件**，使计数跨重启生效。
+///
+/// 只改 fail_count / last_fail_ms，其余字段（salt / verifier / kdf / hint / version）
+/// 原样保留——这些字段决定能否解密，写错就等于毁掉用户数据。
+fn note_failed_unlock(app_dir: &std::path::Path, lock: &mut store::LockRecord) {
+    lock.fail_count = lock.fail_count.saturating_add(1);
+    lock.last_fail_ms = totp::now_millis();
+    // 写盘失败不应阻断解锁流程（它只影响退避的跨重启效果）
+    let _ = store::write_lock(app_dir, lock);
+}
+
+/// 解锁成功后清零失败计数（仅在确有计数时写盘，避免每次解锁都无谓写文件）
+fn clear_failed_unlocks(app_dir: &std::path::Path, lock: &mut store::LockRecord) {
+    if lock.fail_count == 0 && lock.last_fail_ms == 0 {
+        return;
+    }
+    lock.fail_count = 0;
+    lock.last_fail_ms = 0;
+    let _ = store::write_lock(app_dir, lock);
+}
+
 /// 使用锁定密码解锁
 #[tauri::command]
 pub fn unlock(state: State<AppState>, password: String) -> Result<(), String> {
-    // 失败退避：连续失败越多，延迟越长（上限 3 秒），抵御脚本暴力尝试。
-    // 成功输入密码时不受影响（仅在上次失败后的冷却期内施加延迟）。
-    {
-        let guard = state
-            .unlock_failures
-            .lock()
-            .map_err(|_| "状态锁异常".to_string())?;
-        let (count, last) = *guard;
-        if count > 0 {
-            // 指数退避：200ms * 2^(n-1)，封顶 3s
-            let backoff = std::time::Duration::from_millis(
-                (200u64.saturating_mul(1u64 << (count.min(5) - 1))).min(3000),
-            );
-            let elapsed = last.elapsed();
-            if elapsed < backoff {
-                std::thread::sleep(backoff - elapsed);
-            }
+    let mut lock = store::read_lock(&state.app_dir).ok_or_else(|| "未设置锁定密码".to_string())?;
+
+    // 失败退避：**按凭证文件里持久化的失败次数**计算，重启不清零。
+    // 正确口令也受冷却期约束（避免「绕过退避再试一次」），但计数为 0 时零延迟。
+    let backoff = unlock_backoff_ms(lock.fail_count);
+    if backoff > 0 {
+        let elapsed = (totp::now_millis() - lock.last_fail_ms).max(0) as u64;
+        if elapsed < backoff {
+            std::thread::sleep(std::time::Duration::from_millis(backoff - elapsed));
         }
     }
 
-    let lock = store::read_lock(&state.app_dir).ok_or_else(|| "未设置锁定密码".to_string())?;
     let (key, needs_upgrade) = match verify_lock_password(&lock, &password) {
         Ok(v) => v,
         Err(e) => {
-            if let Ok(mut guard) = state.unlock_failures.lock() {
-                guard.0 = guard.0.saturating_add(1);
-                guard.1 = std::time::Instant::now();
-            }
+            note_failed_unlock(&state.app_dir, &mut lock);
             return Err(e);
         }
     };
@@ -278,10 +352,8 @@ pub fn unlock(state: State<AppState>, password: String) -> Result<(), String> {
         upgrade_lock_record_if_needed(&state.app_dir, &lock, &key);
     }
 
-    // 解锁成功：重置失败计数
-    if let Ok(mut guard) = state.unlock_failures.lock() {
-        *guard = (0, std::time::Instant::now());
-    }
+    // 解锁成功：重置失败计数（落盘）
+    clear_failed_unlocks(&state.app_dir, &mut lock);
 
     let file = store::read_vault(&state.app_dir)?;
     let mut payload = crypto::decrypt_payload(&file, &key)?;
@@ -327,7 +399,11 @@ pub fn set_lock_password(
         let salt = crypto::new_salt();
         // 同 unlock：Argon2id 只派生一次，verifier 为带固定上下文的 HMAC
         // （不可反推密钥；早期版本直接存密钥 base64，见 crypto::legacy_verifier）
-        let key = crypto::derive_key(&password, &salt)?;
+        //
+        // 这里用**当前**参数：设置/修改口令本来就是重新派生密钥的时机，
+        // 顺手把 KDF 强度升到最新（凭证与保险库同时改写，二者参数必然一致）。
+        let kdf = crypto::KdfParams::CURRENT;
+        let key = crypto::derive_key(&password, &salt, kdf)?;
         let verifier = crypto::derive_verifier(&key);
 
         // 顺序很关键：先写锁定凭证（含派生所需的 salt + verifier），再写保险库。
@@ -342,13 +418,17 @@ pub fn set_lock_password(
             &state.app_dir,
             &store::LockRecord {
                 version: store::LOCK_RECORD_VERSION,
+                kdf,
                 salt: base64_encode(&salt),
                 verifier,
                 hint: hint.clone(),
+                // 新口令：此前的失败计数不再适用
+                fail_count: 0,
+                last_fail_ms: 0,
             },
         )?;
 
-        let file = crypto::encrypt_payload(&payload, &key, &salt, false)?;
+        let file = crypto::encrypt_payload(&payload, &key, &salt, false, kdf)?;
         if let Err(e) = store::write_vault(&state.app_dir, &file) {
             match previous_lock {
                 Some(prev) => {
@@ -368,7 +448,8 @@ pub fn set_lock_password(
         // 关闭锁定：改回设备本地机器密钥
         let salt = crypto::new_salt();
         let key = crypto::load_or_create_machine_key(&state.app_dir)?;
-        let file = crypto::encrypt_payload(&payload, &key, &salt, true)?;
+        // 机器密钥模式不使用口令派生，但文件仍记录一组有效参数（便于将来开启口令时统一）
+        let file = crypto::encrypt_payload(&payload, &key, &salt, true, crypto::KdfParams::CURRENT)?;
         store::write_vault(&state.app_dir, &file)?;
         store::remove_lock(&state.app_dir)?;
         *state.key.lock().map_err(|_| "状态锁异常".to_string())? = Some(key);
@@ -398,7 +479,8 @@ fn verify_lock_password(
     password: &str,
 ) -> Result<([u8; 32], bool), String> {
     let salt = base64_decode(&record.salt)?;
-    let key = crypto::derive_key(password, &salt)?;
+    // 按**该凭证记录的** KDF 参数派生（旧文件没有 kdf 字段 → 历史参数）
+    let key = crypto::derive_key(password, &salt, record.kdf)?;
     let matched = if record.version >= store::LOCK_RECORD_VERSION {
         crypto::constant_time_eq(
             crypto::derive_verifier(&key).as_bytes(),
@@ -428,11 +510,22 @@ fn upgrade_lock_record_if_needed(
     }
     let upgraded = store::LockRecord {
         version: store::LOCK_RECORD_VERSION,
+        // 升级 verifier 格式不改变密钥，因此必须沿用原 KDF 参数
+        kdf: record.kdf,
         salt: record.salt.clone(),
         verifier: crypto::derive_verifier(key),
         hint: record.hint.clone(),
+        fail_count: record.fail_count,
+        last_fail_ms: record.last_fail_ms,
     };
     let _ = store::write_lock(app_dir, &upgraded);
+}
+
+/// 重新加密的结果：附带失效快照数量
+#[derive(serde::Serialize)]
+pub struct RotateResult {
+    /// 使用旧密钥、现已无法解密的快照数量（建议清理）
+    pub stale_backups: u32,
 }
 
 /// 重新加密保险库：用同一口令，但**全新的 salt** 重新派生密钥并重写数据。
@@ -443,8 +536,8 @@ fn upgrade_lock_record_if_needed(
 ///
 /// 口令必须正确：否则用户以为换过密钥，实际仍是用旧密钥加密。
 #[tauri::command]
-pub fn rotate_vault_key(state: State<AppState>, password: String) -> Result<(), String> {
-    let lock = store::read_lock(&state.app_dir).ok_or_else(|| "未启用锁定密码".to_string())?;
+pub fn rotate_vault_key(state: State<AppState>, password: String) -> Result<RotateResult, String> {
+    let mut lock = store::read_lock(&state.app_dir).ok_or_else(|| "未启用锁定密码".to_string())?;
     let payload = state
         .payload
         .lock()
@@ -455,15 +548,15 @@ pub fn rotate_vault_key(state: State<AppState>, password: String) -> Result<(), 
     // 校验当前口令（兼容 v0 / v1 两种校验值）。
     // 这里只需要「口令是否正确」，新密钥会由新 salt 重新派生。
     if let Err(e) = verify_lock_password(&lock, &password) {
-        if let Ok(mut guard) = state.unlock_failures.lock() {
-            guard.0 = guard.0.saturating_add(1);
-            guard.1 = std::time::Instant::now();
-        }
+        note_failed_unlock(&state.app_dir, &mut lock);
         return Err(e);
     }
 
     let new_salt = crypto::new_salt();
-    let new_key = crypto::derive_key(&password, &new_salt)?;
+    // 「重新加密」正是升级 KDF 参数的最佳时机：新旧凭证与保险库同时改写，
+    // 不存在「文件记旧参数、数据用新密钥」的不一致风险。
+    let new_kdf = crypto::KdfParams::CURRENT;
+    let new_key = crypto::derive_key(&password, &new_salt, new_kdf)?;
 
     // 顺序与 set_lock_password 一致：先提交凭证（含新 salt），再写保险库。
     // 若反过来，一旦「保险库已用新密钥加密、凭证仍是旧盐」就会永久无法解密。
@@ -472,13 +565,17 @@ pub fn rotate_vault_key(state: State<AppState>, password: String) -> Result<(), 
         &state.app_dir,
         &store::LockRecord {
             version: store::LOCK_RECORD_VERSION,
+            kdf: new_kdf,
             salt: base64_encode(&new_salt),
             verifier: crypto::derive_verifier(&new_key),
             hint: lock.hint.clone(),
+            // 口令刚被证实正确：失败计数清零
+            fail_count: 0,
+            last_fail_ms: 0,
         },
     )?;
 
-    let file = crypto::encrypt_payload(&payload, &new_key, &new_salt, false)?;
+    let file = crypto::encrypt_payload(&payload, &new_key, &new_salt, false, new_kdf)?;
     if let Err(e) = store::write_vault(&state.app_dir, &file) {
         // 回滚凭证：保险库仍是旧密钥加密的，旧凭证才能解开它
         let _ = store::write_lock(&state.app_dir, &previous);
@@ -493,10 +590,10 @@ pub fn rotate_vault_key(state: State<AppState>, password: String) -> Result<(), 
 
     // 内存密钥必须同步，否则后续 persist 会用旧密钥覆盖刚写好的数据
     *state.key.lock().map_err(|_| "状态锁异常".to_string())? = Some(new_key);
-    if let Ok(mut guard) = state.unlock_failures.lock() {
-        *guard = (0, std::time::Instant::now());
-    }
-    Ok(())
+
+    // 换了密钥：此前的快照全部解不开，如实回报数量供界面提示清理
+    let stale_backups = store::count_undecryptable_backups(&state.app_dir, &new_key);
+    Ok(RotateResult { stale_backups })
 }
 
 /// 更新已有账户的可编辑字段（服务名、账户标识、密钥、算法、位数、周期、分类）
@@ -792,8 +889,21 @@ pub fn import_otpauth_text(state: State<AppState>, text: String) -> Result<(u32,
     Ok((added, skipped))
 }
 
+/// 删除账户的结果：附带历史快照清理统计
+#[derive(serde::Serialize)]
+pub struct DeleteAccountResult {
+    /// 已从多少份历史快照中清除了该账户的密钥
+    pub purged_backups: u32,
+    /// 有多少份快照无法解密（由旧密钥加密），本次未能清理
+    pub stale_backups: u32,
+}
+
 #[tauri::command]
-pub fn delete_account(state: State<AppState>, id: String) -> Result<(), String> {
+pub fn delete_account(
+    state: State<AppState>,
+    id: String,
+    purge_backups: bool,
+) -> Result<DeleteAccountResult, String> {
     state.with_payload(|p| {
         let before = p.accounts.len();
         p.accounts.retain(|a| a.id != id);
@@ -803,7 +913,23 @@ pub fn delete_account(state: State<AppState>, id: String) -> Result<(), String> 
         Ok(())
     })?;
     state.persist()?;
-    Ok(())
+
+    // 快照与主库共用密钥：若不清理，被删账户的密钥仍能从历史快照里解出
+    // （等于「删除了但没撤销」）。此处的密钥已在手，无需再次派生。
+    let mut purged_backups = 0u32;
+    let mut stale_backups = 0u32;
+    if purge_backups {
+        if let Ok(key) = state.current_key() {
+            let (purged, stale) = store::purge_account_from_backups(&state.app_dir, &id, &key);
+            purged_backups = purged;
+            stale_backups = stale;
+        }
+    }
+
+    Ok(DeleteAccountResult {
+        purged_backups,
+        stale_backups,
+    })
 }
 
 #[tauri::command]
@@ -933,12 +1059,14 @@ pub fn export_vault(
     };
 
     let salt = crypto::new_salt();
-    let key = crypto::derive_key(&password, &salt)?;
+    // 导出统一用当前参数，并在文件里记录，跨设备/跨版本都能按同一参数解开
+    let kdf = crypto::KdfParams::CURRENT;
+    let key = crypto::derive_key(&password, &salt, kdf)?;
     let scope = crate::models::BackupScope {
         accounts: include_accounts,
         settings: include_settings,
     };
-    let file = crypto::encrypt_payload_with_scope(&export_payload, &key, &salt, false, scope)?;
+    let file = crypto::encrypt_payload_with_scope(&export_payload, &key, &salt, false, scope, kdf)?;
     serde_json::to_string_pretty(&file).map_err(|e| e.to_string())
 }
 
@@ -1074,7 +1202,8 @@ pub fn import_vault(
     let file: VaultFile =
         serde_json::from_str(&content).map_err(|_| "备份文件格式不正确".to_string())?;
     let salt = crypto::decode_salt(&file)?;
-    let key = crypto::derive_key(&password, &salt)?;
+    // 按备份文件里记录的参数派生：旧导出没有 kdf 字段 → 历史参数，仍可导入
+    let key = crypto::derive_key(&password, &salt, file.kdf)?;
     let imported = crypto::decrypt_payload(&file, &key)?;
 
     let scope = file.scope.clone();
@@ -1389,7 +1518,10 @@ fn sanitize_settings(mut s: AppSettings) -> AppSettings {
         }
     }
     s.theme = one_of(&s.theme, &["light", "dark", "system"], "light");
+    s.splash_animation = one_of(&s.splash_animation, &["draw", "pop", "ring", "dots"], "dots");
     s.code_visibility = one_of(&s.code_visibility, &["never", "always", "hover"], "never");
+    s.category_expand_mode =
+        one_of(&s.category_expand_mode, &["expand", "collapse", "remember"], "expand");
     s.card_density = one_of(&s.card_density, &["compact", "standard"], "standard");
     s.card_detail = one_of(&s.card_detail, &["minimal", "standard", "detailed"], "standard");
     s.close_behavior = one_of(&s.close_behavior, &["quit", "tray"], "quit");
@@ -1538,6 +1670,10 @@ pub fn set_data_dir(app: tauri::AppHandle, state: State<AppState>, dir: String) 
     }
     if !target.is_dir() {
         return Err("目标路径不是目录".to_string());
+    }
+    // 纯离线前提：数据目录不能是网络位置，否则密文与备份会被写到远端
+    if store::is_network_path(&target) {
+        return Err("不能使用网络路径作为数据目录：数据会被写到远端".to_string());
     }
 
     store::migrate_data_dir(&current, &target)?;
@@ -1783,28 +1919,37 @@ mod tests {
 
     const PASSWORD: &str = "correct horse battery";
 
-    /// 构造一份 v0 旧格式凭证：verifier 就是保险库密钥的 base64
+    /// 构造一份 v0 旧格式凭证：verifier 就是保险库密钥的 base64。
+    /// 同时使用**历史 KDF 参数**，模拟真实的老文件。
     fn legacy_record(password: &str) -> (store::LockRecord, [u8; 32]) {
         let salt = crate::crypto::new_salt();
-        let key = crate::crypto::derive_key(password, &salt).unwrap();
+        let kdf = crate::crypto::KdfParams::LEGACY;
+        let key = crate::crypto::derive_key(password, &salt, kdf).unwrap();
         let record = store::LockRecord {
             version: 0,
+            kdf,
             salt: base64_encode(&salt),
             verifier: crate::crypto::legacy_verifier(&key),
             hint: String::new(),
+            fail_count: 0,
+            last_fail_ms: 0,
         };
         (record, key)
     }
 
-    /// 构造一份 v1 当前格式凭证
+    /// 构造一份 v1 当前格式凭证（当前 KDF 参数）
     fn current_record(password: &str) -> (store::LockRecord, [u8; 32]) {
         let salt = crate::crypto::new_salt();
-        let key = crate::crypto::derive_key(password, &salt).unwrap();
+        let kdf = crate::crypto::KdfParams::CURRENT;
+        let key = crate::crypto::derive_key(password, &salt, kdf).unwrap();
         let record = store::LockRecord {
             version: store::LOCK_RECORD_VERSION,
+            kdf,
             salt: base64_encode(&salt),
             verifier: crate::crypto::derive_verifier(&key),
             hint: String::new(),
+            fail_count: 0,
+            last_fail_ms: 0,
         };
         (record, key)
     }
@@ -1840,22 +1985,29 @@ mod tests {
     #[test]
     fn verifier_formats_are_not_interchangeable() {
         let salt = crate::crypto::new_salt();
-        let key = crate::crypto::derive_key(PASSWORD, &salt).unwrap();
+        let kdf = crate::crypto::KdfParams::CURRENT;
+        let key = crate::crypto::derive_key(PASSWORD, &salt, kdf).unwrap();
         let salt_b64 = base64_encode(&salt);
 
         let v0_with_hmac = store::LockRecord {
             version: 0,
+            kdf,
             salt: salt_b64.clone(),
             verifier: crate::crypto::derive_verifier(&key),
             hint: String::new(),
+            fail_count: 0,
+            last_fail_ms: 0,
         };
         assert!(verify_lock_password(&v0_with_hmac, PASSWORD).is_err());
 
         let v1_with_key = store::LockRecord {
             version: store::LOCK_RECORD_VERSION,
+            kdf,
             salt: salt_b64,
             verifier: crate::crypto::legacy_verifier(&key),
             hint: String::new(),
+            fail_count: 0,
+            last_fail_ms: 0,
         };
         assert!(verify_lock_password(&v1_with_key, PASSWORD).is_err());
     }
@@ -1896,6 +2048,69 @@ mod tests {
         upgrade_lock_record_if_needed(&dir, &record, &key);
         let after = store::read_lock(&dir).unwrap();
         assert_eq!(after.verifier, record.verifier);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // ── 解锁退避：计数必须跨重启生效 ──
+
+    #[test]
+    fn backoff_grows_exponentially_and_is_capped() {
+        assert_eq!(unlock_backoff_ms(0), 0, "没有失败历史不应有任何延迟");
+        assert_eq!(unlock_backoff_ms(1), 200);
+        assert_eq!(unlock_backoff_ms(2), 400);
+        assert_eq!(unlock_backoff_ms(3), 800);
+        assert_eq!(unlock_backoff_ms(4), 1_600);
+        // 封顶 3 秒，避免退避本身变成可用性问题
+        assert_eq!(unlock_backoff_ms(5), 3_000);
+        assert_eq!(unlock_backoff_ms(50), 3_000);
+        assert_eq!(unlock_backoff_ms(u32::MAX), 3_000, "极端值不得溢出");
+    }
+
+    /// 核心回归：失败计数写入凭证文件，重启后仍然存在
+    #[test]
+    fn failed_unlock_count_survives_restart() {
+        let dir = std::env::temp_dir().join(format!("onetotp-backoff-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let (mut record, _key) = current_record(PASSWORD);
+        store::write_lock(&dir, &record).unwrap();
+        let original_verifier = record.verifier.clone();
+        let original_salt = record.salt.clone();
+
+        // 两次失败
+        note_failed_unlock(&dir, &mut record);
+        note_failed_unlock(&dir, &mut record);
+
+        // 模拟「重启」：直接重新从磁盘读取
+        let reloaded = store::read_lock(&dir).expect("凭证应仍可读");
+        assert_eq!(reloaded.fail_count, 2, "失败计数必须落盘，重启不清零");
+        assert!(reloaded.last_fail_ms > 0);
+        // 改写计数不能碰任何决定解密结果的字段
+        assert_eq!(reloaded.salt, original_salt, "salt 不得变化");
+        assert_eq!(reloaded.verifier, original_verifier, "verifier 不得变化");
+        assert_eq!(reloaded.kdf, record.kdf, "KDF 参数不得变化");
+        assert_eq!(reloaded.version, record.version);
+
+        // 解锁成功后清零，并再次落盘
+        clear_failed_unlocks(&dir, &mut record);
+        let cleared = store::read_lock(&dir).unwrap();
+        assert_eq!(cleared.fail_count, 0);
+        assert_eq!(cleared.last_fail_ms, 0);
+        assert_eq!(cleared.salt, original_salt);
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// 退避时长按持久化计数计算（不再依赖内存里的瞬时状态）
+    #[test]
+    fn backoff_uses_persisted_count_after_restart() {
+        let dir = std::env::temp_dir().join(format!("onetotp-backoff2-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let (mut record, _key) = current_record(PASSWORD);
+        for _ in 0..3 {
+            note_failed_unlock(&dir, &mut record);
+        }
+        let reloaded = store::read_lock(&dir).unwrap();
+        assert_eq!(unlock_backoff_ms(reloaded.fail_count), 800);
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

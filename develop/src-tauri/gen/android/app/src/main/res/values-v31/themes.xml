@@ -1,0 +1,11 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!--
+      Android 12+ 使用 SplashScreen API 绘制启动画面，其背景默认取主题的
+      colorBackground（偏白）。这里显式指向同一套启动底色，避免深色系统闪白。
+      注意：不同限定符下的同名 style 是独立资源，需重复声明 windowBackground。
+    -->
+    <style name="Theme.onetotp" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="android:windowBackground">@color/onetotp_startup_background</item>
+        <item name="android:windowSplashScreenBackground">@color/onetotp_startup_background</item>
+    </style>
+</resources>

@@ -34,5 +34,8 @@ keystore.properties
 # 本地端到端测试截图（临时证据，不入库）
 /.e2e/
 
+# 本地预览页（设计稿对比用，临时产物，不入库）
+/.preview/
+
 # Android 打包脚本的本地 versionCode 计数器（每台机器各自递增，不入库）
 develop/src-tauri/gen/android/.versioncode

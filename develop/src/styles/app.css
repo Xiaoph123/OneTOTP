@@ -1467,6 +1467,8 @@ html[data-platform="desktop"] .modal-actions > .ui-btn {
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--color-text-1);
+  /* 独立合成层：值变化时让该层整体重绘，避免亚像素抗锯齿残影（见上一条注释） */
+  transform: translateZ(0);
 }
 .select-placeholder {
   color: var(--color-text-3);
@@ -1525,7 +1527,12 @@ html[data-platform="desktop"] .modal-actions > .ui-btn {
   box-shadow: none;
   border-radius: var(--radius-sm);
   color: var(--color-text-2);
-  transition: background 140ms ease, color 140ms ease;
+  /* 只过渡文字颜色，不过渡 background：
+     实测在 WebView2 上，「下拉展开→关闭」会让触发器的背景在 primary-container
+     与 transparent 之间做 140ms 动画，若此时选项文字同时换行重排，
+     偶尔会残留一条 1px 的淡蓝细线（不属于任何元素的重绘残影）。
+     背景瞬时切换即可规避，且视觉上几乎无差别。 */
+  transition: color 140ms ease;
 }
 .select-ghost .select-trigger:hover {
   background: var(--color-bg-5);
@@ -2667,6 +2674,37 @@ html[data-platform="mobile"] .sticky-actions {
 }
 
 
+/* 移动端验证码加粗：
+   Android 的等宽字体回退（Droid Sans Mono / Noto Sans Mono）只有 Regular
+   一个字重，font-weight 无法选中粗体也不会合成，看起来明显偏细。
+   改用系统无衬线字体（Roboto 有完整字重）。
+   字重用 700 而非 600：Roboto 标准家族只有 400/500/700，没有 600，
+   浏览器会把 600 就近映射到 500（Medium），视觉上仍偏细。 */
+html[data-platform="mobile"] .otp-code {
+  font-family: var(--font-body);
+  font-weight: 700;
+  letter-spacing: 2px;
+}
+
+/* 移动端取消卡片的悬停/按下边框反馈：
+   触摸设备没有真正的 hover，点击后 :hover 会「粘住」直到点别处，
+   表现为卡片一直带着蓝色边框；:active 的边框变化同理。
+   移动端只保留轻微的下压缩放作为触感反馈。 */
+html[data-platform="mobile"] .otp-card:hover {
+  box-shadow: var(--shadow-1);
+  border-color: var(--color-border-light);
+}
+html[data-platform="mobile"] .otp-card:active {
+  transform: scale(0.975);
+  box-shadow: var(--shadow-1);
+  border-color: var(--color-border-light);
+  background: var(--color-bg-card);
+}
+/* 触摸设备不显示键盘焦点环（点击后 WebView 可能给元素加焦点） */
+html[data-platform="mobile"] .otp-card:focus-visible {
+  outline: none;
+}
+
 /* ── 隐私保护：失焦时遮挡验证码 ──────────────────────────── */
 html[data-privacy-mask="on"] .otp-code,
 html[data-privacy-mask="on"] .otp-next-code {
@@ -2675,4 +2713,63 @@ html[data-privacy-mask="on"] .otp-next-code {
 html[data-privacy-mask="on"] .otp-code,
 html[data-privacy-mask="on"] .otp-next-code {
   transition: filter 0.12s ease;
+}
+/* 口令改进建议（即时提示，非阻断） */
+.pwd-hints {
+  margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.pwd-hint {
+  font-size: var(--font-size-body);
+  color: var(--color-text-3);
+  line-height: 16px;
+}
+
+/* 向上弹出的浮层：用于页面底部空间不足的设置行。
+   选择器权重高于 .select-ghost .select-dropdown，可覆盖其 top。 */
+.select.select-dropup .select-dropdown {
+  top: auto;
+  bottom: calc(100% + 6px);
+}
+/* 选项较多时可滚动，避免超出窗口高度 */
+.select-dropdown {
+  max-height: 320px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* 确认框内的附加选项（如「同时清理历史快照」） */
+.modal-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 14px;
+  font-size: var(--font-size-body);
+  color: var(--color-text-1);
+  cursor: pointer;
+  user-select: none;
+}
+.modal-check input {
+  margin-top: 2px;
+  flex-shrink: 0;
+  accent-color: var(--color-primary);
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+.modal-desc-sub {
+  margin-top: 6px;
+  font-size: var(--font-size-body);
+  color: var(--color-text-3);
+}
+
+/* 设置页内的行内提示条：文字左、操作右 */
+.settings-inline-notice {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 10px 14px 14px;
 }

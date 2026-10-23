@@ -1,6 +1,6 @@
 [package]
 name = "onetotp"
-version = "0.2.0"
+version = "0.3.0"
 description = "OneTOTP - 纯离线身份验证器"
 authors = ["wanghao"]
 edition = "2021"
@@ -28,6 +28,8 @@ aes-gcm = "0.10"
 argon2 = "0.5"
 rand = "0.8"
 base64 = "0.22"
+# 锁定/丢弃敏感数据时按字节覆写内存，缩短明文在进程内的残留窗口
+zeroize = "1"
 
 # TOTP 计算
 hmac = "0.12"

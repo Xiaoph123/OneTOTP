@@ -27,17 +27,40 @@ function revealWindow(): void {
 }
 
 /**
- * 移除 index.html 中的静态启动画面。
+ * 启动画面最短展示时长。
+ *
+ * 冷启动时 boot() 往往几十毫秒就完成，启动画面一闪而过，
+ * 动画还没播完就被移除，观感上像「闪了一下」。
+ * 这里保证至少展示 1 秒，让开屏动画完整播完再进入首页。
+ */
+const SPLASH_MIN_MS = 1000;
+
+/** 启动画面开始展示的时刻（模块加载即视为开始） */
+const splashShownAt = performance.now();
+
+/**
+ * 移除 index.html 中的静态启动画面，并触发首页入场动画。
  * 由 App 在 boot() 完成后调用（见 App.tsx），确保首帧即为最终界面
  * （锁定页或主界面），避免「先闪主界面、数秒后才跳锁定页」的倒序观感。
  */
 function dismissSplash(): void {
   const splash = document.getElementById("app-splash");
-  if (!splash) return;
+  const root = document.getElementById("root");
+  if (!splash) {
+    // 启动画面已被移除（重复调用）：只补一次入场动画
+    root?.classList.add("is-entering");
+    return;
+  }
+
+  // 启动画面退出与首页入场同时开始，形成交叉过渡
   splash.classList.add("is-hidden");
+  root?.classList.add("is-entering");
+
   splash.addEventListener("transitionend", () => splash.remove(), { once: true });
   // 兜底：若过渡事件未触发（如减少动态效果），延时强制移除
-  window.setTimeout(() => splash.remove(), 400);
+  window.setTimeout(() => splash.remove(), 600);
+  // 入场动画结束后移除类，避免影响后续布局（transform 会创建新的包含块）
+  window.setTimeout(() => root?.classList.remove("is-entering"), 700);
 }
 
 // 暴露给 App：boot 完成后调用，一次性显窗并淡出启动画面
@@ -45,6 +68,11 @@ function dismissSplash(): void {
   revealWindow();
   // 双 rAF 等 React 完成锁定页/主界面首帧绘制，再淡出，衔接无闪烁
   requestAnimationFrame(() => {
-    requestAnimationFrame(() => dismissSplash());
+    requestAnimationFrame(() => {
+      // 补足最短展示时长：动画播完再进入首页
+      const elapsed = performance.now() - splashShownAt;
+      const wait = Math.max(0, SPLASH_MIN_MS - elapsed);
+      window.setTimeout(dismissSplash, wait);
+    });
   });
 };

@@ -116,7 +116,12 @@
   --font-display: "PingFang SC", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
   --font-heading: "PingFang SC", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
   --font-body: "PingFang SC", "Roboto", "Helvetica Neue", Arial, sans-serif;
-  --font-mono: "SFMono-Regular", "SF Mono", "Roboto Mono", "Consolas", "Liberation Mono", monospace;
+  /* 验证码专用字体：内置 Roboto Mono（400 / 700 两档，见 app.css 的 @font-face）。
+     不依赖系统字体——Android 各 ROM 的等宽字体往往只有 Regular 一个字重，
+     且 WebView 不合成伪粗体，font-weight: 700 会被直接忽略。
+     内置字体文件后，700 是真实的 Bold 字形，任何设备都能正确加粗。 */
+  --font-code: "OneTotp Mono", "SFMono-Regular", "SF Mono", "Roboto Mono", "Consolas", monospace;
+  --font-mono: "OneTotp Mono", "SFMono-Regular", "SF Mono", "Roboto Mono", "Consolas", "Liberation Mono", monospace;
   --font-family-base: "PingFang SC", "Roboto", "Helvetica Neue", Arial, sans-serif;
   --font-size-display: calc(var(--font-scale, 1) * 24px);
   --font-size-h1: calc(var(--font-scale, 1) * 20px);
@@ -518,6 +523,16 @@
   /* ── Button Shadows ── */
   --shadow-blue: 0px 0px 0px 1px #0055FF, 0px 2px 1px 0px rgba(0,0,0,0.15);
   --shadow-blue-hover: 0px 0px 0px 1px #4585FF, 0px 2px 1px 0px rgba(0,0,0,0.15);
+
+  /* ── Brand Gradient（与应用 logo 完全一致：绿 → 青 → 靛）──
+     用于所有主操作按钮（primary）。三档分别对应常态 / 悬停 / 按下，
+     整体压暗而非提亮：渐变本身已足够醒目，再提亮会显得刺眼。 */
+  --brand-gradient: linear-gradient(135deg, #34D399 0%, #22D3EE 45%, #6366F1 100%);
+  --brand-gradient-hover: linear-gradient(135deg, #2FC48D 0%, #1FC5E0 45%, #5A5DE8 100%);
+  --brand-gradient-active: linear-gradient(135deg, #29B681 0%, #1BB8D2 45%, #5154DB 100%);
+  /* 渐变按钮的投影：取渐变中段的靛色与青色，让阴影与按钮同色系 */
+  --shadow-brand: 0 2px 8px rgba(99, 102, 241, 0.26), 0 1px 2px rgba(34, 211, 238, 0.18);
+  --shadow-brand-hover: 0 4px 14px rgba(99, 102, 241, 0.34), 0 1px 3px rgba(34, 211, 238, 0.24);
   --shadow-gray: 0px 0px 0px 1px #DDE2E9, 0px 2px 1px 0px rgba(0,0,0,0.08);
   --shadow-gray-hover: 0px 0px 0px 1px #C9CDD4, 0px 2px 1px 0px rgba(0,0,0,0.08);
   --shadow-danger: 0px 0px 0px 1px #D93F3F, 0px 2px 1px 0px rgba(0,0,0,0.15);
@@ -772,24 +787,28 @@
 :root[data-theme="dark"] {
   color-scheme: dark;
 
-  /* ── 背景 ── */
-  --color-bg-1: #1b1e24;
-  --color-bg-2: #141619;
-  --color-bg-3: #202329;
-  --color-bg-4: #23262d;
-  --color-bg-5: #2b2f38;
-  --color-bg-7: #23262d;
-  --color-bg-8: #1b1e24;
-  --color-bg-9: #1b1e24;
-  --color-bg-page: #141619;
-  --color-bg-card: #1b1e24;
-  --color-bg-hover: #2b2f38;
-  --color-bg-active: #2b2f38;
-  --color-bg-subtle: #23262d;
-  --bg-4: #23262d;
-  --bg-7: #23262d;
-  --bg-hover: #2b2f38;
-  --bg-subtle: #202329;
+  /* ── 背景 ──
+     整体压暗一档：页面底色从 #141619 降到 #0A0B0D，
+     与 Android 状态栏纯黑只差一档，视觉上无缝衔接。
+     此前 #141619 在手机上明显比状态栏亮，形成一条断层。
+     其余层级按同一比例下移，保持相对明度关系不变。 */
+  --color-bg-1: #14161a;
+  --color-bg-2: #0a0b0d;
+  --color-bg-3: #171a1f;
+  --color-bg-4: #1a1d22;
+  --color-bg-5: #22262d;
+  --color-bg-7: #1a1d22;
+  --color-bg-8: #14161a;
+  --color-bg-9: #14161a;
+  --color-bg-page: #0a0b0d;
+  --color-bg-card: #14161a;
+  --color-bg-hover: #22262d;
+  --color-bg-active: #22262d;
+  --color-bg-subtle: #1a1d22;
+  --bg-4: #1a1d22;
+  --bg-7: #1a1d22;
+  --bg-hover: #22262d;
+  --bg-subtle: #171a1f;
 
   /* ── 文本 ── */
   --color-text-1: #e8eaed;
@@ -808,19 +827,21 @@
   --text-yuanliNeutral-9: #e8eaed;
   --text-yuanliNeutral-10: #f2f4f6;
 
-  /* ── 边框 ── */
-  --color-border-2: #262a31;
-  --color-border-3: #343943;
-  --color-border: #343943;
-  --color-border-light: #262a31;
-  --color-border-hover: #454b57;
-  --border-1: #262a31;
-  --border-2: #343943;
-  --border-3: #343943;
-  --border-yuanliBorder-1: #262a31;
-  --border-yuanliBorder-2: #2b2f38;
-  --border-yuanliBorder-3: #343943;
-  --border-yuanliBorder-4: #4a505b;
+  /* ── 边框 ──
+     随背景一起压暗：背景降到 #0A0B0D 后，原来的 #262A31 会显得过亮，
+     像在深色底上画了一道浅灰线。 */
+  --color-border-2: #1e2127;
+  --color-border-3: #2a2e36;
+  --color-border: #2a2e36;
+  --color-border-light: #1e2127;
+  --color-border-hover: #3a3f4a;
+  --border-1: #1e2127;
+  --border-2: #2a2e36;
+  --border-3: #2a2e36;
+  --border-yuanliBorder-1: #1e2127;
+  --border-yuanliBorder-2: #22262d;
+  --border-yuanliBorder-3: #2a2e36;
+  --border-yuanliBorder-4: #3f4550;
 
   /* ── 主色容器（暗色下的浅蓝底） ── */
   --color-primary-container: #16233f;
@@ -855,16 +876,40 @@
   --shadow-3: 0 5px 15px rgba(0, 0, 0, 0.45), 0 2px 4px rgba(0, 0, 0, 0.35);
   --shadow-4: 0 15px 35px -2px rgba(0, 0, 0, 0.5), 0 5px 15px rgba(0, 0, 0, 0.4);
   --shadow-5: 0 24px 48px -4px rgba(0, 0, 0, 0.55), 0 8px 20px rgba(0, 0, 0, 0.45);
-  --shadow-gray: 0 0 0 1px #343943, 0 2px 1px 0 rgba(0, 0, 0, 0.25);
-  --shadow-gray-hover: 0 0 0 1px #454b57, 0 2px 1px 0 rgba(0, 0, 0, 0.25);
+  --shadow-gray: 0 0 0 1px #2a2e36, 0 2px 1px 0 rgba(0, 0, 0, 0.25);
+  --shadow-gray-hover: 0 0 0 1px #3a3f4a, 0 2px 1px 0 rgba(0, 0, 0, 0.25);
+
+  /* ── 品牌渐变（暗色专用）──
+     亮色那套 #34D399 → #22D3EE → #6366F1 是为白底设计的，
+     在近黑背景上亮度对比过强，像一块「发光贴纸」，非常扎眼。
+
+     暗色版做两件事：
+       1. 整体压暗约 35%，保留品牌色相（绿→青→靛）但降低明度；
+       2. 叠一层顶部内高光（白 16% → 52% 处渐隐），
+          模拟玻璃受光面，让按钮有体积感而不是纯色块。
+
+     为什么高光放在渐变之前：CSS 多层 background-image 中，
+     先声明的在上层。高光必须盖在色块之上才看得见。 */
+  --brand-gradient:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.16), transparent 52%),
+    linear-gradient(135deg, #2b9c7a 0%, #1f8fa8 45%, #4a4dab 100%);
+  --brand-gradient-hover:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.2), transparent 52%),
+    linear-gradient(135deg, #31a884 0%, #239bb6 45%, #5255b8 100%);
+  --brand-gradient-active:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.1), transparent 52%),
+    linear-gradient(135deg, #268a6c 0%, #1b7e94 45%, #414496 100%);
+  /* 阴影：暗色下用深色投影，亮色阴影会显得脏 */
+  --shadow-brand: 0 2px 10px rgba(74, 77, 171, 0.28), 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-brand-hover: 0 4px 16px rgba(74, 77, 171, 0.36), 0 1px 3px rgba(0, 0, 0, 0.45);
 
   /* ── 落地细节 ── */
-  --color-secondary: #23262d;
-  --color-surface-variant: #23262d;
-  --color-outline: #343943;
-  --color-outline-variant: #262a31;
+  --color-secondary: #1a1d22;
+  --color-surface-variant: #1a1d22;
+  --color-outline: #2a2e36;
+  --color-outline-variant: #1e2127;
   --color-on-surface: #e8eaed;
   --color-on-surface-variant: #8b929e;
   --color-muted-foreground: #8b929e;
-  --color-sidebar: #1b1e24;
+  --color-sidebar: #14161a;
 }

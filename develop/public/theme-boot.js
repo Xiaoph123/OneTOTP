@@ -16,7 +16,9 @@
     try {
       mode = localStorage.getItem("onetotp.theme");
     } catch (e) {}
-    if (mode !== "light" && mode !== "dark" && mode !== "system") mode = "light";
+    // 默认「跟随系统」：与后端 AppSettings::default() 的 theme 保持一致，
+    // 否则首次安装时首帧会先按亮色渲染，等设置解密完再跳成暗色。
+    if (mode !== "light" && mode !== "dark" && mode !== "system") mode = "system";
 
     /**
      * 解析「跟随系统」时的真实明暗。
@@ -45,7 +47,7 @@
       var dark = mode === "dark" || (mode === "system" && systemIsDark());
       document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
       var meta = document.querySelector('meta[name="theme-color"]');
-      if (meta) meta.setAttribute("content", dark ? "#141619" : "#FCFDFE");
+      if (meta) meta.setAttribute("content", dark ? "#0A0B0D" : "#FCFDFE");
     }
 
     apply();

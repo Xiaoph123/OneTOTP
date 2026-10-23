@@ -20,11 +20,11 @@ import { useI18n } from "../i18n";
 
 /** 各平台生物识别的展示名（Linux 等不支持平台回退为通用文案） */
 function biometricLabel(t: (k: string) => string): string {
-  if (typeof navigator === "undefined") return t("指纹 / 面容解锁");
+  if (typeof navigator === "undefined") return t("指纹 / 人脸解锁");
   const ua = navigator.userAgent;
   if (isDesktop() && /Windows/i.test(ua)) return t("Windows Hello 解锁");
   if (isDesktop() && /Macintosh|Mac OS X/i.test(ua)) return t("Touch ID 解锁");
-  return t("指纹 / 面容解锁");
+  return t("指纹 / 人脸解锁");
 }
 
 export function SecurityPage() {

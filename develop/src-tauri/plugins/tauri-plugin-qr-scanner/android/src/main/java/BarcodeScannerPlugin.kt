@@ -90,6 +90,7 @@ class BarcodeScannerPlugin(private val activity: Activity) : Plugin(activity),
     private var cameraProviderFuture: ListenableFuture<ProcessCameraProvider>? = null
     private var cameraProvider: ProcessCameraProvider? = null
     private var graphicOverlay: GraphicOverlay? = null
+    private var scanMaskView: ScanMaskView? = null
     private var camera: Camera? = null
         set(value) {
             field = value
@@ -158,6 +159,21 @@ class BarcodeScannerPlugin(private val activity: Activity) : Plugin(activity),
                 parent.addView(previewView)
                 parent.addView(graphicOverlay)
 
+                // 取景蒙版：叠在相机画面之上，只做视觉引导与两个按钮的点击，
+                // 不参与任何相机逻辑（不持有 Camera / Preview / ImageAnalysis）。
+                // 放在 graphicOverlay 之后，保证盖住未来可能添加的识别框。
+                val mask = ScanMaskView(
+                    activity,
+                    onBack = { cancelScan() },
+                    onManualInput = { requestManualInput() },
+                )
+                mask.layoutParams = FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT
+                )
+                parent.addView(mask)
+                this.scanMaskView = mask
+
                 this.windowed = windowed
                 if (windowed) {
                     webView.bringToFront()
@@ -190,7 +206,18 @@ class BarcodeScannerPlugin(private val activity: Activity) : Plugin(activity),
     private fun bindPreview(cameraProvider: ProcessCameraProvider, cameraDirection: Int) {
         activity
             .runOnUiThread {
-                val preview = Preview.Builder().build()
+                // Preview 与分析帧使用同一分辨率。
+                //
+                // 为什么必须一致：蒙版要把「屏幕上的取景框」换算成「分析帧里的裁剪矩形」，
+                // 这个换算只有在两者视野相同时才成立（否则预览看到的范围和分析的
+                // 范围不同，框内框外就对不上）。CameraX 在未指定分辨率时会按 View
+                // 宽高比挑一个，与 ImageAnalysis 的 3:4 不一致，因此这里显式对齐。
+                //
+                // 副作用：预览从「按屏幕比例」变成 3:4，横向视野略窄、画面更放大。
+                // 对扫码是正向的（二维码更大更好认）。
+                val preview = Preview.Builder()
+                    .setTargetResolution(SCAN_RESOLUTION)
+                    .build()
                 val cameraSelector =
                     CameraSelector.Builder().requireLensFacing(cameraDirection).build()
                 preview.setSurfaceProvider(previewView?.surfaceProvider)
@@ -220,16 +247,49 @@ class BarcodeScannerPlugin(private val activity: Activity) : Plugin(activity),
     private fun dismantleCamera() {
         activity
             .runOnUiThread {
-                if (cameraProvider != null) {
-                    cameraProvider?.unbindAll()
-                    val parent = webView.parent as ViewGroup
-                    parent.removeView(previewView)
-                    parent.removeView(graphicOverlay)
-                    camera = null
-                    previewView = null
-                    graphicOverlay = null
-                }
+                // 解绑相机只在 provider 就绪时才有意义
+                cameraProvider?.unbindAll()
+                // 视图移除必须无条件执行：蒙版在 provider 就绪前就已挂上，
+                // 若相机初始化失败（权限被拒 / 无可用镜头），provider 为 null，
+                // 用 provider 做守卫会让蒙版永久留在界面上。
+                val parent = webView.parent as? ViewGroup
+                parent?.removeView(previewView)
+                parent?.removeView(graphicOverlay)
+                parent?.removeView(scanMaskView)
+                camera = null
+                previewView = null
+                graphicOverlay = null
+                scanMaskView = null
             }
+    }
+
+    /**
+     * 蒙版上的「返回」：与系统返回键走同一条路径。
+     *
+     * 先拒绝待处理的 scan Promise（前端 catch 到 "cancelled" 后回到扫码页签），
+     * 再销毁相机。顺序不能反：destroy() 会清掉 savedInvoke 之外的状态，
+     * 但 Promise 必须由 reject 结束，否则前端会一直停在「正在识别」。
+     */
+    private fun cancelScan() {
+        savedInvoke?.reject("cancelled")
+        savedInvoke = null
+        destroy()
+    }
+
+    /**
+     * 蒙版上的「手动输入代码」：通知前端切到「手动」页签。
+     *
+     * 这里**只**发通知，不主动关闭相机。关闭动作由前端钩子自己调用 `cancel()`，
+     * 这样顺序是确定的：前端先置位「主动切换」标记 → 再 cancel → Promise 拒绝时
+     * 标记已就绪，不会误报「已取消扫码」。若由原生先 reject，标记可能还没置位。
+     */
+    private fun requestManualInput() {
+        activity.runOnUiThread {
+            webView.evaluateJavascript(
+                "(window.__onScanManualInput && window.__onScanManualInput())",
+                null
+            )
+        }
     }
 
     private fun getFormats(args: ScanOptions): List<BarcodeFormat> {
@@ -277,6 +337,10 @@ class BarcodeScannerPlugin(private val activity: Activity) : Plugin(activity),
     /**
      * 逐帧解码：直接取 Y 平面给 ZXing，避免 YUV→RGB 转换。
      * 参照 Aegis 的 QrCodeAnalyzer 实现。
+     *
+     * 只解码取景框内的区域：蒙版把框的位置换算成帧坐标（见
+     * [ScanMaskView.cropRectForImage]），这里按该矩形裁剪后再交给 ZXing。
+     * 这样「框外扫不到」与用户直觉一致，也省掉框外区域的二值化开销。
      */
     @SuppressLint("UnsafeOptInUsageError")
     override fun analyze(image: ImageProxy) {
@@ -292,14 +356,25 @@ class BarcodeScannerPlugin(private val activity: Activity) : Plugin(activity),
             buf.get(data)
             buf.rewind()
 
+            // 换算失败（蒙版尚未布局 / 尺寸异常）时回退整帧，宁可多扫也不要漏扫
+            val crop = scanMaskView?.cropRectForImage(
+                image.width,
+                image.height,
+                image.imageInfo.rotationDegrees,
+            )
+            val left = crop?.left ?: 0
+            val top = crop?.top ?: 0
+            val cropW = crop?.width() ?: image.width
+            val cropH = crop?.height() ?: image.height
+
             val source = PlanarYUVLuminanceSource(
                 data,
                 plane.rowStride,
                 image.height,
-                0,
-                0,
-                image.width,
-                image.height,
+                left,
+                top,
+                cropW,
+                cropH,
                 false
             )
             val bitmap = BinaryBitmap(HybridBinarizer(source))
@@ -349,8 +424,7 @@ class BarcodeScannerPlugin(private val activity: Activity) : Plugin(activity),
     @Command
     fun cancel(invoke: Invoke) {
         // 先拒绝待处理的 scan Promise，再销毁，否则 Promise 永不结束。
-        savedInvoke?.reject("cancelled")
-        destroy()
+        cancelScan()
         invoke.resolve()
     }
 

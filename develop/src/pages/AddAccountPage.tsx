@@ -115,6 +115,8 @@ export function AddAccountPage({ editing }: Props) {
   const streamRef = useRef<MediaStream | null>(null);
   // 本次扫码是否走原生 BarcodeDetector 路径
   const nativeRef = useRef(false);
+  // 是否由原生蒙版的「手动输入代码」主动结束扫码（用于抑制「已取消扫码」提示）
+  const manualRequestedRef = useRef(false);
 
   /** 将解析出的账户信息填入表单 */
   const applyParsed = useCallback(
@@ -356,6 +358,9 @@ export function AddAccountPage({ editing }: Props) {
     if (isMobile()) {
       setScanning(true);
       let cancelScan: (() => Promise<void>) | null = null;
+      // 原生蒙版上的「手动输入代码」会先置位该标记再关闭相机。
+      // 关闭相机必然让 scan() 以 "cancelled" 拒绝，若不区分就会误报「已取消扫码」。
+      manualRequestedRef.current = false;
       try {
         const { scan, cancel, Format, requestPermissions, checkPermissions } = await import(
           "@tauri-apps/plugin-barcode-scanner"
@@ -369,7 +374,7 @@ export function AddAccountPage({ editing }: Props) {
           setScanNotice(t("未授予相机权限，请在系统设置中开启后重试"));
           return;
         }
-        // 原生相机是全屏覆盖层，会盖住应用 UI（没有可见的返回按钮）。
+        // 原生相机是全屏覆盖层，会盖住应用 UI。
         // 注册取消钩子，让系统返回键能关闭扫描页而不是退出应用。
         cancelScan = async () => {
           try {
@@ -381,6 +386,15 @@ export function AddAccountPage({ editing }: Props) {
         (window as unknown as { __cancelActiveScan?: () => Promise<void> }).__cancelActiveScan =
           cancelScan;
 
+        // 原生蒙版「手动输入代码」的回调：先置位标记再关闭相机。
+        // 顺序很重要——cancel() 会让 scan() 立刻以 "cancelled" 拒绝，
+        // 标记必须先就绪，否则 catch 分支会误报「已取消扫码」。
+        (window as unknown as { __onScanManualInput?: () => void }).__onScanManualInput = () => {
+          manualRequestedRef.current = true;
+          setMode("manual");
+          void cancelScan?.();
+        };
+
         // windowed=false：原生相机全屏覆盖（windowed=true 是让 WebView 透明、
         // 相机置于其后，会被本页背景遮住，不适合当前全屏扫码体验）
         const result = await scan({ windowed: false, formats: [Format.QRCode] });
@@ -389,11 +403,15 @@ export function AddAccountPage({ editing }: Props) {
           await handleDecoded(text);
         }
       } catch (e) {
-        // 用户取消或权限被拒：给出可读提示
-        setScanNotice(describeError(t, e));
+        // 用户取消或权限被拒：给出可读提示。
+        // 从蒙版点「手动输入代码」也会走到这里，但那是主动切换，不该报错。
+        if (!manualRequestedRef.current) {
+          setScanNotice(describeError(t, e));
+        }
       } finally {
         delete (window as unknown as { __cancelActiveScan?: () => Promise<void> })
           .__cancelActiveScan;
+        delete (window as unknown as { __onScanManualInput?: () => void }).__onScanManualInput;
         setScanning(false);
       }
       return;
@@ -537,18 +555,98 @@ export function AddAccountPage({ editing }: Props) {
             <div className="scan-box">
               {/* 移动端走原生相机（全屏原生取景），此处只显示图标占位 */}
               {scanning && !isMobile() ? (
-                <video
-                  ref={videoRef}
-                  playsInline
-                  muted
-                  className="scan-video"
-                />
+                <div className="scan-viewport">
+                  <video
+                    ref={videoRef}
+                    playsInline
+                    muted
+                    className="scan-video"
+                  />
+                  {/* 取景引导：四角括号 + 扫描线。
+                      纯 CSS 叠加，不参与解码——jsQR 仍按整帧识别。 */}
+                  <div className="scan-frame" aria-hidden>
+                    <span className="scan-corner tl" />
+                    <span className="scan-corner tr" />
+                    <span className="scan-corner bl" />
+                    <span className="scan-corner br" />
+                    <span className="scan-line" />
+                  </div>
+                </div>
               ) : (
                 <div className="qr-placeholder" aria-label={t("扫码区域")}>
-                  <svg viewBox="0 0 64 64" width="120" height="120" aria-hidden>
-                    <rect x="2" y="2" width="60" height="60" rx="8" fill="var(--color-bg-5)" />
-                    <path d="M18 18h12v12H18zM34 18h12v12H34zM18 34h12v12H18z" fill="var(--color-border-4)" />
-                    <path d="M34 34h4v4h-4zM42 34h4v4h-4zM34 42h4v4h-4zM42 42h4v4h-4z" fill="var(--color-primary)" />
+                  {/* 取景框 + 四角括号：虚线框表示「未激活」，与开启摄像头后的
+                      实线取景框形成语义呼应。纯内联 SVG，明暗模式靠 currentColor 跟随。 */}
+                  <svg
+                    className="qr-placeholder-icon"
+                    viewBox="0 0 96 96"
+                    width="96"
+                    height="96"
+                    fill="none"
+                    aria-hidden
+                  >
+                    <rect
+                      x="14"
+                      y="14"
+                      width="68"
+                      height="68"
+                      rx="10"
+                      stroke="var(--color-border-3)"
+                      strokeWidth="1.5"
+                      strokeDasharray="4 4"
+                    />
+                    <path
+                      d="M26 38V30a4 4 0 0 1 4-4h8"
+                      stroke="var(--color-primary)"
+                      strokeWidth="3"
+                      strokeLinecap="round"
+                    />
+                    <path
+                      d="M70 38V30a4 4 0 0 0-4-4h-8"
+                      stroke="var(--color-primary)"
+                      strokeWidth="3"
+                      strokeLinecap="round"
+                    />
+                    <path
+                      d="M26 58v8a4 4 0 0 0 4 4h8"
+                      stroke="var(--color-primary)"
+                      strokeWidth="3"
+                      strokeLinecap="round"
+                    />
+                    <path
+                      d="M70 58v8a4 4 0 0 1-4 4h-8"
+                      stroke="var(--color-primary)"
+                      strokeWidth="3"
+                      strokeLinecap="round"
+                    />
+                    <rect
+                      x="40"
+                      y="45"
+                      width="16"
+                      height="3"
+                      rx="1.5"
+                      fill="var(--color-primary)"
+                      opacity="0.85"
+                    />
+                    <rect
+                      x="40"
+                      y="45"
+                      width="16"
+                      height="3"
+                      rx="1.5"
+                      fill="var(--color-primary)"
+                      opacity="0.35"
+                      transform="translate(0 -6)"
+                    />
+                    <rect
+                      x="40"
+                      y="45"
+                      width="16"
+                      height="3"
+                      rx="1.5"
+                      fill="var(--color-primary)"
+                      opacity="0.35"
+                      transform="translate(0 6)"
+                    />
                   </svg>
                 </div>
               )}
@@ -557,7 +655,7 @@ export function AddAccountPage({ editing }: Props) {
                   {scanning ? t("正在识别二维码…") : t("扫描二维码添加账户")}
                 </div>
                 <div className="scan-caption-desc">
-                  {t("支持摄像头实时扫码，或从本地图片识别（完全离线）")}
+                  {t("摄像头实时识别，或从图片导入")}
                 </div>
               </div>
               <div className="scan-actions">
@@ -795,7 +893,7 @@ export function AddAccountPage({ editing }: Props) {
               <span className="field-help">{t("支持一次导入多条，逐行解析 otpauth 链接。")}</span>
             </div>
             <Button
-              variant="secondary"
+              variant="primary"
               block
               className="mt-12"
               icon={<Upload className="icon-14" />}

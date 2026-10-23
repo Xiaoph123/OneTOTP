@@ -1,6 +1,6 @@
 [package]
 name = "onetotp"
-version = "0.3.0"
+version = "0.4.0"
 description = "OneTOTP - 纯离线身份验证器"
 authors = ["wanghao"]
 edition = "2021"

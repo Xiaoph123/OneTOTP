@@ -3,7 +3,7 @@ import { useApp } from "../state/AppContext";
 import { api } from "../lib/api";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { IconButton } from "../components/Button";
-import { Backspace, Eye, EyeOff, Fingerprint, Lock, OneTotpMark } from "../components/icons";
+import { Eye, EyeOff, Fingerprint, Lock, OneTotpMark } from "../components/icons";
 import { authenticateBiometric, clearBiometric, isBiometricEnrolled } from "../lib/biometric";
 import { isBiometricBusy, tryClaimAutoPrompt } from "../lib/lockGuard";
 import { clearClipboard, readClearClipboardOnFail } from "../lib/utils";
@@ -13,12 +13,22 @@ import { useI18n } from "../i18n";
 /** 连续失败达到该次数时清空剪贴板 */
 const CLEAR_ON_FAIL_THRESHOLD = 5;
 
+/** 各平台生物识别的展示名（与「安全与锁定」页保持同一套文案） */
+function biometricLabel(t: (k: string) => string): string {
+  if (typeof navigator === "undefined") return t("指纹 / 人脸解锁");
+  const ua = navigator.userAgent;
+  if (isDesktop() && /Windows/i.test(ua)) return t("Windows Hello 解锁");
+  if (isDesktop() && /Macintosh|Mac OS X/i.test(ua)) return t("Touch ID 解锁");
+  return t("指纹 / 人脸解锁");
+}
+
 export function LockPage() {
   const { unlockWithPassword, passwordHint, hasLock, boot, error: bootError } = useApp();
   const { t } = useI18n();
   const desktop = isDesktop();
   const [password, setPassword] = useState("");
   const [show, setShow] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   // 生物识别可用性：支持平台（Windows/macOS/Android/iOS）且已保存凭据时提供入口
@@ -261,24 +271,15 @@ export function LockPage() {
     setBusy(false);
   };
 
-  const press = (digit: string) => {
-    if (password.length >= 32) return;
-    setPassword((p) => p + digit);
-  };
-
-  const dots = Math.min(Math.max(password.length, 6), 12);
-
   return (
     <div className="lock-page">
-      <div className="lock-card">
-        <div className="lock-avatar"><OneTotpMark /></div>
+      <div className="lock-inner">
+        <OneTotpMark className="lock-logo" />
         <div className="lock-title">{t("应用已锁定")}</div>
-        <div className="lock-subtitle">
-          {t("请输入密码以解锁 OneTOTP")}
-        </div>
+        <div className="lock-subtitle">{t("请输入密码以解锁 OneTOTP")}</div>
 
         <form
-          className="mt-16"
+          className="lock-form"
           onSubmit={(e) => {
             e.preventDefault();
             submit();
@@ -286,13 +287,14 @@ export function LockPage() {
         >
           <div className="lock-input-wrap">
             <input
-              className={`ui-input lock-input${desktop ? " is-desktop" : ""}`}
+              ref={inputRef}
+              className="ui-input lock-input"
               type={show ? "text" : "password"}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder={t("输入锁定密码")}
-              // 移动端不自动聚焦：否则软键盘会立即弹出并遮住数字键盘区，
-              // 与移动端「用下方数字键盘输入」的交互冲突。
+              // 移动端不自动聚焦：避免一进锁屏页就弹出软键盘遮住界面，
+              // 用户点输入框时再唤起，观感更从容。
               autoFocus={desktop}
               autoComplete="current-password"
             />
@@ -305,19 +307,8 @@ export function LockPage() {
             </IconButton>
           </div>
 
-          {/* 圆点指示器仅在移动端显示：桌面端用常规密码框，不需要 */}
-          {!desktop ? (
-            <div className="lock-dots">
-              {Array.from({ length: dots }).map((_, i) => (
-                <span key={i} className={`lock-dot${i < password.length ? " is-filled" : ""}`} />
-              ))}
-            </div>
-          ) : null}
-
           {shownError ? (
-            <div className={`notice notice-err notice-center${desktop ? " mt-12" : ""} mb-12`}>
-              {shownError}
-            </div>
+            <div className="notice notice-err notice-center lock-error">{shownError}</div>
           ) : null}
 
           <button type="submit" disabled={busy} className="lock-submit">
@@ -325,70 +316,39 @@ export function LockPage() {
             {t("解锁")}
           </button>
 
-          {/* 桌面端：Windows Hello 等生物识别作为独立的次级操作按钮 */}
-          {desktop ? (
-            <button
-              type="button"
-              disabled={!bioAvailable || bioBusy}
-              onClick={unlockByBiometric}
-              title={bioAvailable ? t("Windows Hello 解锁") : t("需先在设置中启用")}
-              className="lock-bio-btn"
-            >
-              <Fingerprint className="icon-18" />
-              {bioBusy ? t("正在验证…") : t("Windows Hello 解锁")}
-            </button>
-          ) : null}
+          {/* 生物识别：桌面端为 Windows Hello / Touch ID，移动端为指纹 / 人脸。
+              两端都作为次级操作放在主按钮下方，视觉权重低于密码解锁。 */}
+          <button
+            type="button"
+            disabled={!bioAvailable || bioBusy}
+            onClick={unlockByBiometric}
+            title={bioAvailable ? biometricLabel(t) : t("需先在设置中启用")}
+            className="lock-bio-btn"
+          >
+            <Fingerprint className="icon-18" />
+            {bioBusy ? t("正在验证…") : biometricLabel(t)}
+          </button>
         </form>
 
-        {/* 数字键盘仅在移动端显示：桌面端为物理键盘输入 */}
-        {!desktop ? (
-          <div className="keypad mt-18">
-            {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((d) => (
-              <button key={d} className="key-btn" type="button" onClick={() => press(d)}>
-                {d}
-              </button>
-            ))}
-            <button
-              className="key-btn ghost"
-              type="button"
-              aria-label={t("生物识别")}
-              disabled={!bioAvailable || bioBusy}
-              title={bioAvailable ? t("指纹 / 面容解锁") : t("需先在设置中启用")}
-              onClick={unlockByBiometric}
-            >
-              <Fingerprint className="icon-22" />
-            </button>
-            <button className="key-btn" type="button" onClick={() => press("0")}>
-              0
-            </button>
-            <button
-              className="key-btn ghost"
-              type="button"
-              aria-label={t("删除")}
-              onClick={() => setPassword((p) => p.slice(0, -1))}
-            >
-              <Backspace className="icon-22" />
-            </button>
-          </div>
-        ) : null}
-
         {passwordHint ? (
-          <div className="lock-hint">
-            {t("密码提示：{hint}", { hint: passwordHint })}
-          </div>
+          <div className="lock-hint">{t("密码提示：{hint}", { hint: passwordHint })}</div>
         ) : null}
 
-        {!desktop ? (
-          <div className="lock-note">
-            <svg viewBox="0 0 16 16" fill="none" stroke="var(--color-text-3)" strokeWidth={1.5} className="lock-note-icon">
-              <circle cx="8" cy="8" r="6" />
-              <path d="M8 7.4v3.4M8 5.3v.1" strokeLinecap="round" />
-            </svg>
-            <span className="lock-note-text">
-              {t("密码仅用于本机解锁，忘记后无法找回，只能通过加密备份在新设备恢复。")}
-            </span>
-          </div>
-        ) : null}
+        <div className="lock-note">
+          <svg
+            viewBox="0 0 16 16"
+            fill="none"
+            stroke="var(--color-text-3)"
+            strokeWidth={1.5}
+            className="lock-note-icon"
+          >
+            <circle cx="8" cy="8" r="6" />
+            <path d="M8 7.4v3.4M8 5.3v.1" strokeLinecap="round" />
+          </svg>
+          <span className="lock-note-text">
+            {t("密码仅用于本机解锁，忘记后无法找回，只能通过加密备份在新设备恢复。")}
+          </span>
+        </div>
       </div>
     </div>
   );

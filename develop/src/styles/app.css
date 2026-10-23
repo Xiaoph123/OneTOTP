@@ -1,3 +1,31 @@
+/* ══════════ 内置等宽字体（验证码专用） ══════════
+   为什么必须内置：Android 各 ROM 的等宽字体（Droid Sans Mono /
+   Noto Sans Mono）通常只提供 Regular 一个字重，且 WebView 不会像桌面
+   浏览器那样合成伪粗体（faux bold）。因此 font-weight: 700 在这些设备上
+   被直接忽略，验证码看起来始终是细的——这正是此前多次修改无效的根因。
+
+   内置 Roboto Mono 的 400 / 700 两个真实字重后，700 是字体文件里
+   实际存在的 Bold 字形，不依赖任何合成机制，所有设备表现一致。
+
+   只取 latin 子集（每个约 12KB）：验证码只含数字，不需要西里尔 / 希腊
+   等字符集，避免无谓的体积增长。
+   font-display: block —— 验证码是核心内容，宁可短暂不可见也不要
+   先渲染成细体再跳变（swap 会造成明显的粗细闪烁）。 */
+@font-face {
+  font-family: "OneTotp Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url("/fonts/roboto-mono-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "OneTotp Mono";
+  font-style: normal;
+  font-weight: 700;
+  font-display: block;
+  src: url("/fonts/roboto-mono-700.woff2") format("woff2");
+}
+
 :root {
   color-scheme: light;
 }
@@ -51,15 +79,43 @@ select {
 }
 
 /* 窄窗口应用骨架 */
+/* 全局背景：亮色用点阵纹理，暗色用微噪点。
+   两者都是「极淡的均匀纹理」，替代此前的径向光斑——
+   窄窗口（290~370px）里两团径向光斑会挤在一起，边界叠加后像「一块脏」。
+
+   为什么暗色不用点阵：点阵是 16px 规则网格，在深色底上对比更明显，
+   肉眼能数出网格，观感像「贴了一张网格纸」。噪点是随机分布的颗粒，
+   没有周期性，暗色下更像胶片颗粒，不会形成网格感。
+
+   亮色点阵 0.055 / 暗色噪点 0.035：
+   亮色底接近白，点阵需要 0.055 才看得见；暗色底深，
+   噪点 0.035 已足够，再高会像脏污。 */
 .app-window {
   display: flex;
   flex-direction: column;
   height: 100%;
   width: 100%;
-  background: var(--color-bg-2);
+  background-color: var(--color-bg-2);
+  background-image: radial-gradient(rgba(12, 13, 14, 0.055) 1px, transparent 1px);
+  background-size: 16px 16px;
+}
+/* 暗色：微噪点（SVG feTurbulence 分形噪声，120×120 平铺）。
+   stitchTiles="stitch" 让图块边缘的噪声连续，避免平铺时出现可见接缝。
+
+   opacity 从 0.035 降到 0.028：底色压暗到 #0A0B0D 后，
+   同样的白色噪点在更深的底上对比更强，0.035 会显得像脏污。 */
+:root[data-theme="dark"] .app-window {
+  background-color: var(--color-bg-2);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)' opacity='0.028'/%3E%3C/svg%3E");
+  background-size: 120px 120px;
 }
 
-/* 自绘标题栏（替代原生窗口装饰） */
+/* 自绘标题栏（替代原生窗口装饰）
+   完全透明：标题栏是窗口最顶部，背后就是 .app-window 的纹理背景，
+   任何白色蒙层都会把纹理盖掉——此前用 0.72 白，背景被压到几乎不可见，
+   看起来仍是一块死白，与下方内容割裂。
+   这里不加 backdrop-filter：标题栏与内容区是 flex 兄弟节点，
+   内容不会滚到它下面，模糊没有可作用的对象，只会白白增加合成开销。 */
 .titlebar {
   position: relative;
   z-index: 30;
@@ -68,7 +124,7 @@ select {
   display: flex;
   align-items: center;
   padding-left: 16px;
-  background: var(--color-bg-1);
+  background: transparent;
   -webkit-app-region: drag;
   user-select: none;
 }
@@ -152,6 +208,8 @@ select {
   color: var(--color-white);
 }
 
+/* 页头：与标题栏同一套语言——透明，让背景纹理贯穿整个窗口。
+   页头下方有 border-bottom 作为与内容区的分界，不需要底色来区分。 */
 .app-bar {
   position: relative;
   z-index: 20;
@@ -161,7 +219,7 @@ select {
   align-items: center;
   gap: 8px;
   padding: 0 14px;
-  background: var(--color-bg-1);
+  background: transparent;
   border-bottom: 1px solid var(--color-border-light);
   -webkit-app-region: drag;
 }
@@ -242,14 +300,17 @@ select {
   box-shadow: 0 0 0 1px var(--color-primary), 0 0 0 3px rgba(22, 100, 255, 0.3);
 }
 /* 主操作：图标+文字；与搜索框等高、同圆角；去掉主按钮默认投影以贴合搜索行。
-   需带 .search-row 前缀提升优先级——否则会被后面的 .ui-btn-primary 覆盖回默认阴影。 */
+   需带 .search-row 前缀提升优先级——否则会被后面的 .ui-btn-primary 覆盖回默认阴影。
+   宽度收紧到 64px：330px 窗口下搜索框能多出约 12px 输入空间，
+   同时「+ 添加」两字仍完整可见。 */
 .search-row .search-add-btn {
   flex-shrink: 0;
-  padding: 0 12px;
+  padding: 0 10px;
   width: auto;
+  min-width: 64px;
   height: var(--search-add-h);
   font-size: var(--font-size-lead);
-  box-shadow: none;
+  box-shadow: var(--shadow-brand);
 }
 /* 搜索框内图标与输入框 */
 .search-icon {
@@ -315,12 +376,32 @@ select {
   color: var(--color-text-2);
 }
 
-/* 面板 */
+/* 面板 · 半透明玻璃
+   与标题栏 / 页头 / 标签栏同一套语言：卡片不再是实色块，
+   而是让全局背景纹理透上来的磨砂玻璃，整窗视觉连成一片。
+
+   为什么亮色用 0.62、暗色用 0.55：
+   亮色底本身接近白色，透明度再低就与背景糊成一片、看不出卡片边界；
+   暗色底深，0.55 已足够让背景透出，再高会让文字对比度下降。
+
+   模糊半径 14px 远大于亮色点阵间距 16px：纹理在卡片下方会被完全糊平，
+   因此卡片区域是「干净的玻璃」，纹理只出现在卡片之间的缝隙里——
+   这正是想要的层次，卡片不会被纹理干扰。 */
 .panel {
-  background: var(--color-bg-card);
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-1);
+  background: rgba(255, 255, 255, 0.62);
+  backdrop-filter: blur(14px) saturate(1.4);
+  -webkit-backdrop-filter: blur(14px) saturate(1.4);
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 2px 10px rgba(12, 13, 14, 0.05);
+}
+:root[data-theme="dark"] .panel {
+  /* 底色随全局压暗：从 rgba(35,38,45,.55) 降到 rgba(26,29,34,.72)。
+     透明度反而提高——背景变深后，低透明度会让卡片与背景糊在一起，
+     看不出边界；提高不透明度并保持半透明，才能既透出噪点又有轮廓。 */
+  background: rgba(26, 29, 34, 0.72);
+  border-color: rgba(255, 255, 255, 0.06);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);
 }
 
 /* 设置页：整页文字不可选中（输入框除外，需保留编辑与选择能力） */
@@ -406,14 +487,16 @@ select {
   margin-bottom: 4px;
 }
 
-/* 底部标签导航 */
+/* 底部标签导航
+   与标题栏、页头同一套语言：透明，让背景纹理贯穿到底部。
+   标签栏是 flex 兄弟节点，内容不会滚到它下面，因此不需要模糊。 */
 .tab-bar {
   position: relative;
   z-index: 20;
   flex-shrink: 0;
   height: 56px;
   display: flex;
-  background: var(--color-bg-1);
+  background: transparent;
   border-top: 1px solid var(--color-border-light);
 }
 .tab-item {
@@ -486,10 +569,16 @@ select {
   justify-content: space-between;
   gap: 12px;
   padding: 12px 14px;
-  border-bottom: 1px solid var(--color-border-light);
+  /* 分隔线用半透明黑/白，而不是实色 border-light：
+     玻璃面板本身是半透明的，实色线会显得比卡片还「硬」，
+     像贴在玻璃上的一道刻痕。 */
+  border-bottom: 1px solid rgba(12, 13, 14, 0.06);
   /* 设置项文字不可选中：避免拖动或连续点击时出现蓝色选区 */
   user-select: none;
   -webkit-user-select: none;
+}
+:root[data-theme="dark"] .s-row {
+  border-bottom-color: rgba(255, 255, 255, 0.06);
 }
 .s-row:last-child {
   border-bottom: none;
@@ -579,17 +668,25 @@ select {
   background: var(--color-primary);
 }
 
-/* 分段控件 */
+/* 分段控件
+   亮色下 bg-5(#F1F3F5) 与页面底色(#FCFDFE) 只差一点点，
+   加上全局背景纹理后整块控件几乎「融进背景」，看不出是个可点的分段。
+   因此亮色补一圈描边把轮廓立起来；暗色下 bg-5 与底色对比足够，
+   描边反而多余，故置为透明。 */
 .segmented {
   display: inline-flex;
   align-items: center;
   gap: 4px;
   padding: 4px;
   background: var(--color-bg-5);
+  border: 1px solid var(--color-border-3);
   border-radius: var(--radius-md);
   /* 父级为 flex column 时不被拉伸，宽度仅包裹内部按钮 */
   width: fit-content;
   align-self: flex-start;
+}
+:root[data-theme="dark"] .segmented {
+  border-color: transparent;
 }
 .segmented button {
   border: none;
@@ -680,7 +777,10 @@ select {
   }
 }
 
-/* 主操作底部吸附条 */
+/* 主操作底部吸附条
+   这里必须保留半透明 + 模糊：它是 position:sticky，滚动内容会从下方穿过，
+   完全透明会让按钮与滚过的文字叠在一起。
+   不透明度取 0.6（比标题栏低）：既压住穿过的内容，又能透出一点背景纹理。 */
 .sticky-actions {
   position: sticky;
   bottom: 0;
@@ -690,8 +790,15 @@ select {
   flex-wrap: wrap;
   gap: 8px;
   padding: 10px 14px;
-  background: var(--color-bg-1);
+  background: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(14px) saturate(1.3);
+  -webkit-backdrop-filter: blur(14px) saturate(1.3);
   border-top: 1px solid var(--color-border-light);
+}
+:root[data-theme="dark"] .sticky-actions {
+  /* 与新的近黑底色对齐：rgba(10,11,13,.72) 比原来的 rgba(20,22,25,.6) 更暗，
+     否则底部操作条会比页面背景亮出一块。 */
+  background: rgba(10, 11, 13, 0.72);
 }
 
 /* 并排按钮行：窄窗口（如紧凑模式 320px）下自动换行，避免溢出容器。
@@ -894,10 +1001,12 @@ html .sticky-actions .ui-btn {
   margin-bottom: -6px;
 }
 .otp-code {
-  font-family: var(--font-mono);
+  font-family: var(--font-code);
   font-size: 27px;
   letter-spacing: 3px;
-  font-weight: var(--font-weight-semibold);
+  /* 内置字体只有 400 / 700 两档，600 会被就近映射到 700，
+     直接写 700 更明确，也避免不同引擎映射策略不一致。 */
+  font-weight: 700;
   color: var(--color-text-1);
   line-height: 30px;
   font-variant-numeric: tabular-nums;
@@ -971,10 +1080,10 @@ html .sticky-actions .ui-btn {
   flex-shrink: 0;
 }
 .otp-next-code {
-  font-family: var(--font-mono);
+  font-family: var(--font-code);
   font-size: var(--font-size-lead);
   letter-spacing: 2px;
-  font-weight: var(--font-weight-medium);
+  font-weight: 400;
   color: var(--color-text-3);
   font-variant-numeric: tabular-nums;
 }
@@ -1663,13 +1772,111 @@ html[data-platform="mobile"] .scan-actions > .ui-btn {
 .qr-placeholder {
   display: inline-flex;
 }
-/* 桌面端扫码预览视频 */
-.scan-video {
-  width: 200px;
-  height: 200px;
+/* 占位图案：虚线取景框 + 四角括号，与开启摄像头后的实线取景框呼应 */
+.qr-placeholder-icon {
+  display: block;
+}
+/* 桌面端扫码取景容器：视频铺满，引导层绝对定位叠在上面 */
+.scan-viewport {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
   border-radius: var(--radius-md);
-  object-fit: cover;
+  overflow: hidden;
   background: #000;
+}
+/* 桌面端扫码预览视频：铺满容器，由容器决定尺寸 */
+.scan-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+/* 取景引导框：居中 62% 见方，与移动端原生蒙版比例一致 */
+.scan-frame {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 62%;
+  aspect-ratio: 1;
+  pointer-events: none;
+}
+/* 四角括号：只画两条边，用 border 拼出 L 形 */
+.scan-corner {
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  border: 2.5px solid var(--color-primary);
+}
+.scan-corner.tl {
+  top: 0;
+  left: 0;
+  border-right: 0;
+  border-bottom: 0;
+  border-radius: 4px 0 0 0;
+}
+.scan-corner.tr {
+  top: 0;
+  right: 0;
+  border-left: 0;
+  border-bottom: 0;
+  border-radius: 0 4px 0 0;
+}
+.scan-corner.bl {
+  bottom: 0;
+  left: 0;
+  border-right: 0;
+  border-top: 0;
+  border-radius: 0 0 0 4px;
+}
+.scan-corner.br {
+  bottom: 0;
+  right: 0;
+  border-left: 0;
+  border-top: 0;
+  border-radius: 0 0 4px 0;
+}
+/* 扫描线：上下往复，两端慢中间快，首尾淡入淡出 */
+.scan-line {
+  position: absolute;
+  left: 4%;
+  right: 4%;
+  height: 2px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--color-primary) 18%,
+    #a8c8ff 50%,
+    var(--color-primary) 82%,
+    transparent
+  );
+  box-shadow: 0 0 10px 2px rgba(64, 128, 255, 0.7);
+  animation: scan-sweep 2.4s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+@keyframes scan-sweep {
+  0% {
+    top: 3%;
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  88% {
+    opacity: 1;
+  }
+  100% {
+    top: 97%;
+    opacity: 0;
+  }
+}
+/* 尊重系统「减少动态效果」偏好：关闭扫描线动画，避免前庭不适 */
+@media (prefers-reduced-motion: reduce) {
+  .scan-line {
+    animation: none;
+    top: 50%;
+    opacity: 0.9;
+  }
 }
 /* 扫码区文案 */
 .scan-caption {
@@ -1881,6 +2088,13 @@ html[data-platform="mobile"] .scan-actions > .ui-btn {
 }
 
 /* 锁定页 */
+/* ══════════ 锁定页 · 沉浸全屏 ══════════
+   无卡片：Logo、标题、输入框直接铺在背景上，视觉更聚焦。
+
+   背景与全局一致，用同一套纹理（见 .app-window）：
+   锁定页是 .app-window 的子节点，若这里再铺一层背景，
+   会与父级叠加成两层不同的纹理，观感割裂。
+   因此这里只保留透明，让父级的纹理直接透上来。 */
 .lock-page {
   display: flex;
   align-items: center;
@@ -1888,35 +2102,27 @@ html[data-platform="mobile"] .scan-actions > .ui-btn {
   flex: 1;
   min-height: 0;
   width: 100%;
-  padding: 28px 18px;
-  background: linear-gradient(180deg, var(--color-primary-bg) 0%, var(--color-bg-2) 40%);
+  padding: 28px 22px;
+  background: transparent;
   overflow-y: auto;
 }
-.lock-card {
+.lock-inner {
   width: 100%;
-  max-width: 340px;
-  background: var(--color-bg-card);
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-3);
-  padding: 26px 20px;
+  max-width: 320px;
   text-align: center;
 }
-/* 锁定页头像位：改为展示品牌 Logo（盾牌），去掉旧的主色圆形底 */
-.lock-avatar {
-  width: 64px;
-  height: 64px;
-  border-radius: var(--radius-full);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  margin: 0 auto 14px;
+/* Logo 带品牌色投影，像从背景里发光浮起。
+   亮色下投影要更淡，否则会在白底上糊出一圈灰边。 */
+.lock-logo {
+  display: block;
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 20px;
+  filter: drop-shadow(0 4px 12px rgba(99, 102, 241, 0.22));
 }
-.lock-avatar svg {
-  width: 52px;
-  height: 52px;
+:root[data-theme="dark"] .lock-logo {
+  filter: drop-shadow(0 6px 20px rgba(99, 102, 241, 0.45));
 }
-/* 锁定页排版 */
 .lock-title {
   font-size: var(--font-size-h3);
   font-weight: 500;
@@ -1926,22 +2132,29 @@ html[data-platform="mobile"] .scan-actions > .ui-btn {
   color: var(--color-text-3);
   margin-top: 4px;
 }
+.lock-form {
+  margin-top: 26px;
+}
 /* 密码输入框容器：用于放置右侧显隐按钮 */
 .lock-input-wrap {
   position: relative;
 }
+/* 居中大字 + 字间距：密码圆点排布更舒展，也强化「这是唯一焦点」的暗示。
+   亮色下 bg-4 与页面底色几乎同色，输入框会「消失」，
+   因此亮色改用白底 + 描边，暗色才用浅色填充。 */
 .lock-input {
-  height: 44px;
+  height: 48px;
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-1);
+  border: 1px solid var(--color-border-3);
   font-size: var(--font-size-h3);
-  /* 移动端配数字键盘，居中显示更自然 */
   text-align: center;
-  padding-right: 44px;
+  letter-spacing: 2px;
+  padding: 0 44px;
 }
-.lock-input.is-desktop {
-  height: 40px;
-  font-size: var(--font-size-lead);
-  /* 桌面端为常规键盘输入，左对齐更自然 */
-  text-align: left;
+:root[data-theme="dark"] .lock-input {
+  background: var(--color-bg-4);
+  border-color: transparent;
 }
 .lock-eye {
   position: absolute;
@@ -1949,63 +2162,46 @@ html[data-platform="mobile"] .scan-actions > .ui-btn {
   top: 50%;
   transform: translateY(-50%);
 }
-/* 密码强度圆点（仅移动端） */
-.lock-dots {
-  display: flex;
-  justify-content: center;
-  gap: 10px;
-  margin: 16px 0;
-}
-.lock-dot {
-  width: 11px;
-  height: 11px;
-  border-radius: 50%;
-  border: 1.5px solid var(--color-border-4);
-  background: transparent;
-}
-.lock-dot.is-filled {
-  border-color: var(--color-primary);
-  background: var(--color-primary);
-}
 /* 解锁主按钮 */
 .lock-submit {
   width: 100%;
-  height: 36px;
-  margin-top: 0;
+  height: 48px;
+  margin-top: 16px;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
   border: none;
-  border-radius: var(--radius-md);
-  background: var(--color-primary);
+  border-radius: var(--radius-lg);
+  background-image: var(--brand-gradient);
   color: var(--color-white);
   font-size: var(--font-size-h4);
   font-weight: 500;
   cursor: pointer;
+  box-shadow: var(--shadow-brand);
 }
 .lock-submit:hover:not(:disabled) {
-  background: var(--color-primary-hover);
+  background-image: var(--brand-gradient-hover);
+  box-shadow: var(--shadow-brand-hover);
+}
+.lock-submit:active:not(:disabled) {
+  background-image: var(--brand-gradient-active);
 }
 .lock-submit:disabled {
   cursor: not-allowed;
   opacity: 0.7;
 }
-html[data-platform="desktop"] .lock-submit {
-  height: 40px;
-  margin-top: 16px;
-}
-/* 生物识别次级按钮（桌面端） */
+/* 生物识别解锁：次要操作，保持描边样式，不使用渐变 */
 .lock-bio-btn {
   width: 100%;
-  height: 40px;
+  height: 44px;
   margin-top: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
   border: 1px solid var(--color-border-3);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
   background: transparent;
   color: var(--color-text-1);
   font-size: var(--font-size-h4);
@@ -2023,9 +2219,13 @@ html[data-platform="desktop"] .lock-submit {
   font-size: var(--font-size-body);
   color: var(--color-text-3);
 }
-/* 移动端底部安全说明 */
+/* 错误提示：无卡片布局下需要自己撑开间距 */
+.lock-error {
+  margin-top: 12px;
+}
+/* 底部安全说明：亮色下用浅灰底，暗色下用深灰底 */
 .lock-note {
-  margin-top: 16px;
+  margin-top: 20px;
   padding: 10px 12px;
   border-radius: var(--radius-md);
   background: var(--color-bg-4);
@@ -2044,7 +2244,17 @@ html[data-platform="desktop"] .lock-submit {
   color: var(--color-text-3);
   line-height: 18px;
 }
-/* 无锁定密码时的兜底页 */
+/* 无锁定密码时的兜底页：仍用卡片承载长错误信息，避免文字散在背景上 */
+.lock-card {
+  width: 100%;
+  max-width: 340px;
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-3);
+  padding: 26px 20px;
+  text-align: center;
+}
 .lock-boot-logo {
   width: 56px;
   height: 56px;
@@ -2065,43 +2275,6 @@ html[data-platform="desktop"] .lock-submit {
   max-width: 100%;
   word-break: break-word;
   text-align: left;
-}
-.keypad {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
-  max-width: 244px;
-  margin: 0 auto;
-}
-.key-btn {
-  height: 50px;
-  border: none;
-  border-radius: var(--radius-md);
-  background: var(--color-bg-4);
-  color: var(--color-text-1);
-  font-size: var(--font-size-h2);
-  font-weight: var(--font-weight-medium);
-  cursor: pointer;
-  box-shadow: inset 0 0 0 1px var(--color-border-light);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: background 150ms ease, transform 100ms ease;
-}
-.key-btn:hover:not(:disabled) {
-  background: var(--color-bg-5);
-}
-.key-btn:active:not(:disabled) {
-  transform: scale(0.96);
-}
-.key-btn.ghost {
-  background: transparent;
-  box-shadow: none;
-  color: var(--color-text-3);
-}
-.key-btn:disabled {
-  color: var(--color-text-4);
-  cursor: not-allowed;
 }
 
 /* 启动加载：品牌 Logo + 循环扫光，替代传统转圈 */
@@ -2174,14 +2347,19 @@ html[data-platform="desktop"] .lock-submit {
   padding: 0 16px;
   border: none;
   border-radius: var(--radius-md);
-  background: var(--color-primary);
+  background-image: var(--brand-gradient);
   color: var(--color-white);
   font-size: var(--font-size-lead);
   font-weight: 500;
   cursor: pointer;
+  box-shadow: var(--shadow-brand);
 }
 .btn-primary-inline:hover {
-  background: var(--color-primary-hover);
+  background-image: var(--brand-gradient-hover);
+  box-shadow: var(--shadow-brand-hover);
+}
+.btn-primary-inline:active {
+  background-image: var(--brand-gradient-active);
 }
 /* 列表底部提示条：与上方内容拉开间距，并抵消底部内边距的视觉重叠 */
 .notice-bottom {
@@ -2229,15 +2407,26 @@ html[data-platform="desktop"] .lock-submit {
   width: 100%;
 }
 /* 变体 */
+/* 主操作：品牌渐变（绿 → 青 → 靛，与应用 logo 一致）。
+   用 background-image 而非 background-color，才能承载渐变；
+   悬停/按下切换整条渐变而非叠加半透明遮罩，避免渐变被冲淡。 */
 .ui-btn-primary {
-  background: var(--color-primary);
+  background-image: var(--brand-gradient);
   color: var(--color-white);
-  box-shadow: var(--shadow-blue);
+  box-shadow: var(--shadow-brand);
   font-weight: var(--font-weight-medium);
 }
 .ui-btn-primary:hover:not(:disabled) {
-  background: var(--color-primary-hover);
+  background-image: var(--brand-gradient-hover);
+  box-shadow: var(--shadow-brand-hover);
 }
+.ui-btn-primary:active:not(:disabled) {
+  background-image: var(--brand-gradient-active);
+  box-shadow: var(--shadow-brand);
+}
+/* 次要操作：保持灰底描边，**不使用渐变**。
+   渐变是主操作的专属视觉语言（每个页面只应有一个渐变按钮），
+   次要按钮若也用渐变，主次就分不清了——「取消」和「保存」看起来一样重。 */
 .ui-btn-secondary {
   background: var(--color-bg-4);
   color: var(--color-text-2);
@@ -2464,14 +2653,28 @@ html[data-platform="desktop"] .lock-submit {
 /* ─────────────────────────────────────────────
    移动端适配（Android / iOS）
    通过 <html data-platform="mobile"> 判定，桌面端不受影响
-   注：状态栏/导航栏避让由 Android 原生侧 setPadding 处理（见 MainActivity.kt），
-   WebView 不支持下 env(safe-area-inset-*)，故此处不再叠加安全区。
+
+   安全区避让：由 Android 原生侧把状态栏 / 导航栏 / 刘海尺寸写进
+   --safe-top / --safe-bottom / --safe-left / --safe-right（见 MainActivity.kt），
+   这里用 padding 消费这些变量。
+
+   为什么不用原生 setPadding 把 WebView 整体推下来：
+   那样状态栏区域露出的是原生窗口底色（纯色），而应用区域是
+   「底色 + 噪点纹理」，两者平均亮度差 3~4 个色阶，视觉上就是一条色差带。
+   让 WebView 铺满整屏、由 CSS 内边距避让后，纹理能一直画到状态栏下方，
+   颜色完全连续——这也是 Proton Authenticator 等应用的做法。
    ───────────────────────────────────────────── */
 
 /* 移动端全屏铺满，取消窗口圆角/阴影 */
 html[data-platform="mobile"] .app-window {
   border-radius: 0;
   box-shadow: none;
+  /* 安全区：背景铺满整屏，内容靠 padding 避让。
+     变量由原生注入，未注入时回退 0（桌面端 / 浏览器预览不受影响）。 */
+  padding-top: var(--safe-top, 0px);
+  padding-bottom: var(--safe-bottom, 0px);
+  padding-left: var(--safe-left, 0px);
+  padding-right: var(--safe-right, 0px);
 }
 
 html[data-platform="mobile"] .titlebar {
@@ -2509,9 +2712,13 @@ html[data-platform="mobile"] .tab-item svg {
   height: 22px;
 }
 
-/* 顶部提示条下移，避开原生顶部内边距；并保留下方间距，避免被压扁 */
+/* 顶部提示条下移，避开状态栏与页头 */
+html[data-platform="mobile"] .message-container {
+  /* 移动端页头高 56px，桌面端的 44px 会让提示条压在页头文字上。
+     再叠加状态栏高度（--safe-top），否则提示条会被状态栏遮住。 */
+  top: calc(var(--safe-top, 0px) + 64px);
+}
 html[data-platform="mobile"] .message {
-  top: 8px;
   padding: 12px 16px;
   gap: 8px;
   border-radius: var(--radius-lg);
@@ -2547,28 +2754,91 @@ html[data-platform="mobile"] .ui-input,
 html[data-platform="mobile"] .select-trigger {
   height: 44px;
 }
-/* ghost 变体在移动端保持紧凑高度：它只是「当前值 + 箭头」的轻量入口，
-   撑到 44px 会让设置行显得臃肿；点击热区由整行高度保证。 */
-html[data-platform="mobile"] .select-ghost .select-trigger {
-  height: 32px;
-  padding: 0 8px;
-}
-html[data-platform="mobile"] .select-ghost .select-value {
-  max-width: 160px;
-}
 
 /* 搜索栏与"添加"按钮在移动端保持等高：统一 44px */
 html[data-platform="mobile"] .search-row {
   --search-add-h: 44px;
 }
 html[data-platform="mobile"] .search-add-btn {
-  padding: 0 16px;
+  padding: 0 14px;
+  min-width: 72px;
 }
 
 /* 设置项：加大行高与内边距，右侧控件不再固定窄宽 */
 html[data-platform="mobile"] .s-row {
   padding: 15px 16px;
   gap: 10px;
+}
+/* 设置项文字放大一档：桌面端 13/12px 在手机上偏小，
+   与 44px 的控件高度也不成比例。标题 15px、说明 13px 更易读。 */
+html[data-platform="mobile"] .s-title {
+  font-size: calc(var(--font-scale, 1) * 15px);
+  line-height: 20px;
+}
+html[data-platform="mobile"] .s-desc {
+  font-size: calc(var(--font-scale, 1) * 13px);
+  line-height: 18px;
+  margin-top: 3px;
+}
+/* 分组标题同步放大，与设置项标题形成层级差 */
+html[data-platform="mobile"] .s-group-title {
+  font-size: calc(var(--font-scale, 1) * 15px);
+  line-height: 22px;
+  padding: 10px 4px 8px;
+}
+html[data-platform="mobile"] .s-group-title::before {
+  height: 15px;
+}
+
+/* ── 移动端开关 ──
+   桌面端 36×20 的开关在手机上明显偏小，手指点按容易落空。
+   放大到 44×26（高度对齐最小触控尺寸），滑块 22px。
+   滑块位移按内容盒计算：44 - 2×1px 边框 = 42，42 - 22 - 2 = 18。 */
+html[data-platform="mobile"] .switch {
+  width: 44px;
+  height: 26px;
+}
+html[data-platform="mobile"] .switch i {
+  width: 22px;
+  height: 22px;
+}
+html[data-platform="mobile"] .switch.on i {
+  left: 18px;
+}
+
+/* ── 移动端下拉（ghost 变体）──
+   触发器从 32px 提到 40px，字号提到 15px，箭头 14px：
+   它是设置行里唯一的可点入口，太小会让人以为只是文字。 */
+html[data-platform="mobile"] .select-ghost .select-trigger {
+  height: 40px;
+  padding: 0 10px;
+  gap: 4px;
+  font-size: calc(var(--font-scale, 1) * 15px);
+}
+html[data-platform="mobile"] .select-ghost .select-value {
+  max-width: 160px;
+}
+html[data-platform="mobile"] .select-ghost .select-arrow {
+  width: 14px;
+  height: 14px;
+}
+/* 浮层选项同步放大：桌面端 5px 内边距 + 13px 字号，
+   在触屏上选项之间几乎贴在一起，容易点错相邻项。 */
+html[data-platform="mobile"] .select-ghost .select-dropdown {
+  min-width: 150px;
+  padding: 6px;
+}
+html[data-platform="mobile"] .select-option {
+  padding: 10px 14px;
+  font-size: calc(var(--font-scale, 1) * 15px);
+}
+html[data-platform="mobile"] .select-option + .select-option {
+  margin-top: 2px;
+}
+/* 设置行右侧的「进入子页」箭头同步放大，与 15px 文字成比例 */
+html[data-platform="mobile"] .chevron-muted {
+  width: 18px;
+  height: 18px;
 }
 
 /* 按钮整体加高，便于点按 */
@@ -2639,27 +2909,23 @@ html[data-platform="mobile"] .modal-actions > * {
   width: 100%;
 }
 
-/* 锁定页卡片横向留白 */
+/* 锁定页卡片横向留白（仅兜底页使用） */
 html[data-platform="mobile"] .lock-card {
   max-width: min(360px, calc(100vw - 32px));
   padding: 30px 22px;
 }
-/* 锁定页主操作按钮：统一放大到 48px */
-html[data-platform="mobile"] .lock-card form > button[type="submit"] {
-  height: 48px !important;
+/* 锁定页主操作按钮：移动端统一放大到 48px，符合触控最小尺寸 */
+html[data-platform="mobile"] .lock-submit {
+  height: 48px;
   font-size: calc(var(--font-scale, 1) * 16px);
 }
-/* 锁定页数字键盘：加大按键高度与间距，便于触控 */
-html[data-platform="mobile"] .keypad {
-  gap: 12px;
+html[data-platform="mobile"] .lock-bio-btn {
+  height: 48px;
+  font-size: calc(var(--font-scale, 1) * 15px);
 }
-html[data-platform="mobile"] .key-btn {
-  height: 56px;
-  font-size: calc(var(--font-scale, 1) * 22px);
-}
-html[data-platform="mobile"] .key-btn svg {
-  width: 26px;
-  height: 26px;
+html[data-platform="mobile"] .lock-input {
+  height: 52px;
+  font-size: calc(var(--font-scale, 1) * 19px);
 }
 
 /* 移动端禁用文本长按选中与点击高亮，提升原生化观感 */
@@ -2674,14 +2940,18 @@ html[data-platform="mobile"] .sticky-actions {
 }
 
 
-/* 移动端验证码加粗：
-   Android 的等宽字体回退（Droid Sans Mono / Noto Sans Mono）只有 Regular
-   一个字重，font-weight 无法选中粗体也不会合成，看起来明显偏细。
-   改用系统无衬线字体（Roboto 有完整字重）。
-   字重用 700 而非 600：Roboto 标准家族只有 400/500/700，没有 600，
-   浏览器会把 600 就近映射到 500（Medium），视觉上仍偏细。 */
+/* 移动端验证码：
+   字体与字重由内置的 OneTotp Mono（400 / 700 真实字重）保证，
+   不再需要任何描边或合成技巧——700 就是字体文件里的 Bold 字形。
+
+   此前用 -webkit-text-stroke 描边加粗是取巧做法：描边会让笔画边缘
+   发虚、字腔（如 0 的内圈）被填小，放大看能明显看出「糊」。
+   内置字体是根治方案，与 Proton Authenticator 等成熟应用的做法一致。
+
+   字重固定 700 而非 600：字体文件只提供 400 / 700 两档，
+   600 会被浏览器就近映射到 700，不如直接写 700 明确。 */
 html[data-platform="mobile"] .otp-code {
-  font-family: var(--font-body);
+  font-family: var(--font-code);
   font-weight: 700;
   letter-spacing: 2px;
 }

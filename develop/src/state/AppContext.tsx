@@ -399,7 +399,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   // 主题应用：设置变化时切换，system 模式跟随系统
   useEffect(() => {
-    const mode = settings?.theme ?? "light";
+    const mode = settings?.theme ?? "system";
     applyTheme(mode);
     if (mode !== "system") return;
     const mql = window.matchMedia?.("(prefers-color-scheme: dark)");

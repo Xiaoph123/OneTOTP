@@ -100,8 +100,8 @@ SHA-256: 0E:FE:3E:59:3B:FD:FF:82:6F:C5:74:82:3B:A3:E9:F3:0B:5E:41:43:E0:4D:74:D2
 
 ## 4. 版本号来源
 
-- 应用版本：`src-tauri/tauri.conf.json` 的 `version`（当前 `0.3.0`）
-- Android 侧：`app/tauri.properties` 的 `tauri.android.versionName=0.3.0` / `versionCode=2000`
+- 应用版本：`src-tauri/tauri.conf.json` 的 `version`（当前 `0.4.0`）
+- Android 侧：`app/tauri.properties` 的 `tauri.android.versionName=0.4.0` / `versionCode=2000`
   （由 Tauri 生成，改版本号需同步）
 
 ## 5. 备注

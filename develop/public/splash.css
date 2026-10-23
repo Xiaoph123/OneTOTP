@@ -11,17 +11,17 @@ html {
   background: #fcfdfe;
 }
 html[data-theme="dark"] {
-  background: #141619;
+  background: #0a0b0d;
 }
 /* 兜底：万一 theme-boot.js 未能执行（脚本被禁、存储异常等），
    也要跟随系统明暗，避免深色系统上闪一帧白。
    放在 [data-theme="dark"] 之后，属性已存在时以显式设置为准。 */
 @media (prefers-color-scheme: dark) {
   html:not([data-theme="light"]) {
-    background: #141619;
+    background: #0a0b0d;
   }
   html:not([data-theme="light"]) #app-splash {
-    background: #141619;
+    background: #0a0b0d;
   }
 }
 body {
@@ -29,7 +29,7 @@ body {
 }
 
 /* 静态启动画面：随 HTML 立即渲染，React 挂载后由 main.tsx 移除。
-   背景色对齐应用 --color-bg-2（亮 #FCFDFE / 暗 #141619），确保淡出无跳变。 */
+   背景色对齐应用 --color-bg-2（亮 #FCFDFE / 暗 #0A0B0D），确保淡出无跳变。 */
 #app-splash {
   position: fixed;
   inset: 0;
@@ -44,13 +44,16 @@ body {
      否则会出现「深色背景 + 亮白文字/亮蓝环」的刺眼组合。 */
   --splash-text: #a9aeb6;
   --splash-ring: #1664ff;
-  --splash-dot: #1664ff;
+  /* 光点聚合用的三色：取自品牌渐变（绿 → 青 → 靛），
+     与图标同源，明暗两种主题下都足够醒目，无需分别调色。 */
+  --splash-dot-1: #34d399;
+  --splash-dot-2: #22d3ee;
+  --splash-dot-3: #6366f1;
 }
 html[data-theme="dark"] #app-splash {
-  background: #141619;
+  background: #0a0b0d;
   --splash-text: #6b7280;
   --splash-ring: #4080ff;
-  --splash-dot: #4080ff;
 }
 
 /* ── 触屏设备（Android / iOS）：首屏底色交给原生窗口 ──
@@ -113,32 +116,116 @@ html:not([data-splash]) #app-splash .splash-dots {
   display: flex;
 }
 
-/* ══════════ A · 描边绘制 ══════════ */
-.splash-draw svg {
+/* ══════════ A · 描边绘制（双线 + 光点领跑 + 光晕脉冲） ══════════
+   总时长 1500ms，时间轴：
+     0    ~ 900ms  双线描边（外层粗光晕线 + 内层细实线，错开 60ms）
+     0    ~ 900ms  光点沿路径领跑，900ms 后淡出（绘制完成即消失）
+     700  ~ 1100ms 渐变填充淡入
+     1000 ~ 1320ms 钥匙孔淡入
+     880  ~ 1500ms 光晕脉冲：亮起 → 回落 → 稳定 */
+.splash-draw .a-stage {
+  position: relative;
   width: 76px;
   height: 76px;
 }
-.splash-draw .a-outline {
+.splash-draw svg {
+  position: relative;
+  width: 76px;
+  height: 76px;
+  /* 光点与光晕会超出 viewBox，不能裁掉 */
+  overflow: visible;
+}
+/* 光晕：盾牌背后的径向柔光，描边完成后脉冲一次再稳定 */
+.splash-draw .a-glow {
+  position: absolute;
+  inset: -10px;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    rgba(99, 102, 241, 0.55),
+    rgba(34, 211, 238, 0.16) 45%,
+    transparent 70%
+  );
+  opacity: 0;
+  animation: splash-a-glow 620ms ease-out 880ms forwards;
+}
+/* 外层粗线：低透明度 + 同色，视觉上像描边的辉光 */
+.splash-draw .a-outer {
   fill: none;
   stroke: url(#splash-grad);
-  stroke-width: 1.6;
+  stroke-width: 3.4;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  opacity: 0.28;
+  stroke-dasharray: 62;
+  stroke-dashoffset: 62;
+  animation: splash-a-draw 900ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+/* 内层细线：与外层同起同止，形成「粗光晕 + 细实线」的双线层次。
+   此前错开 60ms，导致光点（按 960ms 走完全程）始终落后描边约 4% 路径，
+   观感上像光点追不上线。三条路径必须共用同一时长与缓动才能严丝合缝。 */
+.splash-draw .a-inner {
+  fill: none;
+  stroke: url(#splash-grad);
+  stroke-width: 1.4;
   stroke-linejoin: round;
   stroke-linecap: round;
   stroke-dasharray: 62;
   stroke-dashoffset: 62;
-  animation: splash-a-draw 620ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  animation: splash-a-draw 900ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+/* 光点领跑：真实圆点沿路径移动（SVG animateMotion，见 index.html），
+   这里只负责「线一闭合光点立刻消失」。
+
+   时长必须与描边完全一致（900ms + 同一缓动），否则光点会落后于线头：
+   此前光点用 960ms、描边用 900ms，光点全程慢 6%，看起来像追不上。
+
+   为什么不用 stroke-dasharray 做光点：可见段再短也是一段线，
+   圆头描边会让它看起来像拖尾；而且 dasharray 的间隔必须大于路径长度，
+   数值稍有偏差就会出现「线闭合了、尾巴还在跑」。
+   animateMotion 移动的是真实圆点，位置与描边进度天然同步。
+
+   为什么不用 drop-shadow 做光晕：两层 drop-shadow 叠加时，
+   第二层会去模糊第一层的阴影结果，在深色背景上呈现为一团灰雾，
+   观感像「不连贯」。改用径向渐变圆，边缘干净透明。 */
+.splash-draw .a-spark {
+  opacity: 1;
+  animation: splash-a-spark-out 1ms linear 900ms forwards;
 }
 .splash-draw .a-fill {
   opacity: 0;
-  animation: splash-a-fade 380ms ease 480ms forwards;
+  animation: splash-a-fade 400ms ease 700ms forwards;
 }
 .splash-draw .a-mark {
   opacity: 0;
-  animation: splash-a-fade 300ms ease 700ms forwards;
+  animation: splash-a-fade 320ms ease 1000ms forwards;
 }
 @keyframes splash-a-draw {
   to {
     stroke-dashoffset: 0;
+  }
+}
+@keyframes splash-a-spark-out {
+  to {
+    opacity: 0;
+  }
+}
+@keyframes splash-a-glow {
+  0% {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+  45% {
+    opacity: 1;
+    transform: scale(1.05);
+  }
+  75% {
+    opacity: 0.35;
+    transform: scale(1.2);
+  }
+  100% {
+    opacity: 0.55;
+    transform: scale(1.1);
   }
 }
 @keyframes splash-a-fade {
@@ -147,24 +234,40 @@ html:not([data-splash]) #app-splash .splash-dots {
   }
 }
 
-/* ══════════ B · 弹入光扫 ══════════ */
+/* ══════════ B · 玻璃反光 ══════════
+   弹入 → 顶部玻璃高光淡入 → 斜向光扫划过。
+   总时长 1500ms，时间轴：
+     0    ~ 800ms  盾牌弹性弹入
+     500  ~ 1000ms 顶部玻璃高光淡入（常驻，不消失）
+     620  ~ 1320ms 斜向光扫划过 */
 .splash-pop .b-wrap {
   opacity: 0;
   transform: scale(0.55);
-  animation: splash-b-pop 560ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  animation: splash-b-pop 800ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
 }
 .splash-pop svg {
   width: 76px;
   height: 76px;
 }
+/* 顶部玻璃高光：垂直渐变，上亮下透明，模拟玻璃受光面。
+   常驻显示，是「玻璃质感」的主体，光扫只是掠过的一瞬。 */
+.splash-pop .b-gloss {
+  opacity: 0;
+  animation: splash-b-gloss 500ms ease 500ms forwards;
+}
 .splash-pop .b-shine {
   transform: translateX(-14px);
-  animation: splash-b-sweep 900ms cubic-bezier(0.4, 0, 0.2, 1) 260ms forwards;
+  animation: splash-b-sweep 700ms cubic-bezier(0.4, 0, 0.2, 1) 620ms forwards;
 }
 @keyframes splash-b-pop {
   to {
     opacity: 1;
     transform: scale(1);
+  }
+}
+@keyframes splash-b-gloss {
+  to {
+    opacity: 1;
   }
 }
 @keyframes splash-b-sweep {
@@ -173,7 +276,10 @@ html:not([data-splash]) #app-splash .splash-dots {
   }
 }
 
-/* ══════════ C · 环形进度 ══════════ */
+/* ══════════ C · 液态粗细 ══════════
+   进度环推进的同时线条先变粗再回落，像液体注入后凝固。
+   总时长 1500ms：进度 1400ms 走完，粗细在 55% 处达到峰值 4.2px。
+   中间盾牌保持静止——动感全部交给圆环，图标再缩放会显得画面在抖。 */
 .splash-ring .c-stage {
   position: relative;
   display: flex;
@@ -188,38 +294,56 @@ html:not([data-splash]) #app-splash .splash-dots {
   width: 108px;
   height: 108px;
 }
-.splash-ring .c-ring circle {
+/* 轨道：淡色底环，让「未走完」的部分也有形状，方向感更明确 */
+.splash-ring .c-track {
   fill: none;
   stroke: var(--splash-ring);
   stroke-width: 2.5;
+  opacity: 0.12;
+}
+.splash-ring .c-bar {
+  fill: none;
+  stroke: url(#splash-grad);
+  stroke-width: 1;
   stroke-linecap: round;
   stroke-dasharray: 314;
   stroke-dashoffset: 314;
   transform: rotate(-90deg);
   transform-origin: 50% 50%;
-  animation: splash-c-progress 1000ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  animation:
+    splash-c-progress 1400ms cubic-bezier(0.4, 0, 0.2, 1) forwards,
+    splash-c-thicken 1400ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 .splash-ring .c-mark {
   width: 64px;
   height: 64px;
-  animation: splash-c-breathe 1400ms ease-in-out infinite;
 }
 @keyframes splash-c-progress {
   to {
     stroke-dashoffset: 0;
   }
 }
-@keyframes splash-c-breathe {
-  0%,
-  100% {
-    transform: scale(1);
+@keyframes splash-c-thicken {
+  0% {
+    stroke-width: 1;
   }
-  50% {
-    transform: scale(1.05);
+  55% {
+    stroke-width: 4.2;
+  }
+  100% {
+    stroke-width: 2.5;
   }
 }
 
-/* ══════════ D · 光点聚合 ══════════ */
+/* ══════════ D · 汇聚光晕 ══════════
+   光点从圆周汇聚到中心 → 汇聚点亮起一圈柔光并脉冲稳定 → 盾牌弹性弹入。
+   总时长 1500ms，与 main.tsx 的 SPLASH_MIN_MS 对齐，动画完整播完才进首页。
+
+   时间轴：
+     0    ~ 620ms  光点依次出发并汇聚（每个延迟 16ms）
+     600  ~ 1220ms 光晕从汇聚点亮起 → 放大 → 回落 → 稳定
+     640  ~ 1060ms 盾牌弹性弹入并稳定
+     1060 ~ 1500ms 静止展示，留出辨识时间 */
 .splash-dots .d-stage {
   position: relative;
   width: 76px;
@@ -227,51 +351,95 @@ html:not([data-splash]) #app-splash .splash-dots {
 }
 .splash-dots .d-dot {
   position: absolute;
-  left: 35px;
-  top: 35px;
+  left: 35.5px;
+  top: 35.5px;
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: var(--splash-dot);
+  background: var(--splash-dot-1);
+  /* 光晕让 5px 的小点在深色背景上也能被看见 */
+  box-shadow: 0 0 7px 1px currentColor;
   opacity: 0;
   animation: splash-d-converge 620ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
-/* 8 个光点均匀分布在半径 46px 的圆上，依次延迟 22ms 出发 */
-.splash-dots .d-dot-1 { --dx: 46px;    --dy: 0px;     animation-delay: 0ms; }
-.splash-dots .d-dot-2 { --dx: 32.5px;  --dy: 32.5px;  animation-delay: 22ms; }
-.splash-dots .d-dot-3 { --dx: 0px;     --dy: 46px;    animation-delay: 44ms; }
-.splash-dots .d-dot-4 { --dx: -32.5px; --dy: 32.5px;  animation-delay: 66ms; }
-.splash-dots .d-dot-5 { --dx: -46px;   --dy: 0px;     animation-delay: 88ms; }
-.splash-dots .d-dot-6 { --dx: -32.5px; --dy: -32.5px; animation-delay: 110ms; }
-.splash-dots .d-dot-7 { --dx: 0px;     --dy: -46px;   animation-delay: 132ms; }
-.splash-dots .d-dot-8 { --dx: 32.5px;  --dy: -32.5px; animation-delay: 154ms; }
+/* 8 个光点均匀分布在半径 46px 的圆上，三色循环，依次延迟 16ms 出发 */
+.splash-dots .d-dot-1 { --dx: 46px;    --dy: 0px;     animation-delay: 0ms;   color: var(--splash-dot-1); }
+.splash-dots .d-dot-2 { --dx: 32.5px;  --dy: 32.5px;  animation-delay: 16ms;  color: var(--splash-dot-2); }
+.splash-dots .d-dot-3 { --dx: 0px;     --dy: 46px;    animation-delay: 32ms;  color: var(--splash-dot-3); }
+.splash-dots .d-dot-4 { --dx: -32.5px; --dy: 32.5px;  animation-delay: 48ms;  color: var(--splash-dot-1); }
+.splash-dots .d-dot-5 { --dx: -46px;   --dy: 0px;     animation-delay: 64ms;  color: var(--splash-dot-2); }
+.splash-dots .d-dot-6 { --dx: -32.5px; --dy: -32.5px; animation-delay: 80ms;  color: var(--splash-dot-3); }
+.splash-dots .d-dot-7 { --dx: 0px;     --dy: -46px;   animation-delay: 96ms;  color: var(--splash-dot-1); }
+.splash-dots .d-dot-8 { --dx: 32.5px;  --dy: -32.5px; animation-delay: 112ms; color: var(--splash-dot-2); }
+
+/* 光晕：汇聚点亮起的径向柔光，脉冲一次后稳定在盾牌背后。
+   与「描边绘制」的光晕同款配色（靛 → 青 → 透明），保持全局一致。 */
+.splash-dots .d-glow {
+  position: absolute;
+  inset: -10px;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    rgba(99, 102, 241, 0.55),
+    rgba(34, 211, 238, 0.16) 45%,
+    transparent 70%
+  );
+  opacity: 0;
+  animation: splash-d-glow 620ms ease-out 600ms forwards;
+}
 .splash-dots .d-mark {
   position: absolute;
   inset: 0;
   width: 76px;
   height: 76px;
   opacity: 0;
-  animation: splash-d-appear 420ms cubic-bezier(0.34, 1.4, 0.64, 1) 480ms forwards;
+  animation: splash-d-appear 420ms cubic-bezier(0.34, 1.5, 0.64, 1) 640ms forwards;
 }
 @keyframes splash-d-converge {
   0% {
     opacity: 0;
-    transform: translate(var(--dx), var(--dy)) scale(0.4);
+    transform: translate(var(--dx), var(--dy)) scale(0.3);
   }
-  35% {
-    opacity: 0.9;
+  12% {
+    opacity: 1;
+  }
+  88% {
+    opacity: 1;
+    transform: translate(0, 0) scale(1.2);
   }
   100% {
     opacity: 0;
     transform: translate(0, 0) scale(0.2);
   }
 }
-@keyframes splash-d-appear {
-  from {
+@keyframes splash-d-glow {
+  0% {
     opacity: 0;
-    transform: scale(0.7);
+    transform: scale(0.5);
   }
-  to {
+  45% {
+    opacity: 1;
+    transform: scale(1.05);
+  }
+  75% {
+    opacity: 0.35;
+    transform: scale(1.2);
+  }
+  100% {
+    opacity: 0.55;
+    transform: scale(1.1);
+  }
+}
+@keyframes splash-d-appear {
+  0% {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+  55% {
+    opacity: 1;
+    transform: scale(1.1);
+  }
+  100% {
     opacity: 1;
     transform: scale(1);
   }
@@ -378,29 +546,32 @@ html:not([data-splash]) #root.is-entering {
 
 /* ── 减少动态效果：全部动画降级为纯淡入淡出 ── */
 @media (prefers-reduced-motion: reduce) {
-  #app-splash .a-outline {
+  #app-splash .a-outer,
+  #app-splash .a-inner {
     animation: none;
     stroke-dashoffset: 0;
   }
   #app-splash .a-fill,
   #app-splash .a-mark,
   #app-splash .b-wrap,
+  #app-splash .b-gloss,
   #app-splash .d-mark {
     animation: none;
     opacity: 1;
     transform: none;
   }
+  #app-splash .a-spark,
+  #app-splash .a-glow,
   #app-splash .b-shine,
-  #app-splash .d-dot {
+  #app-splash .d-dot,
+  #app-splash .d-glow {
     animation: none;
     opacity: 0;
   }
-  #app-splash .c-ring circle {
+  #app-splash .c-bar {
     animation: none;
     stroke-dashoffset: 0;
-  }
-  #app-splash .c-mark {
-    animation: none;
+    stroke-width: 2.5;
   }
   #app-splash.is-hidden {
     animation: splash-exit-fade 200ms ease forwards !important;

@@ -21,11 +21,13 @@ export function TitleBar() {
   };
 
   // 桌面端没有底部标签栏：导航入口收敛到标题栏。
-  // 设置相关页面显示「验证码」入口，验证码列表显示「设置」入口；
-  // 详情/添加等子页面自带返回箭头，标题栏不再叠加导航按钮。
+  // 设置相关页面显示「验证码」入口，其余页面显示「设置」入口。
+  // 除未解锁状态外**始终**显示该入口：此前详情/添加等子页面会隐藏它，
+  // 导致标题栏按钮数量随页面变化、位置左右跳动，全局观感不一致。
   const SETTINGS_ROUTES = ["settings", "security", "categories", "importExport"];
   const inSettings = SETTINGS_ROUTES.includes(route.name);
-  const showNav = inSettings || route.name === "codes";
+  // 启动中 / 锁屏时保险库未解密，进入设置页也无法读写，故不提供入口
+  const showNav = phase === "ready";
   const navToSettings = () => {
     if (phase === "ready") navigate({ name: "settings" });
   };
@@ -39,7 +41,7 @@ export function TitleBar() {
   };
 
   // 明暗模式快捷切换：在亮色与暗色之间切换（system 模式下手动点击则切到反色）
-  const mode = settings?.theme ?? "light";
+  const mode = settings?.theme ?? "system";
   const isDark = resolveTheme(mode) === "dark";
   // 锁定状态下保险库未解密，写入设置会失败（后端返回「应用未解锁」）。
   // 此时隐藏主题按钮，避免点击后弹出无法理解的错误。

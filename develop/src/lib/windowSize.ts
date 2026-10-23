@@ -8,11 +8,14 @@ import { isDesktop, isTauri } from "./platform";
  * - compact  紧凑：最小可用宽度
  * - standard 标准：默认宽度
  * - expanded 扩展：更宽，便于长名称/多列查看
+ *
+ * 三档间距统一 40px。此前是 320 / 400 / 480，标准档在 1080p 屏幕上
+ * 显得过宽（内容区大量留白），整体收窄后更紧凑。
  */
 export const WINDOW_WIDTHS: Record<WindowSize, number> = {
-  compact: 320,
-  standard: 400,
-  expanded: 480,
+  compact: 290,
+  standard: 330,
+  expanded: 370,
 };
 
 /** 默认高度（首次/无法读取当前高度时的回退值） */

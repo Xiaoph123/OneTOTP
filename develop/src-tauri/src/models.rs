@@ -185,10 +185,10 @@ fn default_language() -> String {
 }
 
 fn default_card_density() -> String {
-    "standard".to_string()
+    "compact".to_string()
 }
 fn default_card_detail() -> String {
-    "standard".to_string()
+    "detailed".to_string()
 }
 fn default_close_behavior() -> String {
     "quit".to_string()
@@ -200,7 +200,7 @@ fn default_category_expand_mode() -> String {
     "expand".to_string()
 }
 fn default_theme() -> String {
-    "light".to_string()
+    "system".to_string()
 }
 fn default_splash_animation() -> String {
     "dots".to_string()
@@ -214,7 +214,7 @@ fn default_clipboard_clear() -> u32 {
     30
 }
 fn default_auto_lock() -> u32 {
-    60
+    30
 }
 fn default_backup_count() -> u32 {
     3
@@ -225,7 +225,7 @@ impl Default for AppSettings {
         Self {
             lock_enabled: false,
             lock_on_blur: true,
-            auto_lock_seconds: 60,
+            auto_lock_seconds: 30,
             auto_hide_after_copy: false,
             code_grouping: true,
             expiry_highlight: true,
@@ -238,10 +238,10 @@ impl Default for AppSettings {
             auto_backup: true,
             backup_keep: 3,
             password_hint: String::new(),
-            theme: "light".to_string(),
+            theme: "system".to_string(),
             splash_animation: "dots".to_string(),
-            card_density: "standard".to_string(),
-            card_detail: "standard".to_string(),
+            card_density: "compact".to_string(),
+            card_detail: "detailed".to_string(),
             close_behavior: "quit".to_string(),
             shortcut_toggle: String::new(),
             language: "auto".to_string(),

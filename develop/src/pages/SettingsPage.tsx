@@ -15,10 +15,10 @@ import {
 } from "../lib/api";
 import { getAutostart, setAutostart } from "../lib/autostart";
 import { applyToggleShortcut } from "../lib/shortcut";
-import { ChevronRight, FolderOpen } from "../components/icons";
+import { ChevronRight, Copy, Check, FolderOpen } from "../components/icons";
 import { ConfirmDialog } from "../components/Dialog";
 import { AboutDialog } from "../components/AboutDialog";
-import { formatBytes } from "../lib/utils";
+import { copyText, formatBytes } from "../lib/utils";
 import { isDesktop } from "../lib/platform";
 import { useI18n } from "../i18n";
 
@@ -87,6 +87,8 @@ export function SettingsPage() {
   // 切换目录的二次确认：迁移会覆盖目标目录中的同名文件，必须让用户明确同意
   const [dirConfirm, setDirConfirm] = useState<{ mode: "change" | "reset"; dir: string } | null>(null);
   const [dirBusy, setDirBusy] = useState(false);
+  // 复制路径后的短暂反馈：图标切换为对勾，1.5 秒后复原
+  const [dirCopied, setDirCopied] = useState(false);
   // 开启「允许空密码备份」的二次确认
   const [emptyPwdConfirm, setEmptyPwdConfirm] = useState(false);
 
@@ -276,6 +278,20 @@ export function SettingsPage() {
     }
   };
 
+  /** 复制数据目录路径：移动端无法直达该目录，但复制出来便于排查问题 */
+  const copyDataDir = async () => {
+    const path = dataDir?.current;
+    if (!path) return;
+    try {
+      await copyText(path);
+      setDirCopied(true);
+      toast.success(t("路径已复制"));
+      window.setTimeout(() => setDirCopied(false), 1500);
+    } catch (e) {
+      toast.error(t("复制失败：{msg}", { msg: String(e) }));
+    }
+  };
+
   /** 确认切换目录：调用后端迁移并重启 */
   const applyDataDir = async () => {
     const pending = dirConfirm;
@@ -457,10 +473,10 @@ export function SettingsPage() {
               value={draft.splashAnimation}
               onChange={(v) => changeSplashAnimation(v)}
               options={[
-                { value: "dots" as const, label: t("光点聚合") },
+                { value: "dots" as const, label: t("汇聚光晕") },
                 { value: "draw" as const, label: t("描边绘制") },
-                { value: "pop" as const, label: t("弹入光扫") },
-                { value: "ring" as const, label: t("环形进度") },
+                { value: "pop" as const, label: t("玻璃反光") },
+                { value: "ring" as const, label: t("液态粗细") },
               ]}
             />
           </Row>
@@ -557,7 +573,9 @@ export function SettingsPage() {
             </span>
             <ChevronRight className="chevron-muted" />
           </button>
-          {/* 数据存储目录：整行独立布局，路径用只读输入框 + 内嵌图标按钮 */}
+          {/* 数据存储目录：整行独立布局，路径用只读输入框 + 内嵌图标按钮。
+              移动端不提供「更改目录」——Android 应用私有目录由系统分配，
+              用户无法指定，强行暴露选择器只会让人以为能改。 */}
           {desktop ? (
             <div className="s-row s-row-block">
               <div className="s-main">
@@ -588,6 +606,51 @@ export function SettingsPage() {
                     {t("恢复默认目录")}
                   </button>
                 ) : null}
+              </div>
+            </div>
+          ) : (
+            <div className="s-row s-row-block">
+              <div className="s-main">
+                <div className="s-title">{t("数据存储位置")}</div>
+                <div className="s-desc">
+                  {t("账户、备份与密钥全部保存在应用私有目录，由系统分配，无法更改")}
+                </div>
+              </div>
+              <div className="dir-setting">
+                {/* 移动端无法用文件管理器直达该路径（需 root），
+                    但复制出来便于在反馈、日志或 adb 命令中使用 */}
+                <div className="input-with-action">
+                  <input
+                    className="ui-input has-action dir-input"
+                    value={dataDir?.current ?? ""}
+                    readOnly
+                    title={dataDir?.current ?? ""}
+                    placeholder={t("正在读取…")}
+                  />
+                  <IconButton
+                    label={t("复制路径")}
+                    className="input-action"
+                    onClick={copyDataDir}
+                  >
+                    {dirCopied ? <Check className="icon-16" /> : <Copy className="icon-16" />}
+                  </IconButton>
+                </div>
+              </div>
+            </div>
+          )}
+          {/* 移动端卸载即清空：Android 卸载应用会连同私有目录一起删除，
+              且系统备份默认不覆盖加密保险库。必须明确告知，否则用户
+              换机 / 重装后才发现账号全丢。 */}
+          {!desktop ? (
+            <div className="notice notice-warn settings-inline-notice">
+              <div>
+                <b>{t("卸载应用会清空全部数据")}</b>
+                <div className="mt-6">
+                  {t("覆盖安装升级不会丢失数据；但卸载重装会连同账户与密钥一并删除，且无法恢复。")}
+                </div>
+                <div className="mt-6">
+                  {t("换机或重装前，请先在「导入 / 导出配置」中导出加密备份。")}
+                </div>
               </div>
             </div>
           ) : null}

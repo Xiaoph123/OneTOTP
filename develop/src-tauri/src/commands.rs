@@ -1506,7 +1506,7 @@ fn normalize_hex_color(color: &str) -> String {
 
 /// 规范化设置：枚举字段只接受白名单取值，数值字段夹到合法区间。
 ///
-/// 前端虽然也有 `|| "light"` 之类的兜底，但设置会经「加密备份导入」这条
+/// 前端虽然也有 `|| "system"` 之类的兜底，但设置会经「加密备份导入」这条
 /// 外部数据通道写入，后端不能假设客户端一定自洽——非法值一旦落盘，
 /// 会让下一次启动的渲染逻辑走到未定义分支。
 fn sanitize_settings(mut s: AppSettings) -> AppSettings {
@@ -1517,20 +1517,20 @@ fn sanitize_settings(mut s: AppSettings) -> AppSettings {
             fallback.to_string()
         }
     }
-    s.theme = one_of(&s.theme, &["light", "dark", "system"], "light");
+    s.theme = one_of(&s.theme, &["light", "dark", "system"], "system");
     s.splash_animation = one_of(&s.splash_animation, &["draw", "pop", "ring", "dots"], "dots");
     s.code_visibility = one_of(&s.code_visibility, &["never", "always", "hover"], "never");
     s.category_expand_mode =
         one_of(&s.category_expand_mode, &["expand", "collapse", "remember"], "expand");
-    s.card_density = one_of(&s.card_density, &["compact", "standard"], "standard");
-    s.card_detail = one_of(&s.card_detail, &["minimal", "standard", "detailed"], "standard");
+    s.card_density = one_of(&s.card_density, &["compact", "standard"], "compact");
+    s.card_detail = one_of(&s.card_detail, &["minimal", "standard", "detailed"], "detailed");
     s.close_behavior = one_of(&s.close_behavior, &["quit", "tray"], "quit");
     s.language = one_of(&s.language, &["auto", "zh", "en"], "auto");
     s.window_size = one_of(&s.window_size, &["compact", "standard", "expanded"], "standard");
     s.font_scale = one_of(&s.font_scale, &["small", "standard", "large", "xlarge"], "standard");
-    // 0 =「立即」（不做空闲计时），999999 =「从不」，超出范围回退默认 60 秒
+    // 0 =「离开时锁定」（不做空闲计时），999999 =「从不」，超出范围回退默认 30 秒
     if s.auto_lock_seconds > 999_999 {
-        s.auto_lock_seconds = 60;
+        s.auto_lock_seconds = 30;
     }
     // 备份保留份数：至少留 1 份，最多 10 份（与界面选项一致）
     s.backup_keep = s.backup_keep.clamp(1, 10);
@@ -1827,15 +1827,15 @@ mod tests {
             ..AppSettings::default()
         };
         let out = sanitize_settings(s);
-        assert_eq!(out.theme, "light");
+        assert_eq!(out.theme, "system");
         assert_eq!(out.code_visibility, "never");
-        assert_eq!(out.card_density, "standard");
-        assert_eq!(out.card_detail, "standard");
+        assert_eq!(out.card_density, "compact");
+        assert_eq!(out.card_detail, "detailed");
         assert_eq!(out.close_behavior, "quit");
         assert_eq!(out.language, "auto");
         assert_eq!(out.window_size, "standard");
         assert_eq!(out.font_scale, "standard");
-        assert_eq!(out.auto_lock_seconds, 60);
+        assert_eq!(out.auto_lock_seconds, 30);
         assert_eq!(out.backup_keep, 1);
         assert_eq!(out.password_hint.chars().count(), 100);
     }

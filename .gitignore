@@ -16,6 +16,8 @@ backups/
 *.apk
 *.idsig
 _icon_backup/
+# 图标重新生成前的本地备份目录（时间戳命名，仅本地保留）
+develop/src-tauri/icons-backup-*/
 
 # ── 密钥与凭证（严禁入库）──
 *.keystore

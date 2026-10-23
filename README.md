@@ -59,11 +59,12 @@
 | **加密备份** | 导出为独立口令加密的 JSON 文件（可选仅账户 / 仅配置），经系统文件管理器选择保存位置；导入时先选文件再输密码，按密钥去重合并 |
 | **自动备份快照** | 每次写盘自动留存时间戳快照，可配置保留份数（默认 3，最多 10），支持一键清理；删除账户时可同步从历史快照中清除其密钥 |
 | **隐私保护** | 截屏 / 录屏时隐藏内容（Windows / macOS / Android `FLAG_SECURE`）、远程会话时隐藏窗口（桌面）、窗口失焦时遮挡验证码 |
-| **数据存储目录** | 账户、备份与密钥可迁移到自定义目录，切换后自动重启生效 |
+| **数据存储目录** | 账户、备份与密钥可迁移到自定义目录，切换后自动重启生效；移动端显示系统分配的私有目录路径并支持一键复制，同时提示卸载即清空 |
 | **托盘与自启** | 桌面端支持最小化到托盘、关闭行为可选（退出 / 托盘）、开机自启，托盘菜单可直接进入设置 |
-| **主题与语言** | 浅色 / 深色 / 跟随系统；界面字体缩放；中文 / English 双语 |
-| **开屏动画** | 四种样式可选（描边绘制 / 弹入光扫 / 环形进度 / 光点聚合，默认光点聚合），停留 1 秒后淡出，配色随明暗模式切换 |
+| **主题与语言** | 浅色 / 深色 / 跟随系统（默认跟随系统）；界面字体缩放；中文 / English 双语 |
+| **开屏动画** | 四种样式可选（汇聚光晕 / 描边绘制 / 玻璃反光 / 液态粗细，默认汇聚光晕），动画 1.5 秒播完后停留 0.2 秒再进入首页，配色随明暗模式切换 |
 | **移动端适配** | 独立移动布局（`data-platform` 钩子），底部四项导航（验证码 / 收藏 / 最近 / 设置），触控尺寸按移动端重新校准；「复制后自动隐藏」在 Android 上表现为切到后台 |
+| **内嵌字体** | 验证码使用内置 Roboto Mono（400 / 700 真实字重），不依赖系统字体，各品牌 Android ROM 上都能正确加粗 |
 
 **状态细节**
 
@@ -74,6 +75,28 @@
 ### 界面语言
 
 基于火山引擎 **源力（Volcengine）** 设计系统落地：主色 `#1664FF`，统一圆角 token（4 / 8 / 12 / 9999px），输入框三态（常态描边 → 悬停加深 → 聚焦蓝色描边 + 光晕），设置页分组标题采用源力竖条样式。
+
+**视觉体系（v0.4.0 起）**
+
+| 部分 | 做法 |
+| --- | --- |
+| 应用背景 | 亮色为 16px 极淡点阵，暗色为 SVG `feTurbulence` 微噪点（无周期性、不形成网格感），底色 `#FCFDFE` / `#0A0B0D` |
+| 贴边容器 | 标题栏、页头、标签栏完全透明，让背景纹理贯穿；底部吸附操作条半透明 + 模糊，避免滚过内容互相干扰 |
+| 卡片 | 半透明玻璃（`rgba(255,255,255,.62)` / `rgba(26,29,34,.72)`）+ `blur(14px) saturate(1.4)` |
+| 品牌按钮 | 亮色为绿→青→靛标准渐变；暗色整体压暗 35% 并叠加顶部内高光，保留品牌色相但不刺眼 |
+| 验证码 | 内置 Roboto Mono 400 / 700 两档真实字重，不依赖系统字体 |
+| 移动端状态栏 | Android `enableEdgeToEdge` + WebView 铺满整屏，安全区尺寸经 CSS 变量注入后由 `.app-window` 内边距避让，使背景纹理连续覆盖到状态栏下方 |
+
+**品牌图标**
+
+渐变盾牌 + 反白钥匙孔，外轮廓在 24 单位坐标系中绘制，与应用内 `OneTotpMark` 同源：
+
+| 场景 | 规格 |
+| --- | --- |
+| 主源文件 | `develop/src-tauri/app-icon.svg`（1024×1024，透明底） |
+| 桌面 / iOS | 由 `npm run tauri icon` 从主源文件生成全部尺寸 |
+| Android 自适应图标 | 独立前景层 `app-icon-android-fg.svg`，盾牌约占 108dp 画布的 60%，居中且四周留白，避免被圆形遮罩切角（`app-icon-manifest.json` 中 `android_fg_scale: 62`） |
+| 配色 | 品牌渐变 `#34D399 → #22D3EE → #6366F1`，钥匙孔为纯白 |
 
 ### 安全模型
 
@@ -282,11 +305,12 @@ A desktop and mobile app that does two-factor authentication properly: collect `
 | **Encrypted backup** | Export a JSON file encrypted with a separate passphrase (accounts only / settings only) via the system file picker; import picks the file first, then asks for the password, and merges by secret |
 | **Automatic snapshots** | A timestamped snapshot is kept on every write; retention is configurable (default 3, up to 10) with one-tap cleanup; deleting an account can also purge its secret from historical snapshots |
 | **Privacy protection** | Hide content from screenshots / recording (Windows / macOS / Android `FLAG_SECURE`), hide the window during remote sessions (desktop), mask codes when the window loses focus |
-| **Data directory** | Move accounts, backups and keys to a custom folder; the app restarts automatically after the change |
+| **Data directory** | Move accounts, backups and keys to a custom folder; the app restarts automatically after the change; on mobile the system-assigned private folder path is shown and copyable, with a warning that uninstalling erases everything |
 | **Tray & autostart** | On desktop, minimize to tray, choose close behavior (quit / tray), start on login, and jump to Settings from the tray menu |
-| **Theme & language** | Light / dark / follow system; UI font scaling; Chinese / English |
-| **Splash animation** | Four styles (outline draw / pop with light sweep / ring progress / dot convergence, default dot convergence), 1-second hold then fade-out, colors follow the light/dark theme |
+| **Theme & language** | Light / dark / follow system (default: follow system); UI font scaling; Chinese / English |
+| **Splash animation** | Four styles (converge glow / outline draw / glass gloss / liquid stroke, default converge glow); the 1.5 s animation completes, holds 0.2 s, then the home screen fades in; colors follow the light/dark theme |
 | **Mobile layout** | A dedicated mobile layout (`data-platform` hook) with a four-item bottom bar (codes / favorites / recent / settings) and touch-calibrated sizing; "hide after copy" sends the app to the background on Android |
+| **Embedded font** | Codes use a bundled Roboto Mono (real 400 / 700 weights) instead of system fonts, so bold renders correctly on every Android ROM |
 
 **Behavior notes**
 
@@ -297,6 +321,28 @@ A desktop and mobile app that does two-factor authentication properly: collect `
 ### Design language
 
 Built on the Volcengine **源力 (Yuanli)** design system: primary color `#1664FF`, unified radius tokens (4 / 8 / 12 / 9999px), three-state inputs (idle outline → hover emphasis → focus blue outline with glow), and the section-title bar style on the Settings page.
+
+**Visual system (since v0.4.0)**
+
+| Part | Approach |
+| --- | --- |
+| App background | Light: a faint 16 px dot grid; dark: SVG `feTurbulence` micro-noise (non-periodic, no visible grid). Base colors `#FCFDFE` / `#0A0B0D` |
+| Edge containers | Title bar, page headers and the tab bar are fully transparent so the background texture runs through them; the sticky action bar is translucent with blur so scrolled content does not interfere |
+| Cards | Translucent glass (`rgba(255,255,255,.62)` / `rgba(26,29,34,.72)`) with `blur(14px) saturate(1.4)` |
+| Brand buttons | Light uses the green → cyan → indigo gradient; dark dims it by ~35% and adds a top inner highlight, keeping brand hue without glare |
+| Codes | Bundled Roboto Mono with real 400 / 700 weights — no dependence on system fonts |
+| Mobile status bar | Android `enableEdgeToEdge` with a full-bleed WebView; safe-area insets are injected as CSS variables and consumed as padding on `.app-window`, so the texture continues under the status bar |
+
+**App icon**
+
+A gradient shield with a white keyhole, drawn in a 24-unit coordinate system and shared with the in-app `OneTotpMark`:
+
+| Scope | Spec |
+| --- | --- |
+| Source | `develop/src-tauri/app-icon.svg` (1024×1024, transparent) |
+| Desktop / iOS | All sizes generated from the source via `npm run tauri icon` |
+| Android adaptive icon | Separate foreground layer `app-icon-android-fg.svg` — the shield occupies ~60% of the 108 dp canvas, centered with margins so circular masks never clip its shoulders (`android_fg_scale: 62` in `app-icon-manifest.json`) |
+| Colors | Brand gradient `#34D399 → #22D3EE → #6366F1`, keyhole in pure white |
 
 ### Security model
 

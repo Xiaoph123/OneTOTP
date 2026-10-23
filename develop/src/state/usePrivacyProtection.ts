@@ -33,7 +33,7 @@ function androidBridge(): AndroidNativeBridge | null {
  * 就把整个保护关掉）。
  */
 export function usePrivacyProtection(settings: AppSettings | null) {
-  const screenshot = settings?.hideOnScreenshot ?? false;
+  const screenshot = settings?.hideOnScreenshot ?? true;
   const remote = settings?.hideOnRemote ?? true;
   const unfocused = settings?.hideOnUnfocused ?? true;
 

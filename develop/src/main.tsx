@@ -31,9 +31,10 @@ function revealWindow(): void {
  *
  * 冷启动时 boot() 往往几十毫秒就完成，启动画面一闪而过，
  * 动画还没播完就被移除，观感上像「闪了一下」。
- * 这里保证至少展示 1 秒，让开屏动画完整播完再进入首页。
+ * 这里保证至少展示 1.7 秒 = 动画 1.5 秒 + 200ms 缓冲，
+ * 让开屏动画完整播完、稍作停留再进入首页，衔接更从容。
  */
-const SPLASH_MIN_MS = 1000;
+const SPLASH_MIN_MS = 1700;
 
 /** 启动画面开始展示的时刻（模块加载即视为开始） */
 const splashShownAt = performance.now();

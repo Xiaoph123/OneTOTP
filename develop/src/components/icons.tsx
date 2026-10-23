@@ -57,7 +57,17 @@ const SHIELD_PATH =
   "M12 2.2 3.8 5.9v6.2c0 4.9 3.5 8.6 8.2 10 4.7-1.4 8.2-5.1 8.2-10V5.9L12 2.2z";
 
 /**
- * 品牌图标：渐变色盾牌 + 反白衬线「1」，与 OneTotp 名称呼应。
+ * 钥匙孔：圆形锁芯 + 下方竖槽。
+ *
+ * 为什么用钥匙孔而不是数字 1：钥匙孔直接表达「密码 / 解锁」，
+ * 与验证器的功能语义一致；且圆形 + 竖线在小尺寸下比衬线数字更耐看。
+ * 尺寸随盾牌比例调过：锁芯 r=2.1、竖槽长 4.2，在 16px 下仍可辨认。
+ */
+const KEYHOLE_CIRCLE = { cx: 12, cy: 10.4, r: 2.1 };
+const KEYHOLE_SLOT = "M12 12.2v4.2";
+
+/**
+ * 品牌图标：渐变色盾牌 + 反白钥匙孔。
  * 渐变 id 用 useId 生成，避免多实例/多页面下的 SVG id 冲突。
  */
 export const OneTotpMark = (p: IconProps) => {
@@ -79,15 +89,13 @@ export const OneTotpMark = (p: IconProps) => {
         strokeWidth="1.2"
         strokeLinejoin="round"
       />
+      <circle {...KEYHOLE_CIRCLE} fill="#FFFFFF" />
       <path
-        d="M10.1 9.3 12.4 7.6V15.6"
+        d={KEYHOLE_SLOT}
         stroke="#FFFFFF"
-        strokeWidth="2"
+        strokeWidth="2.1"
         strokeLinecap="round"
-        strokeLinejoin="round"
       />
-      <path d="M10.3 15.6h4" stroke="#FFFFFF" strokeWidth="2" strokeLinecap="round" />
-      <path d="M10.1 9.3h1.3" stroke="#FFFFFF" strokeWidth="2" strokeLinecap="round" />
     </svg>
   );
 };
@@ -119,17 +127,15 @@ export const OneTotpMarkLoading = (p: IconProps) => {
         </clipPath>
       </defs>
 
-      {/* 盾牌底色 + 反白 1 */}
+      {/* 盾牌底色 + 反白钥匙孔 */}
       <path d={SHIELD_PATH} fill={`url(#${grad})`} />
+      <circle {...KEYHOLE_CIRCLE} fill="#FFFFFF" />
       <path
-        d="M10.1 9.3 12.4 7.6V15.6"
+        d={KEYHOLE_SLOT}
         stroke="#FFFFFF"
-        strokeWidth="2"
+        strokeWidth="2.1"
         strokeLinecap="round"
-        strokeLinejoin="round"
       />
-      <path d="M10.3 15.6h4" stroke="#FFFFFF" strokeWidth="2" strokeLinecap="round" />
-      <path d="M10.1 9.3h1.3" stroke="#FFFFFF" strokeWidth="2" strokeLinecap="round" />
 
       {/* 扫光：被裁切在盾牌内，斜向掠过 */}
       <g clipPath={`url(#${clip})`}>

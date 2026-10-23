@@ -31,35 +31,84 @@
             <stop offset="0.5" stop-color="#FFFFFF" stop-opacity="0.75" />
             <stop offset="1" stop-color="#FFFFFF" stop-opacity="0" />
           </linearGradient>
+          <!-- 玻璃高光：垂直渐变，上亮下透明，模拟玻璃受光面 -->
+          <linearGradient id="splash-gloss" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.42" />
+            <stop offset="0.55" stop-color="#FFFFFF" stop-opacity="0.06" />
+            <stop offset="1" stop-color="#FFFFFF" stop-opacity="0" />
+          </linearGradient>
           <clipPath id="splash-clip">
             <path d="M12 2.2 3.8 5.9v6.2c0 4.9 3.5 8.6 8.2 10 4.7-1.4 8.2-5.1 8.2-10V5.9L12 2.2z" />
           </clipPath>
+          <!-- 光点光晕：径向渐变，中心亮、边缘透明。
+               不用 drop-shadow 是因为两层叠加时第二层会模糊第一层的阴影结果，
+               在深色背景上呈现为一团灰雾，观感像「不连贯」。 -->
+          <radialGradient id="splash-spark-glow">
+            <stop offset="0" stop-color="#22D3EE" stop-opacity="0.9" />
+            <stop offset="0.45" stop-color="#6366F1" stop-opacity="0.4" />
+            <stop offset="1" stop-color="#6366F1" stop-opacity="0" />
+          </radialGradient>
+          <!-- 供 animateMotion 引用的盾牌路径 -->
+          <path
+            id="splash-shield-path"
+            d="M12 2.2 3.8 5.9v6.2c0 4.9 3.5 8.6 8.2 10 4.7-1.4 8.2-5.1 8.2-10V5.9L12 2.2z"
+          />
         </defs>
       </svg>
 
-      <!-- A · 描边绘制 -->
+      <!-- A · 描边绘制（双线 + 光点领跑 + 光晕脉冲） -->
       <div class="splash-variant splash-draw">
-        <svg viewBox="0 0 24 24">
-          <path
-            class="a-outline"
-            d="M12 2.2 3.8 5.9v6.2c0 4.9 3.5 8.6 8.2 10 4.7-1.4 8.2-5.1 8.2-10V5.9L12 2.2z"
-          />
-          <g class="a-fill">
+        <div class="a-stage">
+          <div class="a-glow"></div>
+          <svg viewBox="0 0 24 24">
+            <!-- 外层粗光晕线：给描边增加厚度与发光感。
+                 pathLength="62" 把路径长度归一化到 62，与 dasharray 的单位对齐：
+                 盾牌路径的真实长度并非恰好 62，若不归一化，dashoffset 从 62 走到 0
+                 时线会提前画完（真实长度更短），而光点仍按真实长度匀速前进，
+                 于是末段出现「线跑得比光点快」。 -->
             <path
+              class="a-outer"
+              pathLength="62"
               d="M12 2.2 3.8 5.9v6.2c0 4.9 3.5 8.6 8.2 10 4.7-1.4 8.2-5.1 8.2-10V5.9L12 2.2z"
-              fill="url(#splash-grad)"
             />
-            <g class="a-mark">
-              <path d="M10.1 9.3 12.4 7.6V15.6" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-              <path d="M10.3 15.6h4" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" />
-              <path d="M10.1 9.3h1.3" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" />
+            <!-- 内层细实线：与外层同起同止，形成双线层次 -->
+            <path
+              class="a-inner"
+              pathLength="62"
+              d="M12 2.2 3.8 5.9v6.2c0 4.9 3.5 8.6 8.2 10 4.7-1.4 8.2-5.1 8.2-10V5.9L12 2.2z"
+            />
+            <!-- 光点领跑：真实圆点沿路径移动（animateMotion），
+                 光晕用径向渐变圆，避免 drop-shadow 在深色背景上糊成灰雾 -->
+            <g class="a-spark">
+              <circle r="3.2" fill="url(#splash-spark-glow)" />
+              <circle r="1.15" fill="#FFFFFF" />
+              <animateMotion
+                dur="0.9s"
+                begin="0s"
+                fill="freeze"
+                calcMode="spline"
+                keyTimes="0;1"
+                keySplines="0.4 0 0.2 1"
+              >
+                <mpath href="#splash-shield-path" />
+              </animateMotion>
             </g>
-          </g>
-        </svg>
+            <g class="a-fill">
+              <path
+                d="M12 2.2 3.8 5.9v6.2c0 4.9 3.5 8.6 8.2 10 4.7-1.4 8.2-5.1 8.2-10V5.9L12 2.2z"
+                fill="url(#splash-grad)"
+              />
+              <g class="a-mark">
+                <circle cx="12" cy="10.4" r="2.1" fill="#FFFFFF" />
+                <path d="M12 12.2v4.2" fill="none" stroke="#FFFFFF" stroke-width="2.1" stroke-linecap="round" />
+              </g>
+            </g>
+          </svg>
+        </div>
         <div class="splash-text">正在启动 OneTOTP…</div>
       </div>
 
-      <!-- B · 弹入光扫 -->
+      <!-- B · 玻璃反光 -->
       <div class="splash-variant splash-pop">
         <div class="b-wrap">
           <svg viewBox="0 0 24 24">
@@ -67,9 +116,13 @@
               d="M12 2.2 3.8 5.9v6.2c0 4.9 3.5 8.6 8.2 10 4.7-1.4 8.2-5.1 8.2-10V5.9L12 2.2z"
               fill="url(#splash-grad)"
             />
-            <path d="M10.1 9.3 12.4 7.6V15.6" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-            <path d="M10.3 15.6h4" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" />
-            <path d="M10.1 9.3h1.3" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" />
+            <!-- 顶部玻璃高光：常驻，是「玻璃质感」的主体 -->
+            <g clip-path="url(#splash-clip)">
+              <rect class="b-gloss" x="0" y="0" width="24" height="14" fill="url(#splash-gloss)" />
+            </g>
+            <circle cx="12" cy="10.4" r="2.1" fill="#FFFFFF" />
+            <path d="M12 12.2v4.2" fill="none" stroke="#FFFFFF" stroke-width="2.1" stroke-linecap="round" />
+            <!-- 斜向光扫：掠过的一瞬 -->
             <g clip-path="url(#splash-clip)">
               <g transform="skewX(-20)">
                 <rect class="b-shine" x="0" y="-2" width="6" height="28" fill="url(#splash-shine)" />
@@ -80,28 +133,31 @@
         <div class="splash-text">正在启动 OneTOTP…</div>
       </div>
 
-      <!-- C · 环形进度 -->
+      <!-- C · 液态粗细 -->
       <div class="splash-variant splash-ring">
         <div class="c-stage">
           <svg class="c-ring" viewBox="0 0 108 108">
-            <circle cx="54" cy="54" r="50" />
+            <!-- 淡色轨道：让未走完的部分也有形状 -->
+            <circle class="c-track" cx="54" cy="54" r="50" />
+            <!-- 渐变进度条：推进的同时线条先变粗再回落 -->
+            <circle class="c-bar" cx="54" cy="54" r="50" />
           </svg>
           <svg class="c-mark" viewBox="0 0 24 24">
             <path
               d="M12 2.2 3.8 5.9v6.2c0 4.9 3.5 8.6 8.2 10 4.7-1.4 8.2-5.1 8.2-10V5.9L12 2.2z"
               fill="url(#splash-grad)"
             />
-            <path d="M10.1 9.3 12.4 7.6V15.6" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-            <path d="M10.3 15.6h4" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" />
-            <path d="M10.1 9.3h1.3" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" />
+            <circle cx="12" cy="10.4" r="2.1" fill="#FFFFFF" />
+            <path d="M12 12.2v4.2" fill="none" stroke="#FFFFFF" stroke-width="2.1" stroke-linecap="round" />
           </svg>
         </div>
         <div class="splash-text">正在启动 OneTOTP…</div>
       </div>
 
-      <!-- D · 光点聚合 -->
+      <!-- D · 汇聚光晕 -->
       <div class="splash-variant splash-dots">
         <div class="d-stage">
+          <div class="d-glow"></div>
           <div class="d-dot d-dot-1"></div>
           <div class="d-dot d-dot-2"></div>
           <div class="d-dot d-dot-3"></div>
@@ -115,9 +171,8 @@
               d="M12 2.2 3.8 5.9v6.2c0 4.9 3.5 8.6 8.2 10 4.7-1.4 8.2-5.1 8.2-10V5.9L12 2.2z"
               fill="url(#splash-grad)"
             />
-            <path d="M10.1 9.3 12.4 7.6V15.6" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-            <path d="M10.3 15.6h4" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" />
-            <path d="M10.1 9.3h1.3" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" />
+            <circle cx="12" cy="10.4" r="2.1" fill="#FFFFFF" />
+            <path d="M12 12.2v4.2" fill="none" stroke="#FFFFFF" stroke-width="2.1" stroke-linecap="round" />
           </svg>
         </div>
         <div class="splash-text">正在启动 OneTOTP…</div>

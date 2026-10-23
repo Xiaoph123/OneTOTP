@@ -140,8 +140,7 @@ export const en: Record<string, string> = {
   "扫码区域": "Scan area",
   "正在识别二维码…": "Recognizing QR code…",
   "扫描二维码添加账户": "Scan a QR code to add an account",
-  "支持摄像头实时扫码，或从本地图片识别（完全离线）":
-    "Use the camera to scan, or pick a local image (fully offline)",
+  "摄像头实时识别，或从图片导入": "Scan with the camera, or import from an image",
   "停止扫描": "Stop scanning",
   "开启摄像头": "Start camera",
   "从图片选择": "Choose from image",
@@ -226,6 +225,17 @@ export const en: Record<string, string> = {
   "生成并保存备份": "Generate & save backup",
   "默认导出位置": "Default export location",
   "数据存储目录": "Data storage folder",
+  "复制路径": "Copy path",
+  "路径已复制": "Path copied",
+  "复制失败：{msg}": "Copy failed: {msg}",
+  "数据存储位置": "Data storage location",
+  "账户、备份与密钥全部保存在应用私有目录，由系统分配，无法更改":
+    "Accounts, backups and keys are stored in the app's private folder, assigned by the system and not changeable.",
+  "卸载应用会清空全部数据": "Uninstalling erases all data",
+  "覆盖安装升级不会丢失数据；但卸载重装会连同账户与密钥一并删除，且无法恢复。":
+    "Upgrading in place keeps your data, but uninstalling and reinstalling deletes all accounts and keys permanently.",
+  "换机或重装前，请先在「导入 / 导出配置」中导出加密备份。":
+    "Before switching devices or reinstalling, export an encrypted backup from Import / Export.",
   "账户、备份与密钥全部保存在此目录，更改后应用会自动重启":
     "Accounts, backups and keys are all stored here. The app restarts after a change.",
   "选择数据存储目录": "Choose data storage folder",
@@ -348,9 +358,9 @@ export const en: Record<string, string> = {
   "开屏动画": "Splash animation",
   "启动应用时播放的加载动画样式": "Loading animation played when the app starts",
   "描边绘制": "Outline draw",
-  "弹入光扫": "Pop & shine",
-  "环形进度": "Ring progress",
-  "光点聚合": "Dot converge",
+  "玻璃反光": "Glass gloss",
+  "液态粗细": "Liquid stroke",
+  "汇聚光晕": "Converge glow",
   "切换亮色 / 暗色，或跟随系统": "Light / dark, or follow the system",
   "亮色": "Light",
   "暗色": "Dark",
@@ -451,7 +461,7 @@ export const en: Record<string, string> = {
   "当前保险库仍在使用旧版密钥派生参数（强度较低）。点上方「重新加密保险库」即可升级到更强的参数，密码无需更改。":
     "This vault still uses the older key-derivation parameters (weaker). Use \"Re-encrypt vault\" above to upgrade — your password stays the same.",
   "启用锁定": "Enable lock",
-  "指纹 / 面容解锁": "Fingerprint / Face unlock",
+  "指纹 / 人脸解锁": "Fingerprint / Face unlock",
   "验证身份以解锁 OneTOTP": "Verify your identity to unlock OneTOTP",
   "Windows Hello 解锁": "Windows Hello unlock",
   "调用系统指纹或面容快速解锁": "Use system fingerprint or face to unlock quickly",

@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="108" height="108" viewBox="0 0 108 108">
+  <defs>
+    <linearGradient id="onetotp-and-fg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#34D399"/>
+      <stop offset="0.45" stop-color="#22D3EE"/>
+      <stop offset="1" stop-color="#6366F1"/>
+    </linearGradient>
+  </defs>
+  <!-- Android 自适应图标前景（透明底）：
+       盾牌含描边高约 65dp，占 108dp 画布约 60%，居中显示。
+       上限由启动器遮罩决定：可见区是直径 72dp 的圆，
+       盾牌最宽处（上方两个肩角）到圆心的距离必须 < 36dp，
+       否则圆形遮罩的启动器会把肩角切平。当前约 33dp，留有余量。 -->
+  <g transform="translate(17.16 16.7) scale(3.07)">
+    <path d="M12 2.2 3.8 5.9v6.2c0 4.9 3.5 8.6 8.2 10 4.7-1.4 8.2-5.1 8.2-10V5.9L12 2.2z"
+          fill="url(#onetotp-and-fg)"/>
+    <circle cx="12" cy="10.4" r="2.1" fill="#FFFFFF"/>
+    <path d="M12 12.2v4.2" fill="none" stroke="#FFFFFF" stroke-width="2.1" stroke-linecap="round"/>
+    <path d="M12 2.2 3.8 5.9v6.2c0 4.9 3.5 8.6 8.2 10 4.7-1.4 8.2-5.1 8.2-10V5.9L12 2.2z"
+          fill="none" stroke="url(#onetotp-and-fg)" stroke-width="1.2" stroke-linejoin="round"/>
+  </g>
+</svg>

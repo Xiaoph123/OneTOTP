@@ -170,7 +170,7 @@ export function CodesPage() {
       expiryHighlight={settings?.expiryHighlight ?? true}
       clickToCopy={settings?.clickToCopy ?? true}
       codeVisibility={settings?.codeVisibility ?? "never"}
-      density={settings?.cardDensity ?? "compact"}
+      density={settings?.cardDensity ?? "standard"}
       detail={settings?.cardDetail ?? "detailed"}
       autoHideAfterCopy={settings?.autoHideAfterCopy ?? false}
       onOpen={() => navigate({ name: "detail", accountId: account.id })}

@@ -218,7 +218,7 @@ function mapSettings(raw: RawSettings): AppSettings {
     passwordHint: raw.password_hint,
     theme: (raw.theme as ThemeMode) || "system",
     splashAnimation: (raw.splash_animation as SplashAnimation) || "dots",
-    cardDensity: (raw.card_density as CardDensity) || "compact",
+    cardDensity: (raw.card_density as CardDensity) || "standard",
     cardDetail: (raw.card_detail as CardDetail) || "detailed",
     closeBehavior: (raw.close_behavior as CloseBehavior) || "quit",
     shortcutToggle: raw.shortcut_toggle || "",

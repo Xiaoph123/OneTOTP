@@ -372,7 +372,7 @@ mod tests {
 
         let restored = decrypt_payload(&file, &key).unwrap();
         assert!(restored.accounts.is_empty());
-        assert_eq!(restored.settings.auto_lock_seconds, 60);
+        assert_eq!(restored.settings.auto_lock_seconds, 30);
     }
 
     #[test]

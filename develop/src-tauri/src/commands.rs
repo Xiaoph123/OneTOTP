@@ -1522,7 +1522,7 @@ fn sanitize_settings(mut s: AppSettings) -> AppSettings {
     s.code_visibility = one_of(&s.code_visibility, &["never", "always", "hover"], "never");
     s.category_expand_mode =
         one_of(&s.category_expand_mode, &["expand", "collapse", "remember"], "expand");
-    s.card_density = one_of(&s.card_density, &["compact", "standard"], "compact");
+    s.card_density = one_of(&s.card_density, &["compact", "standard"], "standard");
     s.card_detail = one_of(&s.card_detail, &["minimal", "standard", "detailed"], "detailed");
     s.close_behavior = one_of(&s.close_behavior, &["quit", "tray"], "quit");
     s.language = one_of(&s.language, &["auto", "zh", "en"], "auto");
@@ -1829,7 +1829,7 @@ mod tests {
         let out = sanitize_settings(s);
         assert_eq!(out.theme, "system");
         assert_eq!(out.code_visibility, "never");
-        assert_eq!(out.card_density, "compact");
+        assert_eq!(out.card_density, "standard");
         assert_eq!(out.card_detail, "detailed");
         assert_eq!(out.close_behavior, "quit");
         assert_eq!(out.language, "auto");

@@ -185,7 +185,7 @@ fn default_language() -> String {
 }
 
 fn default_card_density() -> String {
-    "compact".to_string()
+    "standard".to_string()
 }
 fn default_card_detail() -> String {
     "detailed".to_string()
@@ -240,7 +240,7 @@ impl Default for AppSettings {
             password_hint: String::new(),
             theme: "system".to_string(),
             splash_animation: "dots".to_string(),
-            card_density: "compact".to_string(),
+            card_density: "standard".to_string(),
             card_detail: "detailed".to_string(),
             close_behavior: "quit".to_string(),
             shortcut_toggle: String::new(),

@@ -2956,6 +2956,24 @@ html[data-platform="mobile"] .otp-code {
   letter-spacing: 2px;
 }
 
+/* 移动端倒计时环：桌面端 42px 在手机上偏小，数字不好认。
+   放大到 48px，数字字号同步提到 14px（桌面端是 12px）。
+   环宽保持 5（viewBox 内单位），随整体尺寸等比放大后视觉粗细不变。 */
+html[data-platform="mobile"] .otp-ring,
+html[data-platform="mobile"] .otp-ring svg {
+  width: 48px;
+  height: 48px;
+}
+html[data-platform="mobile"] .otp-ring-num {
+  font-size: calc(var(--font-scale, 1) * 14px);
+}
+/* 紧凑密度在移动端也略放大，避免比标准档小得过多 */
+html[data-platform="mobile"] .otp-card.is-compact .otp-ring,
+html[data-platform="mobile"] .otp-card.is-compact .otp-ring svg {
+  width: 44px;
+  height: 44px;
+}
+
 /* 移动端取消卡片的悬停/按下边框反馈：
    触摸设备没有真正的 hover，点击后 :hover 会「粘住」直到点别处，
    表现为卡片一直带着蓝色边框；:active 的边框变化同理。

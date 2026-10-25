@@ -3,13 +3,15 @@ import { api } from "../lib/api";
 import { useApp } from "../state/AppContext";
 import { useToast } from "./Toast";
 import { Button, IconButton } from "./Button";
-import { Eye, EyeOff, FileText, Info, Spinner } from "./icons";
+import { AlertTriangle, Eye, EyeOff, FileText, Info, Spinner } from "./icons";
 import { isDesktop } from "../lib/platform";
 import {
   checkDroppedFile,
-  dragHasBackupFile,
   dragHasFiles,
+  dragRejectReason,
   firstDroppedBackupFile,
+  rejectReasonText,
+  rejectReasonTitle,
   type BackupRejectReason,
 } from "../lib/backupImport";
 import { formatBytes } from "../lib/utils";
@@ -31,14 +33,22 @@ interface PendingFile {
  * 为什么挂在 App 根部而不是各页面：
  * 拖拽是窗口级行为，用户不会先切到「导入导出」页再拖文件。
  * 挂在根部只需一套事件监听，所有页面自动生效。
+ *
+ * 遮罩有两种形态：
+ *  - 可接受：文件飞入 + 流光条，提示「松开以导入配置」
+ *  - 拒绝：警示图标 + 具体原因，提示「松开不会导入」
+ * 后者是必要的：此前拖错文件时界面毫无反应，用户会以为程序卡了，
+ * 反复拖拽却始终没有反馈。
  */
 export function DropImportOverlay() {
   const { refreshAccounts, refreshCategories, refreshSettings, refreshLockState, phase, route } = useApp();
   const toast = useToast();
   const { t } = useI18n();
 
-  // 遮罩可见性：拖入**备份文件**时显示
+  // 遮罩可见性：拖入文件时显示（无论是否可接受）
   const [dragging, setDragging] = useState(false);
+  // 拖拽阶段的拒绝原因；null 表示可接受
+  const [dragReject, setDragReject] = useState<BackupRejectReason | null>(null);
   // 待导入文件与密码弹窗
   const [pending, setPending] = useState<PendingFile | null>(null);
   const [password, setPassword] = useState("");
@@ -56,31 +66,24 @@ export function DropImportOverlay() {
   const depth = useRef(0);
   /** 是否已有待导入文件（弹窗打开中）：拖拽事件里读不到最新的 state，用 ref 镜像 */
   const pendingRef = useRef(false);
-  /** 遮罩是否已经显示过：drop 时 reset() 会先清掉 state，需要 ref 记住「用户看到过提示」 */
-  const shownRef = useRef(false);
+  /** 拖拽阶段是否已判定为可接受：drop 时 reset() 会先清掉 state，需要 ref 记住 */
+  const acceptedRef = useRef(false);
+  /**
+   * 当前拒绝原因的 ref 镜像。
+   *
+   * 为什么不用 state 直接比较：若把 `dragReject` 放进 effect 依赖，
+   * 每次判定变化都会重新注册 window 监听器——拖拽过程中反复
+   * remove/add 监听有丢事件的风险。用 ref 读最新值，effect 只注册一次。
+   */
+  const dragRejectRef = useRef<BackupRejectReason | null>(null);
 
   const reset = useCallback(() => {
     depth.current = 0;
-    shownRef.current = false;
+    acceptedRef.current = false;
+    dragRejectRef.current = null;
     setDragging(false);
+    setDragReject(null);
   }, []);
-
-  /** 把拒绝原因翻译成可读提示 */
-  const rejectText = useCallback(
-    (reason: BackupRejectReason) => {
-      switch (reason) {
-        case "name":
-          return t("仅支持 OneTOTP 导出的备份文件（onetotp-backup-*.json）");
-        case "size":
-          return t("备份文件超过 10MB，无法导入");
-        case "not-json":
-          return t("文件内容无法读取，可能已损坏");
-        case "not-backup":
-          return t("该文件不是有效的 OneTOTP 备份");
-      }
-    },
-    [t],
-  );
 
   useEffect(() => {
     // 移动端没有拖拽概念，不注册监听
@@ -97,35 +100,39 @@ export function DropImportOverlay() {
       // 任何文件都要拦下默认行为：WebView 会把拖入的文件当导航目标，
       // 不拦的话松手后整个页面会被那个文件替换掉。
       e.preventDefault();
-      // 但只有「文件名像备份」的才弹遮罩——拖图片、压缩包时不提示，
-      // 避免先给用户「可以放」的错觉，松手后再报错。
-      if (!dragHasBackupFile(e)) return;
+      // 无论可接受与否都弹遮罩：拖错文件时必须给出明确反馈，
+      // 否则用户会以为程序没响应，反复拖拽。
+      const reason = dragRejectReason(e);
       depth.current += 1;
-      shownRef.current = true;
+      acceptedRef.current = reason === null;
+      dragRejectRef.current = reason;
+      setDragReject(reason);
       setDragging(true);
     };
 
     const onDragOver = (e: DragEvent) => {
       if (!dragHasFiles(e)) return;
       e.preventDefault();
-      if (!dragHasBackupFile(e)) {
-        // 明确告诉系统「这里不接受」：光标显示禁止符号，
-        // 比什么都不做更清楚，也避免用户误以为松手会导入。
-        if (e.dataTransfer) e.dataTransfer.dropEffect = "none";
-        return;
+      const reason = dragRejectReason(e);
+      // 光标形态与遮罩保持一致：可接受显示「复制」，否则显示禁止符号
+      if (e.dataTransfer) e.dataTransfer.dropEffect = reason === null ? "copy" : "none";
+      // 拖拽过程中文件可能变化（多选时逐个进入），实时更新拒绝原因
+      if (reason !== dragRejectRef.current) {
+        acceptedRef.current = reason === null;
+        dragRejectRef.current = reason;
+        setDragReject(reason);
       }
-      if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
     };
 
     const onDragLeave = (e: DragEvent) => {
       // 拖出窗口时部分环境已拿不到文件信息，此时直接归零，
       // 避免计数卡住导致遮罩一直显示。
-      if (!dragHasBackupFile(e)) {
+      if (!dragHasFiles(e)) {
         reset();
         return;
       }
       depth.current = Math.max(0, depth.current - 1);
-      if (depth.current === 0) setDragging(false);
+      if (depth.current === 0) reset();
     };
 
     const onDrop = async (e: DragEvent) => {
@@ -133,19 +140,22 @@ export function DropImportOverlay() {
       const file = firstDroppedBackupFile(e);
       // 无论是否合法都要 preventDefault，否则浏览器会尝试打开该文件
       e.preventDefault();
-      // reset() 会清空 shownRef，先记下「用户是否看到过可放提示」
-      const shown = shownRef.current;
+      // reset() 会清空 acceptedRef，先记下「拖拽阶段是否判定为可接受」
+      const accepted = acceptedRef.current;
+      const dragReason = dragRejectRef.current;
       reset();
-      if (!file) return;
-      // 已在密码弹窗里时，忽略重复拖入，避免覆盖已读入的内容
       if (pendingRef.current) return;
+
+      // 拖拽阶段已判定不可接受：给出明确提示，不再读文件内容
+      if (!accepted) {
+        toast.error(t(rejectReasonText(dragReason ?? "name")));
+        return;
+      }
+      if (!file) return;
 
       const result = await checkDroppedFile(file);
       if (!result.ok) {
-        // 拖动阶段没弹遮罩（图片、压缩包等非备份文件）→ 松手时静默忽略，
-        // 不能先让用户以为「能放」，松手后再甩一句报错。
-        if (!shown) return;
-        toast.error(rejectText(result.reason ?? "not-backup"));
+        toast.error(t(rejectReasonText(result.reason ?? "not-backup")));
         return;
       }
       pendingRef.current = true;
@@ -165,7 +175,7 @@ export function DropImportOverlay() {
       window.removeEventListener("dragleave", onDragLeave);
       window.removeEventListener("drop", onDrop);
     };
-  }, [phase, reset, rejectText, t, toast, route.name]);
+  }, [phase, reset, t, toast, route.name]);
 
   const closeModal = () => {
     if (busy) return;
@@ -221,29 +231,50 @@ export function DropImportOverlay() {
     <>
       {dragging ? (
         <div className="drop-overlay" aria-hidden>
-          <div className="drop-card">
-            <div className="drop-stack">
-              <span className="drop-ghost" />
-              <span className="drop-ghost" />
-              <span className="drop-main">
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth={1.8}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
-                  <path d="M14 3v5h5" />
-                </svg>
-              </span>
+          <div className={`drop-card${dragReject ? " is-reject" : ""}`}>
+            {dragReject ? (
+              /* 拒绝态：警示图标 + 具体原因。
+                 不用「文件飞入」动画——那是在暗示「马上要进来了」，
+                 与「这个文件不行」的语义相反。 */
+              <div className="drop-reject-icon">
+                <AlertTriangle />
+              </div>
+            ) : (
+              <div className="drop-stack">
+                <span className="drop-ghost" />
+                <span className="drop-ghost" />
+                <span className="drop-main">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth={1.8}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
+                    <path d="M14 3v5h5" />
+                  </svg>
+                </span>
+              </div>
+            )}
+
+            <div className="drop-title">
+              {dragReject ? t(rejectReasonTitle(dragReject)) : t("松开以导入配置")}
             </div>
-            <div className="drop-title">{t("松开以导入配置")}</div>
-            <div className="drop-desc">{t("支持 OneTOTP 加密备份文件")}</div>
-            <div className="drop-wait">
-              <i />
+            <div className="drop-desc">
+              {dragReject
+                ? t(rejectReasonText(dragReject))
+                : t("支持 OneTOTP 加密备份文件")}
             </div>
+
+            {dragReject ? (
+              <div className="drop-reject-hint">{t("松开不会导入任何内容")}</div>
+            ) : (
+              <div className="drop-wait">
+                <i />
+              </div>
+            )}
           </div>
         </div>
       ) : null}

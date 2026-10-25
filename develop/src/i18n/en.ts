@@ -247,6 +247,13 @@ export const en: Record<string, string> = {
     "If no password was set when exporting, leave this empty and import.",
   "仅支持 OneTOTP 导出的备份文件，重复账户自动跳过":
     "Only OneTOTP backups; duplicate accounts are skipped",
+  "不支持该文件": "Unsupported file",
+  "文件过大": "File too large",
+  "文件无法读取": "Cannot read file",
+  "不是有效备份": "Not a valid backup",
+  "松开不会导入任何内容": "Releasing will not import anything",
+  "点击下方按钮选择 OneTOTP 导出的备份文件":
+    "Tap the button below to choose a backup exported by OneTOTP",
   "选择文件导入": "Choose a file",
   "复制路径": "Copy path",
   "路径已复制": "Path copied",
@@ -323,8 +330,6 @@ export const en: Record<string, string> = {
     "Choose a backup file, then enter its password; accounts and settings are merged into this device",
   "选择备份文件": "Choose backup file",
   "选择文件失败：{msg}": "Failed to choose file: {msg}",
-  "所选文件不是有效的 OneTOTP 备份文件":
-    "The selected file is not a valid OneTOTP backup file",
   "备份密码": "Backup password",
   "导出时设置的密码": "The password set when exporting",
   "备份文件已加密，但仍可被密码解开；请仅在可信设备间迁移，并妥善保管文件与密码。":

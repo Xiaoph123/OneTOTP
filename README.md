@@ -57,7 +57,7 @@
 | **自动锁定** | 离开应用即锁定，或空闲 30 秒 / 1 / 5 / 15 分钟后锁定，也可设为从不；解锁失败按落盘计数指数退避，重启不清零 |
 | **重新加密保险库** | 用全新随机盐重新派生密钥并重写本地数据，使旧密钥立即作废 |
 | **加密备份** | 导出为独立口令加密的 JSON 文件（可选仅账户 / 仅配置），经系统文件管理器选择保存位置；导入时先选文件再输密码，按密钥去重合并 |
-| **拖拽导入** | 桌面端任意页面把备份文件拖进窗口即可导入（新增语义，重复账户跳过）；「导入 / 导出配置」页另有独立拖拽区。只接受 OneTOTP 自己的备份文件，其它文件不弹提示、光标显示禁止 |
+| **拖拽导入** | 桌面端任意页面把备份文件拖进窗口即可导入（新增语义，重复账户跳过）；「导入 / 导出配置」页另有独立拖拽区。只接受 OneTOTP 自己的备份文件，其它文件会显示**拒绝态**遮罩并说明具体原因（文件名不符 / 超过 10MB / 内容损坏 / 不是有效备份），光标同步显示禁止符号 |
 | **自动备份快照** | 每次写盘自动留存时间戳快照，可配置保留份数（默认 3，最多 10），支持一键清理；删除账户时可同步从历史快照中清除其密钥 |
 | **隐私保护** | 截屏 / 录屏时隐藏内容（Windows / macOS / Android `FLAG_SECURE` / iOS secure 图层）、远程会话时隐藏窗口（桌面）、窗口失焦时遮挡验证码 |
 | **数据存储目录** | 账户、备份与密钥可迁移到自定义目录，切换后自动重启生效；移动端显示系统分配的私有目录路径并支持一键复制，同时提示卸载即清空 |
@@ -333,7 +333,7 @@ A desktop and mobile app that does two-factor authentication properly: collect `
 | **Auto-lock** | Lock on leaving the app, or after 30 s / 1 / 5 / 15 minutes idle, or never; failed unlocks back off exponentially using a persisted counter that survives restarts |
 | **Re-encrypt vault** | Re-derive the key with a fresh random salt and rewrite local data, invalidating the old key immediately |
 | **Encrypted backup** | Export a JSON file encrypted with a separate passphrase (accounts only / settings only) via the system file picker; import picks the file first, then asks for the password, and merges by secret |
-| **Drag & drop import** | On desktop, drop a backup file anywhere in the window to import it (additive: duplicates are skipped); the Import / Export page has its own drop zone. Only OneTOTP's own backup files are accepted — other files show no prompt and the cursor turns into a "no drop" sign |
+| **Drag & drop import** | On desktop, drop a backup file anywhere in the window to import it (additive: duplicates are skipped); the Import / Export page has its own drop zone. Only OneTOTP's own backup files are accepted — anything else shows a **rejection overlay** with the specific reason (wrong filename / over 10 MB / unreadable / not a valid backup), and the cursor turns into a "no drop" sign |
 | **Automatic snapshots** | A timestamped snapshot is kept on every write; retention is configurable (default 3, up to 10) with one-tap cleanup; deleting an account can also purge its secret from historical snapshots |
 | **Privacy protection** | Hide content from screenshots / recording (Windows / macOS / Android `FLAG_SECURE` / iOS secure layer), hide the window during remote sessions (desktop), mask codes when the window loses focus |
 | **Data directory** | Move accounts, backups and keys to a custom folder; the app restarts automatically after the change; on mobile the system-assigned private folder path is shown and copyable, with a warning that uninstalling erases everything |

@@ -742,6 +742,12 @@ select {
   flex-shrink: 0;
   margin-top: 2px;
 }
+/* 提示条正文：允许换行且不撑破容器（长文件名 / 长路径场景） */
+.notice-text {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
 
 /* 处理中提示条：与应用内「进行中」语义统一，带旋转指示器 */
 .notice.notice-busy {
@@ -2101,6 +2107,55 @@ html[data-platform="mobile"] .scan-actions > .ui-btn {
   background: rgba(26, 29, 34, 0.72);
   border-color: rgba(139, 157, 255, 0.55);
 }
+
+/* 拒绝态：拖入的不是 OneTOTP 备份。
+   边框与图标改用危险色，与「可接受」的靛蓝形成明确区分——
+   用户余光扫一眼就能判断「这个放不进去」，不必读文字。 */
+.drop-card.is-reject {
+  border-color: rgba(245, 63, 63, 0.6);
+  border-style: solid;
+}
+:root[data-theme="dark"] .drop-card.is-reject {
+  border-color: rgba(255, 122, 122, 0.55);
+}
+.drop-reject-icon {
+  width: 64px;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgba(245, 63, 63, 0.12);
+  color: var(--color-danger);
+}
+:root[data-theme="dark"] .drop-reject-icon {
+  background: rgba(245, 63, 63, 0.18);
+  color: #ff8a8a;
+}
+.drop-reject-icon svg {
+  width: 28px;
+  height: 28px;
+}
+/* 拒绝态标题用危险色，与图标呼应；正文保持中性，避免整块泛红刺眼 */
+.drop-card.is-reject .drop-title {
+  color: var(--color-danger);
+}
+:root[data-theme="dark"] .drop-card.is-reject .drop-title {
+  color: #ff8a8a;
+}
+/* 「松开不会导入」：弱化的小字，明确告知松手后的结果 */
+.drop-reject-hint {
+  margin-top: 2px;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  background: rgba(245, 63, 63, 0.1);
+  font-size: var(--font-size-body);
+  color: var(--color-danger);
+}
+:root[data-theme="dark"] .drop-reject-hint {
+  background: rgba(245, 63, 63, 0.16);
+  color: #ff8a8a;
+}
 /* 三张文件卡片叠放：左右两张倾斜淡出，中间一张上下浮动 */
 .drop-stack {
   position: relative;
@@ -2222,6 +2277,30 @@ html[data-platform="mobile"] .scan-actions > .ui-btn {
 .dropzone.is-active .dropzone-icon {
   background: rgba(99, 102, 241, 0.24);
 }
+/* 拒绝态：拖入的不是 OneTOTP 备份。
+   与全局遮罩用同一套危险色，保证「同一个错误在两处看起来是同一件事」。
+   必须写在 .is-active 之后：两者可能同时存在（拖入时先高亮再判定），
+   拒绝态优先级更高。 */
+.dropzone.is-reject {
+  border-style: solid;
+  border-color: rgba(245, 63, 63, 0.6);
+  background: rgba(245, 63, 63, 0.06);
+  box-shadow: 0 0 0 3px rgba(245, 63, 63, 0.12);
+}
+.dropzone.is-reject .dropzone-icon {
+  background: rgba(245, 63, 63, 0.12);
+  color: var(--color-danger);
+}
+:root[data-theme="dark"] .dropzone.is-reject .dropzone-icon {
+  background: rgba(245, 63, 63, 0.18);
+  color: #ff8a8a;
+}
+.dropzone.is-reject .dropzone-title {
+  color: var(--color-danger);
+}
+:root[data-theme="dark"] .dropzone.is-reject .dropzone-title {
+  color: #ff8a8a;
+}
 .dropzone-title {
   font-size: var(--font-size-lead);
   color: var(--color-text-1);
@@ -2230,6 +2309,20 @@ html[data-platform="mobile"] .scan-actions > .ui-btn {
   font-size: var(--font-size-body);
   color: var(--color-text-3);
   line-height: 16px;
+}
+/* 移动端格式说明：没有拖拽区，只能放在按钮下方 */
+.import-format-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 10px;
+  font-size: var(--font-size-body);
+  line-height: 16px;
+  color: var(--color-text-3);
+}
+.import-format-hint svg {
+  flex: none;
+  margin-top: 1px;
 }
 /* 「或」分隔：两侧细线 + 中间文字 */
 .dropzone-or {
@@ -2928,6 +3021,20 @@ html[data-platform="mobile"] .app-window {
 
 html[data-platform="mobile"] .titlebar {
   display: none;
+}
+
+/* 移动端提示条放大：桌面 12px 在触屏上偏小，且导入失败这类
+   关键反馈必须一眼可见。图标同步放大，避免与文字比例失衡。 */
+html[data-platform="mobile"] .notice {
+  padding: 12px 14px;
+  gap: 10px;
+  font-size: calc(var(--font-scale, 1) * 14px);
+  line-height: 20px;
+}
+html[data-platform="mobile"] .notice svg {
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
 }
 
 /* 内容区：左右留白更舒展，底部预留手势条空间 */

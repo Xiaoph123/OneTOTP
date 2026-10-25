@@ -38,6 +38,45 @@ export interface BackupCheckResult {
 }
 
 /**
+ * 拒绝原因 → 提示文案（中文原文，调用方用 `t()` 翻译）。
+ *
+ * 为什么集中在这里：全局拖拽、导入页拖拽区、选择文件、移动端选择文件
+ * 四条路径都会拒绝文件，文案必须完全一致。分散在各处极易出现
+ * 「同一个错误在不同入口说法不同」的割裂感。
+ */
+export function rejectReasonText(reason: BackupRejectReason): string {
+  switch (reason) {
+    case "name":
+      return "仅支持 OneTOTP 导出的备份文件（onetotp-backup-*.json）";
+    case "size":
+      return "备份文件超过 10MB，无法导入";
+    case "not-json":
+      return "文件内容无法读取，可能已损坏";
+    case "not-backup":
+      return "该文件不是有效的 OneTOTP 备份";
+  }
+}
+
+/**
+ * 拒绝原因 → 简短标题（用于拖拽遮罩的拒绝态）。
+ *
+ * 与 [rejectReasonText] 的分工：遮罩空间有限，标题要短；
+ * toast / 提示条空间充裕，用完整说明。
+ */
+export function rejectReasonTitle(reason: BackupRejectReason): string {
+  switch (reason) {
+    case "name":
+      return "不支持该文件";
+    case "size":
+      return "文件过大";
+    case "not-json":
+      return "文件无法读取";
+    case "not-backup":
+      return "不是有效备份";
+  }
+}
+
+/**
  * 粗校验：内容是否像 OneTOTP 备份文件。
  *
  * 备份是 `VaultFile` 的 JSON，必然含 version / ciphertext / salt / nonce
@@ -120,36 +159,45 @@ export function dragHasFiles(e: DragEvent): boolean {
 }
 
 /**
- * 拖入的文件**是否允许**触发导入遮罩。
+ * 拖拽阶段（不读内容）能判定的拒绝原因；可接受时返回 null。
  *
  * 只允许 OneTOTP 自己的备份：文件名必须匹配 [isBackupName]。
- * 拖一张图片、一个压缩包、别家的 `backup.json` 时遮罩不出现，
- * 比先给「可以放」的错觉、松手后再报错更友好。
+ * 拖一张图片、一个压缩包、别家的 `backup.json` 时返回 `name`，
+ * 由调用方显示「不支持该文件」而不是笼统的「出错了」。
  *
  * 只看文件名不看内容：dragover 阶段不允许读文件内容（浏览器限制），
- * 只能在 drop 之后再按内容做二次校验。
+ * 只能在 drop 之后再按内容做二次校验。因此这里只可能返回
+ * `name` / `size` 两种原因，内容层面的 `not-backup` 必须等 drop 之后。
+ *
+ * 多选场景：只要**任意一个**文件像备份就放行——用户框选一堆文件时
+ * 不该因为夹了张图片就整体拒绝，drop 时取那个像备份的即可。
  *
  * 兼容性处理：Chromium 在 dragenter / dragover 阶段会填充
  * `dataTransfer.files`（名字可读、内容不可读），但部分环境下
  * 该列表为空。此时用 `dataTransfer.items` 的 MIME 做兜底——
  * 备份是 JSON，拖入时 MIME 为 application/json。
- * 两者都拿不到时保守返回 false（不放行），避免误弹遮罩。
+ * 两者都拿不到时保守返回 `name`（拒绝），避免误放行。
  */
-export function dragHasBackupFile(e: DragEvent): boolean {
+export function dragRejectReason(e: DragEvent): BackupRejectReason | null {
   const dt = e.dataTransfer;
-  if (!dt) return false;
+  if (!dt) return "name";
 
   const files = dt.files;
   if (files && files.length > 0) {
-    return Array.from(files).some((f) => isBackupName(f.name));
+    const list = Array.from(files);
+    const backup = list.find((f) => isBackupName(f.name));
+    if (!backup) return "name";
+    if (backup.size > MAX_BACKUP_BYTES) return "size";
+    return null;
   }
 
   // 兜底：拖拽阶段读不到文件名时，按 MIME 判断
   const items = dt.items;
-  if (!items || items.length === 0) return false;
-  return Array.from(items).some((it) => {
+  if (!items || items.length === 0) return "name";
+  const looksLikeJson = Array.from(items).some((it) => {
     if (it.kind !== "file") return false;
     const mime = (it.type || "").toLowerCase();
     return mime === "application/json" || mime === "text/plain";
   });
+  return looksLikeJson ? null : "name";
 }

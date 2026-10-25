@@ -8,7 +8,16 @@ import { useToast } from "../components/Toast";
 import { AlertTriangle, ChevronLeft, Download, Info, Spinner, Upload } from "../components/icons";
 import { formatBytes } from "../lib/utils";
 import { isDesktop } from "../lib/platform";
-import { checkDroppedFile, dragHasBackupFile, dragHasFiles, firstDroppedBackupFile, isBackupLike } from "../lib/backupImport";
+import {
+  checkDroppedFile,
+  dragHasFiles,
+  dragRejectReason,
+  firstDroppedBackupFile,
+  isBackupLike,
+  rejectReasonText,
+  rejectReasonTitle,
+  type BackupRejectReason,
+} from "../lib/backupImport";
 import { useI18n } from "../i18n";
 
 type Mode = "export" | "import";
@@ -43,6 +52,10 @@ export function ImportExportPage() {
   const allowEmptyPwd = settings?.allowEmptyBackupPassword ?? false;
   // 拖拽区高亮：文件拖到本区域上方时置为 true
   const [dragActive, setDragActive] = useState(false);
+  // 拖拽阶段的拒绝原因；null 表示可接受。用于把拖拽区切成「拒绝态」
+  const [dragReject, setDragReject] = useState<BackupRejectReason | null>(null);
+  // 拒绝原因的 ref 镜像：drop 时 state 可能尚未刷新，读 ref 更可靠
+  const dragRejectRef = useRef<BackupRejectReason | null>(null);
   // 拖拽区内的 dragenter/dragleave 计数，避免子元素间移动时闪烁
   const dragDepth = useRef(0);
 
@@ -128,6 +141,9 @@ export function ImportExportPage() {
    *
    * 顺序刻意是「先选文件、后输密码」：用户先确认要导入哪个文件，
    * 再输入该文件的密码，避免先输密码却选错文件的返工。
+   *
+   * 桌面端与移动端共用本函数：移动端没有拖拽，这是唯一的导入入口，
+   * 因此校验与提示必须同样明确——不能因为「用户是主动选的」就放宽。
    */
   const pickAndReadBackup = async () => {
     setMessage(null);
@@ -150,8 +166,15 @@ export function ImportExportPage() {
     setBusy(true);
     try {
       const text = await api.readBackupFile(path);
+      // 体积校验：后端已限制 10MB，这里再判一次是为了给出与拖拽一致的文案
+      if (text.length > 10 * 1024 * 1024) {
+        setMessage({ type: "err", text: t(rejectReasonText("size")) });
+        return;
+      }
       if (!isBackupLike(text)) {
-        setMessage({ type: "err", text: t("所选文件不是有效的 OneTOTP 备份文件") });
+        // 内容不像备份：可能是别家的 JSON、被改坏的文件、或根本不是备份。
+        // 用与拖拽完全相同的文案，避免同一错误在不同入口说法不一。
+        setMessage({ type: "err", text: t(rejectReasonText("not-backup")) });
         return;
       }
       setImportContent(text);
@@ -173,12 +196,19 @@ export function ImportExportPage() {
    */
   const handleDrop = async (e: React.DragEvent) => {
     e.preventDefault();
-    // 先记下拖入过程中是否已高亮（= 文件被识别为备份），
-    // reset 后 state 会被清掉，后面要用它决定「是否提示」
-    const shown = dragActive;
+    // 先记下拖拽过程中的判定结果，reset 后 state 会被清掉
+    const dragReason = dragRejectRef.current;
     dragDepth.current = 0;
+    dragRejectRef.current = null;
     setDragActive(false);
+    setDragReject(null);
     setMessage(null);
+
+    // 拖拽阶段已判定不可接受：给出明确提示，不再读文件内容
+    if (dragReason) {
+      setMessage({ type: "err", text: t(rejectReasonText(dragReason)) });
+      return;
+    }
 
     const file = firstDroppedBackupFile(e.nativeEvent);
     if (!file) return;
@@ -188,17 +218,7 @@ export function ImportExportPage() {
       // 与全局拖拽共用同一套校验：文件名 -> 体积 -> 内容结构
       const result = await checkDroppedFile(file);
       if (!result.ok) {
-        // 拖动阶段就没有高亮（非备份文件）→ 静默忽略，不弹错误
-        if (!shown) return;
-        setMessage({
-          type: "err",
-          text:
-            result.reason === "name"
-              ? t("仅支持 OneTOTP 导出的备份文件（onetotp-backup-*.json）")
-              : result.reason === "size"
-                ? t("备份文件超过 10MB，无法导入")
-                : t("所选文件不是有效的 OneTOTP 备份文件"),
-        });
+        setMessage({ type: "err", text: t(rejectReasonText(result.reason ?? "not-backup")) });
         return;
       }
       setImportContent(result.text ?? "");
@@ -322,49 +342,65 @@ export function ImportExportPage() {
               {t("导入备份")}
             </div>
             <div className="block-desc form-intro">
-              {t("把备份文件拖到下方区域，或点击按钮选择文件")}
+              {isDesktop()
+                ? t("把备份文件拖到下方区域，或点击按钮选择文件")
+                : t("点击下方按钮选择 OneTOTP 导出的备份文件")}
             </div>
             {/* 拖拽区在上、按钮在下：拖拽是更快的路径，放在视觉首位；
                 点击选择作为兜底，用「或」分隔明确两者是并列关系。
                 移动端没有拖拽概念，整块不渲染。 */}
             {isDesktop() ? (
               <div
-                className={`dropzone${dragActive ? " is-active" : ""}`}
+                className={`dropzone${dragActive ? " is-active" : ""}${dragReject ? " is-reject" : ""}`}
                 onDragEnter={(e) => {
                   if (!dragHasFiles(e.nativeEvent)) return;
                   // 任何文件都拦默认行为，否则 WebView 会打开该文件
                   e.preventDefault();
-                  if (!dragHasBackupFile(e.nativeEvent)) return;
+                  // 无论可接受与否都高亮：拖错文件时必须给出明确反馈
+                  const reason = dragRejectReason(e.nativeEvent);
                   dragDepth.current += 1;
+                  dragRejectRef.current = reason;
+                  setDragReject(reason);
                   setDragActive(true);
                 }}
                 onDragOver={(e) => {
                   if (!dragHasFiles(e.nativeEvent)) return;
                   e.preventDefault();
-                  if (!dragHasBackupFile(e.nativeEvent)) {
-                    // 不支持的文件：光标显示禁止，明确拒绝
-                    if (e.dataTransfer) e.dataTransfer.dropEffect = "none";
-                    return;
+                  const reason = dragRejectReason(e.nativeEvent);
+                  // 光标形态与拖拽区状态保持一致
+                  if (e.dataTransfer) e.dataTransfer.dropEffect = reason === null ? "copy" : "none";
+                  if (reason !== dragRejectRef.current) {
+                    dragRejectRef.current = reason;
+                    setDragReject(reason);
                   }
-                  if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
                 }}
                 onDragLeave={(e) => {
-                  if (!dragHasBackupFile(e.nativeEvent)) {
+                  if (!dragHasFiles(e.nativeEvent)) {
                     dragDepth.current = 0;
+                    dragRejectRef.current = null;
                     setDragActive(false);
+                    setDragReject(null);
                     return;
                   }
                   dragDepth.current = Math.max(0, dragDepth.current - 1);
-                  if (dragDepth.current === 0) setDragActive(false);
+                  if (dragDepth.current === 0) {
+                    dragRejectRef.current = null;
+                    setDragActive(false);
+                    setDragReject(null);
+                  }
                 }}
                 onDrop={handleDrop}
               >
                 <span className="dropzone-icon">
-                  <Upload className="icon-22" />
+                  {dragReject ? <AlertTriangle className="icon-22" /> : <Upload className="icon-22" />}
                 </span>
-                <span className="dropzone-title">{t("拖拽备份文件到此处")}</span>
+                <span className="dropzone-title">
+                  {dragReject ? t(rejectReasonTitle(dragReject)) : t("拖拽备份文件到此处")}
+                </span>
                 <span className="dropzone-desc">
-                  {t("仅支持 OneTOTP 导出的备份文件，重复账户自动跳过")}
+                  {dragReject
+                    ? t(rejectReasonText(dragReject))
+                    : t("仅支持 OneTOTP 导出的备份文件，重复账户自动跳过")}
                 </span>
               </div>
             ) : null}
@@ -380,12 +416,24 @@ export function ImportExportPage() {
                 {t("选择文件导入")}
               </Button>
             </div>
+            {/* 移动端没有拖拽区，格式说明只能放在按钮下方。
+                桌面端已由拖拽区的 desc 承担，这里不重复。 */}
+            {!isDesktop() ? (
+              <div className="import-format-hint">
+                <Info className="icon-14" />
+                {t("仅支持 OneTOTP 导出的备份文件（onetotp-backup-*.json）")}
+              </div>
+            ) : null}
           </div>
         )}
 
         {message ? (
-          <div className={`notice mt-12 ${message.type === "ok" ? "notice-ok" : "notice-err"}`}>
-            {message.text}
+          <div
+            className={`notice mt-12 ${message.type === "ok" ? "notice-ok" : "notice-err"}`}
+            role={message.type === "err" ? "alert" : "status"}
+          >
+            {message.type === "err" ? <AlertTriangle /> : <Info />}
+            <span className="notice-text">{message.text}</span>
           </div>
         ) : null}
 

@@ -17,6 +17,7 @@ import { SecurityPage } from "./pages/SecurityPage";
 import { CategoriesPage } from "./pages/CategoriesPage";
 import { ImportExportPage } from "./pages/ImportExportPage";
 import { LockPage } from "./pages/LockPage";
+import { DropImportOverlay } from "./components/DropImportOverlay";
 
 function Router() {
   const { phase, route, error, setError, settings, goBack } = useApp();
@@ -133,6 +134,8 @@ function Router() {
       {route.name === "security" ? <SecurityPage /> : null}
       {route.name === "categories" ? <CategoriesPage /> : null}
       {route.name === "importExport" ? <ImportExportPage /> : null}
+      {/* 全局拖拽导入：任意页面把备份文件拖进窗口即可导入（仅桌面端） */}
+      <DropImportOverlay />
     </div>
   );
 }

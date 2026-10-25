@@ -1,0 +1,8 @@
+{
+  "$schema": "../gen/schemas/mobile-schema.json",
+  "identifier": "ios-only",
+  "description": "iOS 专属能力：截屏 / 录屏保护（screen-guard 插件仅在 iOS 目标上注册，故不能并入 mobile.json，否则 Android 构建会因插件缺失而失败）",
+  "platforms": ["iOS"],
+  "windows": ["main"],
+  "permissions": ["screen-guard:default"]
+}

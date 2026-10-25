@@ -316,6 +316,14 @@ export const Info = (p: IconProps) => (
   </svg>
 );
 
+/** 文件图标：用于导入弹窗中展示备份文件名 */
+export const FileText = (p: IconProps) => (
+  <svg {...base(p)} strokeWidth={1.5}>
+    <path d="M10.5 2.2H5a1.5 1.5 0 0 0-1.5 1.5v10.6A1.5 1.5 0 0 0 5 15.8h8a1.5 1.5 0 0 0 1.5-1.5V6.2l-3.9-4z" />
+    <path d="M10.4 2.3v4h4M6.2 9.4h5.6M6.2 11.9h3.6" />
+  </svg>
+);
+
 export const Check = (p: IconProps) => (
   <svg {...base(p)} strokeWidth={1.8}>
     <path d="M3.8 9.3l3.2 3.2 7-7.4" />

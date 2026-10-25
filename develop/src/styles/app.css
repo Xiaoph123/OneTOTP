@@ -2059,6 +2059,253 @@ html[data-platform="mobile"] .scan-actions > .ui-btn {
   font-size: var(--font-size-body);
   pointer-events: none;
 }
+/* ══════════ 拖拽导入 ══════════
+   两处共用一套视觉语言：虚线框 + 上传图标。
+   全局遮罩用「文件飞入 + 流光条」暗示文件正在进来；
+   导入页拖拽区用静态虚线框，拖入时变实线高亮。 */
+
+/* 全局拖拽遮罩：整窗压暗模糊，中央浮出卡片 */
+.drop-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(10, 11, 13, 0.78);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  /* 遮罩本身不接收事件：拖拽事件由 window 监听，
+     若这里拦截，drop 会落在遮罩上而不是页面 */
+  pointer-events: none;
+}
+:root[data-theme="light"] .drop-overlay {
+  background: rgba(252, 253, 254, 0.82);
+}
+.drop-card {
+  width: 250px;
+  padding: 26px 22px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.62);
+  backdrop-filter: blur(20px) saturate(1.5);
+  -webkit-backdrop-filter: blur(20px) saturate(1.5);
+  border: 1.5px dashed rgba(99, 102, 241, 0.55);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  text-align: center;
+}
+:root[data-theme="dark"] .drop-card {
+  background: rgba(26, 29, 34, 0.72);
+  border-color: rgba(139, 157, 255, 0.55);
+}
+/* 三张文件卡片叠放：左右两张倾斜淡出，中间一张上下浮动 */
+.drop-stack {
+  position: relative;
+  width: 64px;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.drop-ghost {
+  position: absolute;
+  width: 34px;
+  height: 42px;
+  border-radius: 5px;
+  border: 1.5px solid rgba(139, 157, 255, 0.35);
+  background: rgba(99, 102, 241, 0.08);
+}
+.drop-ghost:nth-child(1) {
+  transform: translate(-14px, 6px) rotate(-12deg);
+  opacity: 0.4;
+}
+.drop-ghost:nth-child(2) {
+  transform: translate(14px, 6px) rotate(12deg);
+  opacity: 0.4;
+}
+.drop-main {
+  position: relative;
+  width: 40px;
+  height: 50px;
+  border-radius: 6px;
+  background: linear-gradient(160deg, rgba(99, 102, 241, 0.3), rgba(34, 211, 238, 0.16));
+  border: 1.5px solid rgba(139, 157, 255, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #c7d2ff;
+  animation: drop-bob 1.8s ease-in-out infinite;
+}
+.drop-main svg {
+  width: 18px;
+  height: 18px;
+}
+@keyframes drop-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
+}
+.drop-title {
+  font-size: var(--font-size-lead);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-1);
+}
+.drop-desc {
+  font-size: var(--font-size-body);
+  color: var(--color-text-3);
+  line-height: 17px;
+}
+/* 流光进度条：暗示「正在等待文件进来」 */
+.drop-wait {
+  width: 100%;
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(139, 157, 255, 0.14);
+  overflow: hidden;
+  margin-top: 4px;
+}
+.drop-wait i {
+  display: block;
+  width: 40%;
+  height: 100%;
+  border-radius: 2px;
+  background: linear-gradient(90deg, transparent, #8b9dff, transparent);
+  animation: drop-slide 1.6s ease-in-out infinite;
+}
+@keyframes drop-slide {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(350%); }
+}
+/* 尊重系统「减少动态效果」偏好：停掉浮动与流光，保留静态提示 */
+@media (prefers-reduced-motion: reduce) {
+  .drop-main { animation: none; }
+  .drop-wait i { animation: none; width: 100%; opacity: 0.5; }
+}
+
+/* 导入页拖拽区：虚线框在上，按钮在下 */
+.dropzone {
+  margin-top: 14px;
+  padding: 30px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  border-radius: var(--radius-md);
+  border: 1.5px dashed var(--color-border-3);
+  background: rgba(99, 102, 241, 0.03);
+  text-align: center;
+  transition: border-color 150ms ease, background 150ms ease, box-shadow 150ms ease;
+}
+/* 拖入激活态：虚线变实线、底色加深、外发光 */
+.dropzone.is-active {
+  border-style: solid;
+  border-color: rgba(99, 102, 241, 0.75);
+  background: rgba(99, 102, 241, 0.1);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.14);
+}
+.dropzone-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(99, 102, 241, 0.12);
+  color: var(--color-primary);
+}
+:root[data-theme="dark"] .dropzone-icon {
+  background: rgba(99, 102, 241, 0.16);
+  color: #a5b4ff;
+}
+.dropzone.is-active .dropzone-icon {
+  background: rgba(99, 102, 241, 0.24);
+}
+.dropzone-title {
+  font-size: var(--font-size-lead);
+  color: var(--color-text-1);
+}
+.dropzone-desc {
+  font-size: var(--font-size-body);
+  color: var(--color-text-3);
+  line-height: 16px;
+}
+/* 「或」分隔：两侧细线 + 中间文字 */
+.dropzone-or {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+  font-size: var(--font-size-body);
+  color: var(--color-text-4);
+}
+.dropzone-or::before,
+.dropzone-or::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--color-border-light);
+}
+
+/* 密码弹窗里的文件信息卡：确认拖进来的是哪个备份 */
+.import-file-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border-light);
+  background: var(--color-bg-4);
+}
+.import-file-icon {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(99, 102, 241, 0.12);
+  color: var(--color-primary);
+}
+:root[data-theme="dark"] .import-file-icon {
+  background: rgba(99, 102, 241, 0.18);
+  color: #a5b4ff;
+}
+/* 文件名可能很长：单行截断，完整名靠 title 提示 */
+.import-file-main {
+  min-width: 0;
+  flex: 1;
+}
+.import-file-name {
+  font-size: var(--font-size-body);
+  color: var(--color-text-1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.import-file-meta {
+  margin-top: 1px;
+  font-size: var(--font-size-body);
+  color: var(--color-text-3);
+}
+/* 空密码提示：浅色小字，不与错误提示抢注意力 */
+.import-pwd-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 10px;
+  font-size: var(--font-size-body);
+  line-height: 16px;
+  color: var(--color-text-3);
+}
+.import-pwd-hint svg {
+  flex: none;
+  margin-top: 1px;
+}
+
 .backup-head {
   display: flex;
   align-items: center;
@@ -2654,9 +2901,12 @@ html[data-platform="mobile"] .scan-actions > .ui-btn {
    移动端适配（Android / iOS）
    通过 <html data-platform="mobile"> 判定，桌面端不受影响
 
-   安全区避让：由 Android 原生侧把状态栏 / 导航栏 / 刘海尺寸写进
-   --safe-top / --safe-bottom / --safe-left / --safe-right（见 MainActivity.kt），
-   这里用 padding 消费这些变量。
+   安全区避让：Android 由原生侧把状态栏 / 导航栏 / 刘海尺寸写进
+   --safe-top / --safe-bottom / --safe-left / --safe-right（见 MainActivity.kt）；
+   iOS 没有等价的原生注入，回退到 CSS 的 env(safe-area-inset-*)
+   （index.html 已声明 viewport-fit=cover，WKWebView 会给出真实值）。
+   两级回退：先取 --safe-*（Android 注入），没有则取 env()（iOS），
+   两者都没有时为 0（桌面端 / 浏览器预览）。
 
    为什么不用原生 setPadding 把 WebView 整体推下来：
    那样状态栏区域露出的是原生窗口底色（纯色），而应用区域是
@@ -2669,12 +2919,11 @@ html[data-platform="mobile"] .scan-actions > .ui-btn {
 html[data-platform="mobile"] .app-window {
   border-radius: 0;
   box-shadow: none;
-  /* 安全区：背景铺满整屏，内容靠 padding 避让。
-     变量由原生注入，未注入时回退 0（桌面端 / 浏览器预览不受影响）。 */
-  padding-top: var(--safe-top, 0px);
-  padding-bottom: var(--safe-bottom, 0px);
-  padding-left: var(--safe-left, 0px);
-  padding-right: var(--safe-right, 0px);
+  /* 安全区：背景铺满整屏，内容靠 padding 避让。 */
+  padding-top: var(--safe-top, env(safe-area-inset-top, 0px));
+  padding-bottom: var(--safe-bottom, env(safe-area-inset-bottom, 0px));
+  padding-left: var(--safe-left, env(safe-area-inset-left, 0px));
+  padding-right: var(--safe-right, env(safe-area-inset-right, 0px));
 }
 
 html[data-platform="mobile"] .titlebar {
@@ -2715,8 +2964,9 @@ html[data-platform="mobile"] .tab-item svg {
 /* 顶部提示条下移，避开状态栏与页头 */
 html[data-platform="mobile"] .message-container {
   /* 移动端页头高 56px，桌面端的 44px 会让提示条压在页头文字上。
-     再叠加状态栏高度（--safe-top），否则提示条会被状态栏遮住。 */
-  top: calc(var(--safe-top, 0px) + 64px);
+     再叠加状态栏高度（--safe-top），否则提示条会被状态栏遮住。
+     iOS 上没有 --safe-top，回退到 env(safe-area-inset-top)。 */
+  top: calc(var(--safe-top, env(safe-area-inset-top, 0px)) + 64px);
 }
 html[data-platform="mobile"] .message {
   padding: 12px 16px;

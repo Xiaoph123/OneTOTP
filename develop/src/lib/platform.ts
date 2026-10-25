@@ -20,6 +20,20 @@ export function isDesktop(): boolean {
   return !isMobile();
 }
 
+/**
+ * 是否运行在 iOS / iPadOS。
+ *
+ * 单独判定的原因：两端移动平台部分能力差异较大
+ * （截屏保护机制、切后台是否被允许），需要按平台分支。
+ * iPadOS 13+ 的桌面模式 UA 与 macOS 相同，用触控点数区分。
+ */
+export function isIOS(): boolean {
+  if (typeof navigator === "undefined") return false;
+  const ua = navigator.userAgent;
+  if (/iPhone|iPod/i.test(ua)) return true;
+  return /iPad/i.test(ua) || (/Macintosh/i.test(ua) && navigator.maxTouchPoints > 1);
+}
+
 /** 是否运行在 Tauri 容器内（含桌面与移动） */
 export function isTauri(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;

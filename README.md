@@ -47,7 +47,7 @@
 | **实时进度环** | 卡片展示当前周期的剩余时间与进度，末 5 秒验证码转红提示，并预览「下一个验证码」 |
 | **一键复制** | 点击卡片复制验证码，复制后短暂反馈；支持全局快捷键唤起主窗口 |
 | **剪贴板自动清除** | 复制后默认 30 秒清空剪贴板（可选 15 秒 / 1 分钟 / 不清除）；清除前核对内容仍是刚复制的验证码，不会误删你后来复制的东西 |
-| **扫码录入** | Android 使用 CameraX + ZXing 原生解码（零 GMS 依赖、完全离线）；桌面端用 `jsqr` 本地解析；也可粘贴 `otpauth://` 链接或批量文本导入 |
+| **扫码录入** | Android 使用 CameraX + ZXing 原生解码（零 GMS 依赖、完全离线）；iOS 使用 AVFoundation + 原生取景蒙版；桌面端用 `jsqr` 本地解析；也可粘贴 `otpauth://` 链接或批量文本导入 |
 | **重复账户检测** | 以密钥为唯一标识，重复添加时明确提示并拒绝 |
 | **分类管理** | 自建分类，每个分类可指定主题色；折叠时按分类色淡色高亮，账户可在分类间移动；展开策略可选自动展开 / 不自动展开 / 按上次状态 |
 | **搜索与收藏** | 按服务名 / 账户标识实时过滤（200ms 防抖）；收藏账户优先排序 |
@@ -57,13 +57,14 @@
 | **自动锁定** | 离开应用即锁定，或空闲 30 秒 / 1 / 5 / 15 分钟后锁定，也可设为从不；解锁失败按落盘计数指数退避，重启不清零 |
 | **重新加密保险库** | 用全新随机盐重新派生密钥并重写本地数据，使旧密钥立即作废 |
 | **加密备份** | 导出为独立口令加密的 JSON 文件（可选仅账户 / 仅配置），经系统文件管理器选择保存位置；导入时先选文件再输密码，按密钥去重合并 |
+| **拖拽导入** | 桌面端任意页面把备份文件拖进窗口即可导入（新增语义，重复账户跳过）；「导入 / 导出配置」页另有独立拖拽区。只接受 OneTOTP 自己的备份文件，其它文件不弹提示、光标显示禁止 |
 | **自动备份快照** | 每次写盘自动留存时间戳快照，可配置保留份数（默认 3，最多 10），支持一键清理；删除账户时可同步从历史快照中清除其密钥 |
-| **隐私保护** | 截屏 / 录屏时隐藏内容（Windows / macOS / Android `FLAG_SECURE`）、远程会话时隐藏窗口（桌面）、窗口失焦时遮挡验证码 |
+| **隐私保护** | 截屏 / 录屏时隐藏内容（Windows / macOS / Android `FLAG_SECURE` / iOS secure 图层）、远程会话时隐藏窗口（桌面）、窗口失焦时遮挡验证码 |
 | **数据存储目录** | 账户、备份与密钥可迁移到自定义目录，切换后自动重启生效；移动端显示系统分配的私有目录路径并支持一键复制，同时提示卸载即清空 |
 | **托盘与自启** | 桌面端支持最小化到托盘、关闭行为可选（退出 / 托盘）、开机自启，托盘菜单可直接进入设置 |
 | **主题与语言** | 浅色 / 深色 / 跟随系统（默认跟随系统）；界面字体缩放；中文 / English 双语 |
 | **开屏动画** | 四种样式可选（汇聚光晕 / 描边绘制 / 玻璃反光 / 液态粗细，默认汇聚光晕），动画 1.5 秒播完后停留 0.2 秒再进入首页，配色随明暗模式切换 |
-| **移动端适配** | 独立移动布局（`data-platform` 钩子），底部四项导航（验证码 / 收藏 / 最近 / 设置），触控尺寸按移动端重新校准；「复制后自动隐藏」在 Android 上表现为切到后台 |
+| **移动端适配** | 独立移动布局（`data-platform` 钩子），底部四项导航（验证码 / 收藏 / 最近 / 设置），触控尺寸按移动端重新校准；「复制后自动隐藏」在 Android 上表现为切到后台，iOS 因系统禁止程序主动切后台而改为立即锁定 |
 | **内嵌字体** | 验证码使用内置 Roboto Mono（400 / 700 真实字重），不依赖系统字体，各品牌 Android ROM 上都能正确加粗 |
 
 **状态细节**
@@ -85,7 +86,7 @@
 | 卡片 | 半透明玻璃（`rgba(255,255,255,.62)` / `rgba(26,29,34,.72)`）+ `blur(14px) saturate(1.4)` |
 | 品牌按钮 | 亮色为绿→青→靛标准渐变；暗色整体压暗 35% 并叠加顶部内高光，保留品牌色相但不刺眼 |
 | 验证码 | 内置 Roboto Mono 400 / 700 两档真实字重，不依赖系统字体 |
-| 移动端状态栏 | Android `enableEdgeToEdge` + WebView 铺满整屏，安全区尺寸经 CSS 变量注入后由 `.app-window` 内边距避让，使背景纹理连续覆盖到状态栏下方 |
+| 移动端状态栏 | Android `enableEdgeToEdge` + WebView 铺满整屏，安全区尺寸经 CSS 变量注入后由 `.app-window` 内边距避让，使背景纹理连续覆盖到状态栏下方；iOS 无原生注入，回退到 `env(safe-area-inset-*)` |
 
 **品牌图标**
 
@@ -120,7 +121,7 @@
 | 无口令模式 | 首次使用时生成 32 字节随机「机器本地密钥」并原子落盘（`onetotp.machine.key`），与设备绑定；旧版按 OS + ARCH 派生的密钥仅用于兼容读取旧数据 |
 | 生物识别 | 凭据由系统安全模块保管：Windows Hello / macOS Keychain / Android Keystore（AES-256-GCM），应用侧不接触原始生物特征 |
 | 备份 | 导出时用**独立新口令**重新派生密钥加密，可跨设备迁移 |
-| 截屏保护 | Windows `WDA_EXCLUDEFROMCAPTURE` / macOS 内容保护 / Android `FLAG_SECURE` |
+| 截屏保护 | Windows `WDA_EXCLUDEFROMCAPTURE` / macOS 内容保护 / Android `FLAG_SECURE` / iOS secure text field 图层（系统未提供 `FLAG_SECURE` 等价 API） |
 | 输入校验 | 密钥（Base32）、位数（6/7/8）、算法、周期（1~3600s）、分类名（≤20 字符）、枚举型设置项（开屏动画 / 分类展开策略）均在服务端二次校验 |
 | 文件读写 | 导出仅允许 `.json` / `.txt` 后缀；导入导出均限制 10MB；Android `content://` URI 经 ContentResolver 打开，不接受前端任意构造的地址 |
 | 数据目录 | 指针只接受「绝对路径 + 本地路径 + 真实存在的目录」，拒绝 UNC 网络路径；非法指针回退默认目录并在界面说明原因；迁移时目标同名文件先另存为 `.bak-<时间戳>` |
@@ -140,16 +141,31 @@
 | **macOS** | x64 / arm64 / universal | `.dmg` | universal 为 Intel + Apple Silicon 二合一 |
 | **Linux** | x86_64 / arm64 | `.deb` / `.rpm` / `.AppImage` | AppImage 免安装 |
 | **Android** | arm64 / armv7 / x86 / x86_64 | `.apk` | arm64 覆盖绝大多数真机 |
+| **iOS** | arm64 | `-unsigned.ipa` | **未签名**，需自行签名安装（见下） |
 
 > [!TIP]
 > 32 位 Windows（x86）无产物——Tauri 2 框架本身不支持该目标平台，非配置遗漏。
-> iOS 需 Apple 开发者账号（$99/年）签名，当前版本暂未发布 `.ipa`。
+
+**iOS 安装说明（未签名包）**
+
+发布页提供的是**未签名** `.ipa`。Tauri 与 GitHub Actions 都无法代劳签名，因为签名身份属于使用者自己的 Apple ID 或开发者账号。安装前需要自己重签一次，任选一种方式：
+
+| 方式 | 是否需要 Mac | 是否需要开发者账号 | 说明 |
+| --- | --- | --- | --- |
+| **Sideloadly / AltStore** | 否 | 否（免费 Apple ID 即可） | 最省事。Windows / macOS 都有客户端，登录 Apple ID 后拖入 `.ipa` 即可安装，证书 7 天有效，到期重签 |
+| **Xcode** | 是 | 否（免费 Apple ID 即可） | 新建一个同名工程或用 `ios-deploy`，把 `.ipa` 里的 `.app` 拖进去，选个人团队签名后装到设备 |
+| **Apple Developer 账号** | 视方式 | 是（$99/年） | 可用 Ad Hoc / TestFlight 分发，证书 1 年有效，适合长期自用或小范围分发 |
+
+> [!IMPORTANT]
+> 免费 Apple ID 签名的应用有效期为 7 天，到期需重新签名（已录入的账户数据不会丢失，除非卸载应用）。
+> 重签不会影响应用内的加密数据：保险库与密钥保存在应用沙盒里，重签覆盖安装时保留。
 
 **首次安装提示**
 
 - **macOS**：未签名分发包首次打开需右键 →「打开」，或执行 `xattr -dr com.apple.quarantine OneTOTP.app`。
 - **Windows**：SmartScreen 可能提示未知发布者，选择「更多信息 → 仍要运行」。
 - **Android**：需在系统设置中允许安装来自该来源的应用。
+- **iOS**：未签名包直接点击无法安装，必须先按上表重签。
 
 ### 从源码构建
 
@@ -188,9 +204,22 @@ npm run tauri android build -- --apk --target aarch64
 >
 > 详细说明见 [android-release-build.md](develop/docs/android-release-build.md)。
 
+**移动端（iOS）**
+
+iOS 工程只能在 macOS 上生成与编译（需要 Xcode）：
+
+```bash
+cd develop
+npm run tauri ios init       # 首次生成工程（macOS）
+npm run tauri ios build      # 已配置签名时产出可安装的 .ipa
+npm run tauri ios build -- --no-sign   # 未配置签名时产出未签名包
+```
+
 **全端自动构建**
 
-仓库内置 [GitHub Actions](.github/workflows/release.yml)，推送 `v*` 标签即触发矩阵构建，覆盖 Windows / macOS / Linux / Android 多架构，并自动创建 Release。iOS 任务在配置 Apple 证书 Secrets 后自动启用，未配置时静默跳过。
+仓库内置 [GitHub Actions](.github/workflows/release.yml)，推送 `v*` 标签即触发矩阵构建，覆盖 Windows / macOS / Linux / Android / iOS 全部平台，并自动创建 Release。
+
+iOS 任务**不需要任何 Apple 凭据**：它只做无签名编译，产出 `OneTOTP_x.y.z_ios-unsigned.ipa`，使用者下载后按上文「iOS 安装说明」自行重签。这样做的好处是开源仓库不必持有、也不能代替使用者持有签名身份；坏处是无法提供开箱即装的 iOS 包。
 
 ### 项目结构
 
@@ -217,7 +246,8 @@ OneTOTP/
 │     │  ├─ store.rs       # 保险库读写、备份、数据目录迁移与指针校验
 │     │  ├─ commands.rs    # Tauri 命令（账户 / 分类 / 设置 / 备份）
 │     │  └─ models.rs      # 数据模型
-│     ├─ plugins/          # 内置插件（生物识别、原生扫码）
+│     ├─ plugins/          # 内置插件（生物识别、原生扫码、iOS 截屏保护）
+│     ├─ Info.plist        # iOS 权限声明（相机 / Face ID），构建时合入工程
 │     └─ tauri.conf.json
 ```
 
@@ -229,7 +259,7 @@ OneTOTP/
 | 前端 | **React 19** + **TypeScript** + **Vite 8** |
 | 加密 | `aes-gcm` · `argon2` · `rand` · `zeroize` |
 | OTP 算法 | `hmac` · `sha1` · `sha2` · `base32` |
-| 扫码 | Android：CameraX + ZXing（原生）；桌面：`jsqr`（本地解析） |
+| 扫码 | Android：CameraX + ZXing（原生）；iOS：AVFoundation + 原生取景蒙版；桌面：`jsqr`（本地解析） |
 | 生物识别 | `tauri-plugin-biometry`（Windows Hello / Touch ID / Android Keystore） |
 | 设计系统 | 火山引擎源力（Volcengine） |
 
@@ -293,7 +323,7 @@ A desktop and mobile app that does two-factor authentication properly: collect `
 | **Live progress ring** | Each card shows the remaining time and progress of the current period, turns red in the last 5 seconds, and previews the next code |
 | **One-tap copy** | Click a card to copy the code, with brief feedback; a global shortcut can bring up the main window |
 | **Clipboard auto-clear** | The clipboard is cleared 30 seconds after copying by default (15 s / 1 min / never); the content is checked first, so anything you copied later is left alone |
-| **QR scanning** | Android uses native CameraX + ZXing decoding (zero GMS dependency, fully offline); desktop uses `jsqr` locally; you can also paste `otpauth://` links or import bulk text |
+| **QR scanning** | Android uses native CameraX + ZXing decoding (zero GMS dependency, fully offline); iOS uses AVFoundation with a native viewfinder overlay; desktop uses `jsqr` locally; you can also paste `otpauth://` links or import bulk text |
 | **Duplicate detection** | The secret is the unique key — duplicates are rejected with a clear message |
 | **Categories** | Create your own categories, each with a theme color; collapsed groups are tinted with the category color; accounts can be moved between categories; expansion policy can be always expand / always collapse / restore last state |
 | **Search & favorites** | Live filtering by issuer / account label (200 ms debounce); favorites are sorted first |
@@ -303,13 +333,14 @@ A desktop and mobile app that does two-factor authentication properly: collect `
 | **Auto-lock** | Lock on leaving the app, or after 30 s / 1 / 5 / 15 minutes idle, or never; failed unlocks back off exponentially using a persisted counter that survives restarts |
 | **Re-encrypt vault** | Re-derive the key with a fresh random salt and rewrite local data, invalidating the old key immediately |
 | **Encrypted backup** | Export a JSON file encrypted with a separate passphrase (accounts only / settings only) via the system file picker; import picks the file first, then asks for the password, and merges by secret |
+| **Drag & drop import** | On desktop, drop a backup file anywhere in the window to import it (additive: duplicates are skipped); the Import / Export page has its own drop zone. Only OneTOTP's own backup files are accepted — other files show no prompt and the cursor turns into a "no drop" sign |
 | **Automatic snapshots** | A timestamped snapshot is kept on every write; retention is configurable (default 3, up to 10) with one-tap cleanup; deleting an account can also purge its secret from historical snapshots |
-| **Privacy protection** | Hide content from screenshots / recording (Windows / macOS / Android `FLAG_SECURE`), hide the window during remote sessions (desktop), mask codes when the window loses focus |
+| **Privacy protection** | Hide content from screenshots / recording (Windows / macOS / Android `FLAG_SECURE` / iOS secure layer), hide the window during remote sessions (desktop), mask codes when the window loses focus |
 | **Data directory** | Move accounts, backups and keys to a custom folder; the app restarts automatically after the change; on mobile the system-assigned private folder path is shown and copyable, with a warning that uninstalling erases everything |
 | **Tray & autostart** | On desktop, minimize to tray, choose close behavior (quit / tray), start on login, and jump to Settings from the tray menu |
 | **Theme & language** | Light / dark / follow system (default: follow system); UI font scaling; Chinese / English |
 | **Splash animation** | Four styles (converge glow / outline draw / glass gloss / liquid stroke, default converge glow); the 1.5 s animation completes, holds 0.2 s, then the home screen fades in; colors follow the light/dark theme |
-| **Mobile layout** | A dedicated mobile layout (`data-platform` hook) with a four-item bottom bar (codes / favorites / recent / settings) and touch-calibrated sizing; "hide after copy" sends the app to the background on Android |
+| **Mobile layout** | A dedicated mobile layout (`data-platform` hook) with a four-item bottom bar (codes / favorites / recent / settings) and touch-calibrated sizing; "hide after copy" sends the app to the background on Android, while iOS locks immediately since the platform forbids apps from backgrounding themselves |
 | **Embedded font** | Codes use a bundled Roboto Mono (real 400 / 700 weights) instead of system fonts, so bold renders correctly on every Android ROM |
 
 **Behavior notes**
@@ -331,7 +362,7 @@ Built on the Volcengine **源力 (Yuanli)** design system: primary color `#1664F
 | Cards | Translucent glass (`rgba(255,255,255,.62)` / `rgba(26,29,34,.72)`) with `blur(14px) saturate(1.4)` |
 | Brand buttons | Light uses the green → cyan → indigo gradient; dark dims it by ~35% and adds a top inner highlight, keeping brand hue without glare |
 | Codes | Bundled Roboto Mono with real 400 / 700 weights — no dependence on system fonts |
-| Mobile status bar | Android `enableEdgeToEdge` with a full-bleed WebView; safe-area insets are injected as CSS variables and consumed as padding on `.app-window`, so the texture continues under the status bar |
+| Mobile status bar | Android `enableEdgeToEdge` with a full-bleed WebView; safe-area insets are injected as CSS variables and consumed as padding on `.app-window`, so the texture continues under the status bar. iOS has no native injection and falls back to `env(safe-area-inset-*)` |
 
 **App icon**
 
@@ -366,7 +397,7 @@ A gradient shield with a white keyhole, drawn in a 24-unit coordinate system and
 | No-passphrase mode | A 32-byte random "machine-local key" generated on first use and written atomically (`onetotp.machine.key`), bound to the device; the legacy OS + ARCH derived key is only used to read old data |
 | Biometrics | Credentials are held by the OS secure module: Windows Hello / macOS Keychain / Android Keystore (AES-256-GCM); the app never touches raw biometric data |
 | Backup | Exports are re-encrypted with a **separate passphrase**, so they can move across devices |
-| Screenshot protection | Windows `WDA_EXCLUDEFROMCAPTURE` / macOS content protection / Android `FLAG_SECURE` |
+| Screenshot protection | Windows `WDA_EXCLUDEFROMCAPTURE` / macOS content protection / Android `FLAG_SECURE` / iOS secure text field layer (the OS has no `FLAG_SECURE` equivalent) |
 | Input validation | Secret (Base32), digits (6/7/8), algorithm, period (1–3600s), category name (≤20 chars) and enumerated settings (splash animation / category expansion) are all re-validated on the backend |
 | File I/O | Exports are limited to `.json` / `.txt`; both import and export cap at 10 MB; Android `content://` URIs are opened through ContentResolver and never accepted as arbitrary frontend-supplied paths |
 | Data directory | The pointer accepts only an absolute, local, existing directory — UNC network paths are rejected; an invalid pointer falls back to the default directory with the reason shown in the UI; on migration an existing same-named file is first saved as `.bak-<timestamp>` |
@@ -386,16 +417,31 @@ Grab the latest build from **[Releases](https://github.com/Xiaoph123/OneTOTP/rel
 | **macOS** | x64 / arm64 / universal | `.dmg` | universal = Intel + Apple Silicon |
 | **Linux** | x86_64 / arm64 | `.deb` / `.rpm` / `.AppImage` | AppImage needs no install |
 | **Android** | arm64 / armv7 / x86 / x86_64 | `.apk` | arm64 covers most phones |
+| **iOS** | arm64 | `-unsigned.ipa` | **Unsigned** — you sign it yourself (see below) |
 
 > [!TIP]
 > There is no 32-bit Windows (x86) build — Tauri 2 does not support that target, so it is not an omission.
-> iOS requires an Apple Developer account ($99/yr) for signing, so no `.ipa` is published yet.
+
+**Installing on iOS (unsigned build)**
+
+The release ships an **unsigned** `.ipa`. Neither Tauri nor GitHub Actions can sign it for you: the signing identity belongs to your own Apple ID. You need to re-sign it once before installing — pick one:
+
+| Method | Needs a Mac | Needs a developer account | Notes |
+| --- | --- | --- | --- |
+| **Sideloadly / AltStore** | No | No (a free Apple ID works) | Easiest. Clients for Windows and macOS; sign in with your Apple ID and drop the `.ipa` in. Certificate lasts 7 days, then re-sign |
+| **Xcode** | Yes | No (a free Apple ID works) | Put the `.app` from the `.ipa` into a project and sign with your personal team |
+| **Apple Developer account** | Depends | Yes ($99/yr) | Ad Hoc / TestFlight distribution, certificate valid for a year — suits long-term personal use or small-scale distribution |
+
+> [!IMPORTANT]
+> Free Apple ID signatures expire after 7 days and must be re-signed. Your data is kept as long as you don't delete the app.
+> Re-signing a build over the existing one preserves the vault and keys, which live inside the app sandbox.
 
 **First-run notes**
 
 - **macOS**: an unsigned build must be opened via right-click → Open, or run `xattr -dr com.apple.quarantine OneTOTP.app`.
 - **Windows**: SmartScreen may warn about an unknown publisher — choose "More info → Run anyway".
 - **Android**: allow installing apps from this source in system settings.
+- **iOS**: tapping an unsigned `.ipa` will not install anything — re-sign it first using the table above.
 
 ### Build from source
 
@@ -434,9 +480,22 @@ npm run tauri android build -- --apk --target aarch64
 >
 > See [android-release-build.md](develop/docs/android-release-build.md) for details.
 
+**Mobile (iOS)**
+
+The iOS project can only be generated and built on macOS (Xcode required):
+
+```bash
+cd develop
+npm run tauri ios init       # first-time project generation (macOS)
+npm run tauri ios build      # produces an installable .ipa when signing is configured
+npm run tauri ios build -- --no-sign   # produces an unsigned build
+```
+
 **Automated all-platform builds**
 
-The repo ships a [GitHub Actions workflow](.github/workflows/release.yml). Pushing a `v*` tag triggers a build matrix covering Windows / macOS / Linux / Android across architectures and creates a Release automatically. The iOS job turns on once Apple certificate secrets are configured, and is skipped silently otherwise.
+The repo ships a [GitHub Actions workflow](.github/workflows/release.yml). Pushing a `v*` tag triggers a build matrix covering Windows / macOS / Linux / Android / iOS and creates a Release automatically.
+
+The iOS job needs **no Apple credentials at all** — it only performs an unsigned build and produces `OneTOTP_x.y.z_ios-unsigned.ipa`, which you re-sign yourself following the "Installing on iOS" section above. This keeps signing identities out of an open-source repo (and they belong to the user anyway); the trade-off is that there is no ready-to-install iOS artifact.
 
 ### Project layout
 
@@ -463,7 +522,8 @@ OneTOTP/
 │     │  ├─ store.rs       # vault I/O, backups, data directory migration and pointer validation
 │     │  ├─ commands.rs    # Tauri commands (accounts / categories / settings / backup)
 │     │  └─ models.rs      # data models
-│     ├─ plugins/          # bundled plugins (biometrics, native QR scanner)
+│     ├─ plugins/          # bundled plugins (biometrics, native QR scanner, iOS screen guard)
+│     ├─ Info.plist        # iOS usage descriptions (camera / Face ID), merged at build time
 │     └─ tauri.conf.json
 ```
 
@@ -475,7 +535,7 @@ OneTOTP/
 | Frontend | **React 19** + **TypeScript** + **Vite 8** |
 | Cryptography | `aes-gcm` · `argon2` · `rand` · `zeroize` |
 | OTP algorithms | `hmac` · `sha1` · `sha2` · `base32` |
-| QR scanning | Android: CameraX + ZXing (native); desktop: `jsqr` (parsed locally) |
+| QR scanning | Android: CameraX + ZXing (native); iOS: AVFoundation + 取景蒙版; desktop: `jsqr` (parsed locally) |
 | Biometrics | `tauri-plugin-biometry` (Windows Hello / Touch ID / Android Keystore) |
 | Design system | Volcengine Yuanli |
 

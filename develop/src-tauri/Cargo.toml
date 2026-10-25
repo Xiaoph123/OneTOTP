@@ -1,6 +1,6 @@
 [package]
 name = "onetotp"
-version = "0.4.0"
+version = "0.5.0"
 description = "OneTOTP - 纯离线身份验证器"
 authors = ["wanghao"]
 edition = "2021"
@@ -64,6 +64,13 @@ tauri-plugin-biometry = { path = "plugins/tauri-plugin-biometry" }
 # iOS 侧沿用系统 Vision 框架。桌面端不使用该插件，扫码仍走 getUserMedia + jsQR。
 [target.'cfg(any(target_os = "android", target_os = "ios"))'.dependencies]
 tauri-plugin-barcode-scanner = { path = "plugins/tauri-plugin-qr-scanner" }
+
+# iOS 截屏 / 录屏保护：iOS 没有 Android FLAG_SECURE 的等价 API，
+# 用 secure text field 图层让系统捕获管线呈现黑屏（未公开行为，业界通行）。
+# 只在 iOS 引入，Android 走 MainActivity 的 JS 桥（capabilities/ios.json
+# 里声明的权限也带 platforms= ["iOS"]，Android 构建不会去找这个插件）。
+[target.'cfg(target_os = "ios")'.dependencies]
+tauri-plugin-screen-guard = { path = "plugins/tauri-plugin-screen-guard" }
 
 [profile.release]
 codegen-units = 1

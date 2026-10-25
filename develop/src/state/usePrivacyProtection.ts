@@ -1,20 +1,11 @@
 import { useEffect } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { isDesktop, isMobile, isTauri } from "../lib/platform";
+import { setSecureScreen } from "../lib/screenGuard";
 import { api, type AppSettings } from "../lib/api";
 
 /** 远程会话检测间隔：远程连接/断开会话不是高频事件，5 秒足够且开销可忽略 */
 const REMOTE_CHECK_MS = 5000;
-
-/** Android 原生桥：由 MainActivity 通过 addJavascriptInterface 注入 */
-interface AndroidNativeBridge {
-  setSecure(enabled: boolean): void;
-}
-
-function androidBridge(): AndroidNativeBridge | null {
-  const bridge = (window as unknown as { OneTotpNative?: AndroidNativeBridge }).OneTotpNative;
-  return bridge && typeof bridge.setSecure === "function" ? bridge : null;
-}
 
 /**
  * 隐私保护（防「被看见」）。
@@ -41,8 +32,9 @@ export function usePrivacyProtection(settings: AppSettings | null) {
   useEffect(() => {
     if (!isTauri()) return;
     if (isMobile()) {
-      // Android：FLAG_SECURE 由原生侧设置，开启后截屏失败、录屏与投屏黑屏
-      androidBridge()?.setSecure(screenshot);
+      // Android：FLAG_SECURE（JS 桥）
+      // iOS：secure text field 图层（screen-guard 插件）
+      void setSecureScreen(screenshot);
       return;
     }
     getCurrentWindow()

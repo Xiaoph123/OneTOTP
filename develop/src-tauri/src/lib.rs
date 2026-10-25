@@ -42,6 +42,11 @@ pub fn run() {
     #[cfg(any(target_os = "android", target_os = "ios"))]
     let builder = builder.plugin(tauri_plugin_barcode_scanner::init());
 
+    // iOS 截屏 / 录屏保护：系统没有 Android FLAG_SECURE 的等价 API，
+    // 用 secure text field 图层让截屏 / 录屏 / 投屏 / 多任务快照全部黑屏。
+    #[cfg(target_os = "ios")]
+    let builder = builder.plugin(tauri_plugin_screen_guard::init());
+
     builder
         .setup(|app| {
             // 系统默认应用目录：数据目录指针文件固定放在这里

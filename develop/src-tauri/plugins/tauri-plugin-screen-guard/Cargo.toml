@@ -1,0 +1,23 @@
+[package]
+name = "tauri-plugin-screen-guard"
+version = "0.1.0"
+description = "iOS 截屏 / 录屏保护：用 secure text field 覆盖层让系统捕获到黑屏"
+authors = ["wanghao"]
+edition = "2021"
+rust-version = "1.77.2"
+license = "MIT"
+links = "tauri-plugin-screen-guard"
+
+[lib]
+name = "tauri_plugin_screen_guard"
+path = "src/lib.rs"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+tauri = { version = "2", default-features = false }
+
+[build-dependencies]
+tauri-plugin = { version = "2", features = ["build"] }
+
+[target.'cfg(target_os = "ios")'.dependencies]
+tauri = { version = "2", features = ["wry"], default-features = false }

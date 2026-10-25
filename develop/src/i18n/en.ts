@@ -225,6 +225,29 @@ export const en: Record<string, string> = {
   "生成并保存备份": "Generate & save backup",
   "默认导出位置": "Default export location",
   "数据存储目录": "Data storage folder",
+  "松开以导入配置": "Release to import",
+  "支持 OneTOTP 加密备份文件": "OneTOTP encrypted backup files supported",
+  "仅支持 .json / .txt 格式的备份文件": "Only .json / .txt backup files are supported",
+  "该文件不是有效的 OneTOTP 备份": "This file is not a valid OneTOTP backup",
+  "读取文件失败：{msg}": "Failed to read file: {msg}",
+  "把备份文件拖到下方区域，或点击按钮选择文件":
+    "Drag a backup file into the area below, or click the button to pick one",
+  "拖拽备份文件到此处": "Drop a backup file here",
+  "支持 .json 加密备份，重复账户自动跳过":
+    "Encrypted .json backups; duplicate accounts are skipped",
+  "或": "or",
+  "仅支持 OneTOTP 导出的备份文件（onetotp-backup-*.json）":
+    "Only OneTOTP backups are supported (onetotp-backup-*.json)",
+  "备份文件超过 10MB，无法导入": "The backup is larger than 10MB and cannot be imported",
+  "文件内容无法读取，可能已损坏": "The file cannot be read and may be corrupted",
+  "该备份已加密，请输入导出时设置的密码。":
+    "This backup is encrypted. Enter the password set when exporting.",
+  "加密备份": "Encrypted backup",
+  "若导出时未设置密码，可直接留空后点击导入。":
+    "If no password was set when exporting, leave this empty and import.",
+  "仅支持 OneTOTP 导出的备份文件，重复账户自动跳过":
+    "Only OneTOTP backups; duplicate accounts are skipped",
+  "选择文件导入": "Choose a file",
   "复制路径": "Copy path",
   "路径已复制": "Path copied",
   "复制失败：{msg}": "Copy failed: {msg}",
@@ -325,6 +348,8 @@ export const en: Record<string, string> = {
   "复制后自动隐藏窗口": "Hide window after copy",
   "复制验证码后自动收起窗口": "Collapse the window after copying a code",
   "复制验证码后自动切到后台": "Send the app to the background after copying a code",
+  "复制验证码后立即锁定，回来需重新解锁":
+    "Lock immediately after copying a code; you will need to unlock again",
   "验证码显示分组": "Group code digits",
   "分类自动展开": "Auto-expand categories",
   "首页分类分组打开应用时的展开方式":

@@ -1,0 +1,11 @@
+"$schema" = "schemas/schema.json"
+[default]
+description = """
+iOS 截屏 / 录屏保护。
+
+开启后窗口内容会从系统所有捕获管线中剔除：截屏、录屏、AirPlay 投屏、
+后台多任务快照均呈黑屏。实现方式是叠一层 secure text field，
+这是 iOS 上唯一可行的做法（系统没有提供 Android FLAG_SECURE 的等价 API）。
+"""
+
+permissions = ["allow-set-secure"]

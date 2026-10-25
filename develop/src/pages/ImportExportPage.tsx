@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useApp } from "../state/AppContext";
 import { api, type BackupView } from "../lib/api";
 import { TabBar } from "../components/TabBar";
@@ -7,6 +7,8 @@ import { Switch } from "../components/Controls";
 import { useToast } from "../components/Toast";
 import { AlertTriangle, ChevronLeft, Download, Info, Spinner, Upload } from "../components/icons";
 import { formatBytes } from "../lib/utils";
+import { isDesktop } from "../lib/platform";
+import { checkDroppedFile, dragHasBackupFile, dragHasFiles, firstDroppedBackupFile, isBackupLike } from "../lib/backupImport";
 import { useI18n } from "../i18n";
 
 type Mode = "export" | "import";
@@ -15,26 +17,6 @@ type Mode = "export" | "import";
 function defaultFileName(): string {
   const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
   return `onetotp-backup-${stamp}.json`;
-}
-
-/**
- * 粗校验：内容是否像 OneTOTP 备份文件。
- * 备份是 `VaultFile` 的 JSON，必然含 ciphertext / salt / nonce 三个字段；
- * 只做结构判断，真正的解密与校验仍在后端完成。
- */
-function isBackupLike(text: string): boolean {
-  try {
-    const obj = JSON.parse(text) as Record<string, unknown>;
-    return (
-      !!obj &&
-      typeof obj === "object" &&
-      typeof obj.ciphertext === "string" &&
-      typeof obj.salt === "string" &&
-      typeof obj.nonce === "string"
-    );
-  } catch {
-    return false;
-  }
 }
 
 export function ImportExportPage() {
@@ -59,6 +41,10 @@ export function ImportExportPage() {
   const [impError, setImpError] = useState<string | null>(null);
   // 允许空密码（设置项）：开启后导出/导入弹窗可跳过密码
   const allowEmptyPwd = settings?.allowEmptyBackupPassword ?? false;
+  // 拖拽区高亮：文件拖到本区域上方时置为 true
+  const [dragActive, setDragActive] = useState(false);
+  // 拖拽区内的 dragenter/dragleave 计数，避免子元素间移动时闪烁
+  const dragDepth = useRef(0);
 
   const loadBackups = () => {
     api.listBackups().then(setBackups).catch(() => {});
@@ -179,6 +165,53 @@ export function ImportExportPage() {
     }
   };
 
+  /**
+   * 拖拽区放下文件：读取内容后弹出密码框。
+   *
+   * 与「选择文件」走同一条后续流程（setImportContent + 开弹窗），
+   * 只是文件来源不同：一个来自系统文件管理器，一个来自拖拽。
+   */
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    // 先记下拖入过程中是否已高亮（= 文件被识别为备份），
+    // reset 后 state 会被清掉，后面要用它决定「是否提示」
+    const shown = dragActive;
+    dragDepth.current = 0;
+    setDragActive(false);
+    setMessage(null);
+
+    const file = firstDroppedBackupFile(e.nativeEvent);
+    if (!file) return;
+
+    setBusy(true);
+    try {
+      // 与全局拖拽共用同一套校验：文件名 -> 体积 -> 内容结构
+      const result = await checkDroppedFile(file);
+      if (!result.ok) {
+        // 拖动阶段就没有高亮（非备份文件）→ 静默忽略，不弹错误
+        if (!shown) return;
+        setMessage({
+          type: "err",
+          text:
+            result.reason === "name"
+              ? t("仅支持 OneTOTP 导出的备份文件（onetotp-backup-*.json）")
+              : result.reason === "size"
+                ? t("备份文件超过 10MB，无法导入")
+                : t("所选文件不是有效的 OneTOTP 备份文件"),
+        });
+        return;
+      }
+      setImportContent(result.text ?? "");
+      setImpPwd("");
+      setImpError(null);
+      setImpOpen(true);
+    } catch (err) {
+      setMessage({ type: "err", text: String(err) });
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const handleImport = async () => {
     setImpError(null);
     if (!allowEmptyPwd && !impPwd) {
@@ -289,8 +322,53 @@ export function ImportExportPage() {
               {t("导入备份")}
             </div>
             <div className="block-desc form-intro">
-              {t("选择备份文件后输入该文件的密码，账户与配置将合并到本机")}
+              {t("把备份文件拖到下方区域，或点击按钮选择文件")}
             </div>
+            {/* 拖拽区在上、按钮在下：拖拽是更快的路径，放在视觉首位；
+                点击选择作为兜底，用「或」分隔明确两者是并列关系。
+                移动端没有拖拽概念，整块不渲染。 */}
+            {isDesktop() ? (
+              <div
+                className={`dropzone${dragActive ? " is-active" : ""}`}
+                onDragEnter={(e) => {
+                  if (!dragHasFiles(e.nativeEvent)) return;
+                  // 任何文件都拦默认行为，否则 WebView 会打开该文件
+                  e.preventDefault();
+                  if (!dragHasBackupFile(e.nativeEvent)) return;
+                  dragDepth.current += 1;
+                  setDragActive(true);
+                }}
+                onDragOver={(e) => {
+                  if (!dragHasFiles(e.nativeEvent)) return;
+                  e.preventDefault();
+                  if (!dragHasBackupFile(e.nativeEvent)) {
+                    // 不支持的文件：光标显示禁止，明确拒绝
+                    if (e.dataTransfer) e.dataTransfer.dropEffect = "none";
+                    return;
+                  }
+                  if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
+                }}
+                onDragLeave={(e) => {
+                  if (!dragHasBackupFile(e.nativeEvent)) {
+                    dragDepth.current = 0;
+                    setDragActive(false);
+                    return;
+                  }
+                  dragDepth.current = Math.max(0, dragDepth.current - 1);
+                  if (dragDepth.current === 0) setDragActive(false);
+                }}
+                onDrop={handleDrop}
+              >
+                <span className="dropzone-icon">
+                  <Upload className="icon-22" />
+                </span>
+                <span className="dropzone-title">{t("拖拽备份文件到此处")}</span>
+                <span className="dropzone-desc">
+                  {t("仅支持 OneTOTP 导出的备份文件，重复账户自动跳过")}
+                </span>
+              </div>
+            ) : null}
+            {isDesktop() ? <div className="dropzone-or">{t("或")}</div> : null}
             <div className="btn-row mt-14">
               <Button
                 variant="primary"
@@ -299,7 +377,7 @@ export function ImportExportPage() {
                 icon={<Upload className="icon-14" />}
                 onClick={pickAndReadBackup}
               >
-                {t("导入配置")}
+                {t("选择文件导入")}
               </Button>
             </div>
           </div>

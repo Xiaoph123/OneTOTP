@@ -5,6 +5,9 @@
 import AVFoundation
 import UIKit
 
+/// 相机预览容器。
+///
+/// 职责只有两件事：铺满父视图、随设备方向同步预览图层的方向。
 class CameraView: UIView {
   var videoPreviewLayer: AVCaptureVideoPreviewLayer?
 
@@ -21,7 +24,27 @@ class CameraView: UIView {
     case UIInterfaceOrientation.landscapeRight:
       return AVCaptureVideoOrientation.landscapeRight
     default:
-      return AVCaptureVideoOrientation.portraitUpsideDown
+      return AVCaptureVideoOrientation.portrait
+    }
+  }
+
+  /// 设备方向 → 顺时针旋转角度。
+  ///
+  /// iOS 17 起 `videoOrientation` 被废弃，官方替代是 `videoRotationAngle`。
+  /// 两者对「画面前方」的定义不同：rotationAngle 以传感器原始方向为 0°，
+  /// 竖向手持时需要 90°。这里按 interfaceOrientation 换算。
+  private func rotationAngle(for orientation: UIInterfaceOrientation) -> CGFloat {
+    switch orientation {
+    case .portrait:
+      return 90
+    case .portraitUpsideDown:
+      return 270
+    case .landscapeLeft:
+      return 0
+    case .landscapeRight:
+      return 180
+    default:
+      return 90
     }
   }
 
@@ -33,11 +56,22 @@ class CameraView: UIView {
       }
     }
 
-    if let interfaceOrientation = UIApplication.shared.windows.first(where: { $0.isKeyWindow })?
-      .windowScene?.interfaceOrientation
-    {
-      self.videoPreviewLayer?.connection?.videoOrientation = interfaceOrientationToVideoOrientation(
-        interfaceOrientation)
+    guard
+      let interfaceOrientation = UIApplication.shared.connectedScenes
+        .compactMap({ $0 as? UIWindowScene })
+        .first(where: { $0.activationState == .foregroundActive })?
+        .interfaceOrientation
+    else { return }
+
+    guard let connection = videoPreviewLayer?.connection else { return }
+    if #available(iOS 17.0, *) {
+      // 角度在部分镜头组合下不可任意设置，越界会抛异常，先校验再赋值
+      let angle = rotationAngle(for: interfaceOrientation)
+      if connection.isVideoRotationAngleSupported(angle) {
+        connection.videoRotationAngle = angle
+      }
+    } else {
+      connection.videoOrientation = interfaceOrientationToVideoOrientation(interfaceOrientation)
     }
   }
 

@@ -15,3 +15,9 @@
 /gen/android/*.jks
 /gen/android/key.properties
 /gen/android/keystore.properties
+
+# iOS 工程由 `tauri ios init` 生成（只能在 macOS 上生成），
+# 属本地产物而非源码。CI 每次 checkout 后重新生成，无需入库。
+# 注意：Info.plist 不在此列 —— 项目自己的权限声明是 src-tauri/Info.plist，
+# 那是源码，必须入库。
+/gen/apple/

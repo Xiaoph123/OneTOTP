@@ -13,7 +13,7 @@ import { useToast } from "./Toast";
 import { avatarOf, copyTextAutoClear, formatCode } from "../lib/utils";
 import { hideWindow } from "../state/useAutoLock";
 import { useApp } from "../state/AppContext";
-import { isMobile } from "../lib/platform";
+import { isIOS, isMobile } from "../lib/platform";
 import { useI18n } from "../i18n";
 
 interface Props {
@@ -43,7 +43,7 @@ export function CodeCard({
 }: Props) {
   const { t } = useI18n();
   const toast = useToast();
-  const { refreshAccounts, settings } = useApp();
+  const { refreshAccounts, settings, lockApp } = useApp();
   const mobile = isMobile();
   // 桌面 hover 模式下由悬停控制显示；移动端无 hover，改为点击揭示
   const [hovering, setHovering] = useState(false);
@@ -91,7 +91,16 @@ export function CodeCard({
     // 同步内存中的 lastUsedAt，否则「最近」筛选要等下次启动才反映本次使用
     refreshAccounts().catch(() => {});
     toast.success(t("已复制到剪贴板"));
-    if (autoHideAfterCopy) hideWindow();
+    if (autoHideAfterCopy) {
+      // iOS 不允许程序主动切后台（UIApplication.suspend 会被审核拒），
+      // 改为立即锁定：界面回到锁屏，用户回来必须重新解锁。
+      // 语义上比「切后台」更安全，也最接近「复制完就把验证码藏起来」的意图。
+      if (isIOS()) {
+        void lockApp();
+      } else {
+        hideWindow();
+      }
+    }
   };
 
   const handleCardClick = () => {

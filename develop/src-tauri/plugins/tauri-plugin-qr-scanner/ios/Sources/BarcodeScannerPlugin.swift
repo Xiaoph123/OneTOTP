@@ -78,6 +78,8 @@ class BarcodeScannerPlugin: Plugin, AVCaptureMetadataOutputObjectsDelegate {
   var captureSession: AVCaptureSession?
   var captureVideoPreviewLayer: AVCaptureVideoPreviewLayer?
   var metaOutput: AVCaptureMetadataOutput?
+  /// 取景蒙版：与 Android 侧设计保持一致
+  var scanMaskView: ScanMaskView?
 
   var currentCamera = 0
   var frontCamera: AVCaptureDevice?
@@ -98,9 +100,7 @@ class BarcodeScannerPlugin: Plugin, AVCaptureMetadataOutputObjectsDelegate {
   }
 
   private func loadCamera() {
-    cameraView = CameraView(
-      frame: CGRect(
-        x: 0, y: 0, width: UIScreen.main.bounds.width, height: UIScreen.main.bounds.height))
+    cameraView = CameraView(frame: UIScreen.main.bounds)
     cameraView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
   }
 
@@ -113,7 +113,7 @@ class BarcodeScannerPlugin: Plugin, AVCaptureMetadataOutputObjectsDelegate {
       return
     }
 
-    let found = metadataObjects[0] as! AVMetadataMachineReadableCodeObject
+    guard let found = metadataObjects[0] as? AVMetadataMachineReadableCodeObject else { return }
     if scanFormats.contains(found.type) {
       var jsObject: JsonObject = [:]
 
@@ -122,9 +122,12 @@ class BarcodeScannerPlugin: Plugin, AVCaptureMetadataOutputObjectsDelegate {
         jsObject["content"] = found.stringValue
       }
 
+      // 命中时给一次轻触反馈，与 Android 侧 vibrate() 的体验对齐
+      let generator = UIImpactFeedbackGenerator(style: .medium)
+      generator.impactOccurred()
+
       invoke?.resolve(jsObject)
       destroy()
-
     }
   }
 
@@ -169,6 +172,21 @@ class BarcodeScannerPlugin: Plugin, AVCaptureMetadataOutputObjectsDelegate {
       captureVideoPreviewLayer = AVCaptureVideoPreviewLayer(session: captureSession!)
       cameraView.addPreviewLayer(captureVideoPreviewLayer)
 
+      // 二维码通常只有几厘米，连续自动对焦能让识别「秒出」；
+      // 单次对焦在近距离下容易锁在无穷远，表现为一直扫不上。
+      configureContinuousFocus(device: input.device)
+
+      // 取景蒙版：叠在相机画面之上，绘制遮罩 / 括号 / 扫描线 / 两个按钮
+      let mask = ScanMaskView()
+      mask.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+      mask.frame = (webView.superview?.bounds) ?? UIScreen.main.bounds
+      mask.onBack = { [weak self] in self?.cancelScan() }
+      mask.onManualInput = { [weak self] in self?.requestManualInput() }
+      // 旋转或尺寸变化后，取景框位置随之改变，必须重算解码区域
+      mask.onLayoutChanged = { [weak self] in self?.updateRectOfInterest() }
+      webView.superview?.addSubview(mask)
+      scanMaskView = mask
+
       self.windowed = windowed
       if windowed {
         self.previousBackgroundColor = self.webView.backgroundColor
@@ -187,6 +205,46 @@ class BarcodeScannerPlugin: Plugin, AVCaptureMetadataOutputObjectsDelegate {
     }
   }
 
+  /// 连续自动对焦 + 兴趣点居中，兼顾「远距离整屏扫码」与「近距离贴近扫码」
+  private func configureContinuousFocus(device: AVCaptureDevice) {
+    guard device.isFocusModeSupported(.continuousAutoFocus) else { return }
+    do {
+      try device.lockForConfiguration()
+      device.focusMode = .continuousAutoFocus
+      if device.isAutoFocusRangeRestrictionSupported {
+        device.autoFocusRangeRestriction = .near
+      }
+      device.unlockForConfiguration()
+    } catch {
+      // 配置失败不影响扫码，只是对焦策略退回系统默认
+    }
+  }
+
+  /// 把取景框换算成 `AVCaptureMetadataOutput.rectOfInterest`。
+  ///
+  /// 为什么需要换算：`rectOfInterest` 用的是「预览图层坐标系」。
+  /// 直接拿视图坐标赋值会因为坐标系不一致而完全错位（常见表现是
+  /// 框内扫不到、框外反而能扫到）。系统提供的
+  /// `metadataOutputRectConverted(fromLayerRect:)` 正是为此设计。
+  ///
+  /// 换算失败（蒙版尚未布局 / 尺寸为 0）时保持整屏识别，宁可多扫也不漏扫。
+  private func updateRectOfInterest() {
+    guard let output = metaOutput else { return }
+    // rectOfInterest 在 metadataObjectTypes 为空时赋值会抛 NSInvalidArgumentException。
+    // 蒙版的首次布局早于 runScanner（那时格式还没设置），必须在这里挡住。
+    guard !output.metadataObjectTypes.isEmpty else { return }
+    guard let layer = captureVideoPreviewLayer else { return }
+    guard let mask = scanMaskView, !mask.decodeRect.isEmpty else {
+      output.rectOfInterest = CGRect(x: 0, y: 0, width: 1, height: 1)
+      return
+    }
+    // 蒙版与相机视图同属一个父视图且尺寸相同，坐标可直接转换
+    let inLayer = layer.metadataOutputRectConverted(fromLayerRect: mask.decodeRect)
+    guard inLayer.width > 0, inLayer.height > 0 else { return }
+    // 夹到合法范围，越界会让 AVCaptureMetadataOutput 抛异常
+    output.rectOfInterest = inLayer.intersection(CGRect(x: 0, y: 0, width: 1, height: 1))
+  }
+
   private func dismantleCamera() {
     if self.captureSession != nil {
       self.captureSession!.stopRunning()
@@ -199,6 +257,11 @@ class BarcodeScannerPlugin: Plugin, AVCaptureMetadataOutputObjectsDelegate {
       self.backCamera = nil
     }
 
+    // 蒙版移除必须无条件执行：它可能在相机初始化失败前就已挂上，
+    // 若用 session 做守卫会让蒙版永久留在界面上（与 Android 侧同理）。
+    self.scanMaskView?.removeFromSuperview()
+    self.scanMaskView = nil
+
     self.isScanning = false
   }
 
@@ -210,6 +273,28 @@ class BarcodeScannerPlugin: Plugin, AVCaptureMetadataOutputObjectsDelegate {
       webView.isOpaque = true
       webView.backgroundColor = backgroundColor
       webView.scrollView.backgroundColor = backgroundColor
+    }
+  }
+
+  /// 蒙版上的「返回」：与 Android 侧走同一条路径。
+  ///
+  /// 先拒绝待处理的 scan Promise（前端 catch 到 "cancelled" 后回到扫码页签），
+  /// 再销毁相机。顺序不能反：destroy() 之后 invoke 已被清空，Promise 永不结束。
+  private func cancelScan() {
+    invoke?.reject("cancelled")
+    invoke = nil
+    destroy()
+  }
+
+  /// 蒙版上的「手动输入代码」：通知前端切到「手动」页签。
+  ///
+  /// 这里**只**发通知，不主动关闭相机。关闭动作由前端钩子自己调用 `cancel()`，
+  /// 这样顺序是确定的：前端先置位「主动切换」标记 → 再 cancel → Promise 拒绝时
+  /// 标记已就绪，不会误报「已取消扫码」。
+  private func requestManualInput() {
+    DispatchQueue.main.async {
+      self.webView.evaluateJavaScript(
+        "(window.__onScanManualInput && window.__onScanManualInput())", completionHandler: nil)
     }
   }
 
@@ -260,15 +345,30 @@ class BarcodeScannerPlugin: Plugin, AVCaptureMetadataOutputObjectsDelegate {
     }
   }
 
+  /// 轻触反馈。
+  ///
+  /// iOS 没有 Android 那样的任意时长震动接口（`AudioServicesPlaySystemSound`
+  /// 的 kSystemSoundID_Vibrate 在部分机型上无效），统一用触感反馈代替。
+  @objc func vibrate(_ invoke: Invoke) {
+    let generator = UIImpactFeedbackGenerator(style: .medium)
+    generator.impactOccurred()
+    invoke.resolve()
+  }
+
   private func runScanner(_ invoke: Invoke, args: ScanOptions) {
     if getPermissionState() != "granted" {
       invoke.reject("Camera permission denied or not yet requested")
       return
     }
 
+    guard let output = metaOutput, let session = captureSession else {
+      invoke.reject("Camera is not ready")
+      return
+    }
+
     scanFormats = [AVMetadataObject.ObjectType]()
 
-    (args.formats ?? []).forEach { format in
+    for format in args.formats ?? [] {
       if let formatValue = format.value {
         scanFormats.append(formatValue)
       } else {
@@ -285,9 +385,12 @@ class BarcodeScannerPlugin: Plugin, AVCaptureMetadataOutputObjectsDelegate {
       }
     }
 
-    self.metaOutput!.metadataObjectTypes = self.scanFormats
+    // 逐帧解码的格式列表必须在 session 启动前设置好
+    output.metadataObjectTypes = scanFormats
+    updateRectOfInterest()
+
     DispatchQueue.main.async {
-      self.captureSession!.startRunning()
+      session.startRunning()
     }
 
     self.isScanning = true
@@ -338,8 +441,7 @@ class BarcodeScannerPlugin: Plugin, AVCaptureMetadataOutputObjectsDelegate {
 
   @objc private func cancel(_ invoke: Invoke) {
     DispatchQueue.main.async { [self] in
-      self.invoke?.reject("cancelled")
-      self.destroy()
+      self.cancelScan()
       invoke.resolve()
     }
   }

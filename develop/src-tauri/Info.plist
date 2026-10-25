@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  iOS 原生权限与外观声明。
+
+  Tauri 会把与 tauri.conf.json 同目录的这个文件合并进最终工程的
+  Info.plist（见官方文档：Tauri also looks for a `Info.plist` and
+  `Info.ios.plist` file in the same directory as the Tauri configuration file）。
+
+  为什么必须显式声明：iOS 在访问相机 / Face ID 前会校验对应的
+  UsageDescription 键，缺失时**直接崩溃**（不是拒绝授权），
+  而插件侧只能检测到缺失后返回错误，在此之前系统已经终止了进程。
+-->
+<plist version="1.0">
+<dict>
+  <!-- 扫码添加账户（tauri-plugin-qr-scanner 的 BarcodeScannerPlugin 会校验该键） -->
+  <key>NSCameraUsageDescription</key>
+  <string>用于扫描二维码快速添加验证码账户。相机画面仅在本机处理，不会上传或保存。</string>
+
+  <!-- 指纹 / 面容快速解锁（tauri-plugin-biometry 的 BiometryPlugin 会校验该键） -->
+  <key>NSFaceIDUsageDescription</key>
+  <string>用于通过 Face ID 快速解锁 OneTOTP，免去每次输入主密码。生物识别数据由系统保管，应用无法读取。</string>
+
+  <!--
+    状态栏样式交给 UIViewController 决定。
+
+    为什么要设：默认为 false 时状态栏样式由 UIApplication.statusBarStyle 全局控制，
+    WKWebView 全屏（viewport-fit=cover）场景下无法随页面明暗切换图标颜色，
+    深色背景上会出现「黑色状态栏图标看不见」。设为 true 后由宿主 ViewController
+    按 overrideUserInterfaceStyle 自适应，与 Android 侧 isAppearanceLightStatusBars
+    的行为一致。
+  -->
+  <key>UIViewControllerBasedStatusBarAppearance</key>
+  <true/>
+
+  <!--
+    仅支持竖屏与横屏，不跟随「倒置」。
+    倒置竖屏会让扫码取景框与相机预览方向错位（AVCaptureVideoOrientation
+    .portraitUpsideDown 在部分机型上表现不一致），而 TOTP 应用没有该场景需求。
+  -->
+  <key>UISupportedInterfaceOrientations</key>
+  <array>
+    <string>UIInterfaceOrientationPortrait</string>
+    <string>UIInterfaceOrientationLandscapeLeft</string>
+    <string>UIInterfaceOrientationLandscapeRight</string>
+  </array>
+
+  <!-- iPad 多任务：声明支持全部方向以避免分屏时的布局告警 -->
+  <key>UISupportedInterfaceOrientations~ipad</key>
+  <array>
+    <string>UIInterfaceOrientationPortrait</string>
+    <string>UIInterfaceOrientationPortraitUpsideDown</string>
+    <string>UIInterfaceOrientationLandscapeLeft</string>
+    <string>UIInterfaceOrientationLandscapeRight</string>
+  </array>
+</dict>
+</plist>

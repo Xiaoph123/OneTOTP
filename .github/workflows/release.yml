@@ -12,9 +12,13 @@ name: Release
 #       OneTOTP_0.1.0_linux_x86_64.deb / .rpm / .AppImage
 #       OneTOTP_0.1.0_linux_arm64.deb / .rpm / .AppImage
 #       OneTOTP_0.1.0_android_arm64.apk / _armv7.apk / _x86.apk / _x86_64.apk
-#       OneTOTP_0.1.0_ios.ipa
+#       OneTOTP_0.1.0_ios-unsigned.ipa
 #
-# 说明：Tauri 2 不支持 32 位 Windows（i686），故 Windows 仅出 x64 / arm64。
+# 说明：
+#   - Tauri 2 不支持 32 位 Windows（i686），故 Windows 仅出 x64 / arm64。
+#   - iOS 产物是**未签名**包，安装前需使用者用 Apple ID 自行重签
+#     （Sideloadly / AltStore / Xcode），详见 README「iOS 安装说明」。
+#     之所以不做签名：签名身份属于使用者自己，仓库不应也无需持有证书。
 on:
   push:
     tags:
@@ -25,18 +29,6 @@ env:
   NODE_VERSION: '22'
 
 jobs:
-  # ═══════════════════════ 前置探测 ═══════════════════════
-  # job 级 if 无法直接读取 secrets，需通过一个探测 job 把
-  # 「是否配置了 Apple 证书」转成 output 供 build-ios 判断。
-  detect:
-    name: Detect secrets
-    runs-on: ubuntu-24.04
-    outputs:
-      has_apple_cert: ${{ steps.check.outputs.has_apple_cert }}
-    steps:
-      - id: check
-        run: echo "has_apple_cert=${{ secrets.APPLE_CERTIFICATE != '' }}" >> "$GITHUB_OUTPUT"
-
   # ═══════════════════════ Windows (x64 / arm64) ═══════════════════════
   build-windows:
     name: Windows ${{ matrix.arch }}
@@ -311,20 +303,27 @@ jobs:
           name: android-${{ matrix.name }}
           path: artifacts/
 
-  # ═══════════════════════ iOS ═══════════════════════
-  # 需要 Apple 开发者账号（$99/年）。在仓库 Settings → Secrets and variables → Actions 配置：
-  #   APPLE_CERTIFICATE          （.p12 证书的 base64）
-  #   APPLE_CERTIFICATE_PASSWORD （.p12 密码）
-  #   APPLE_SIGNING_IDENTITY     （如 "Apple Distribution: XXX (TEAMID)"）
-  #   APPLE_PROVISIONING_PROFILE （描述文件 base64）
-  #   APPLE_TEAM_ID              （10 位团队 ID）
-  #   KEYCHAIN_PASSWORD          （临时钥匙串密码，任意字符串）
-  # 未配置 APPLE_CERTIFICATE 时本 job 自动跳过（不会失败）。
+  # ═══════════════════════ iOS（无签名编译） ═══════════════════════
+  # 产物是**未签名**的 .ipa：任何人都能下载，但安装到真机前必须自己用
+  # Apple ID 重签（Sideloadly / AltStore / Xcode 均可，详见 README）。
+  #
+  # 为什么不做签名：签名需要 Apple 开发者账号（$99/年）与证书、描述文件、
+  # Team ID 等一整套 secrets。仓库维护者不持有证书，也不应替使用者承担
+  # 签名责任——签名身份属于使用者自己。无签名编译不需要任何 Apple 凭据，
+  # GitHub 的 macOS runner 可直接完成，因此本 job 无条件执行，
+  # 不再依赖「是否配置了证书」的探测。
+  #
+  # 关于 --no-sign 的实际行为（与直觉不同，值得写下来）：
+  # 它不止是「跳过签名」，而是让 tauri **跳过 xcodebuild build 这一步**，
+  # 直接对工程做一次跳过签名的 archive。archive 产物是
+  # `<scheme>.xcarchive/Products/Applications/<name>.app`，
+  # **不会**自动生成 .ipa —— 所以下面手工打 Payload/ 目录。
   build-ios:
     name: iOS
-    needs: [detect]
-    if: needs.detect.outputs.has_apple_cert == 'true'
     runs-on: macos-latest
+    # Rust 全量编译 + Xcode archive 在 macOS runner 上约 15~25 分钟，
+    # 给足余量避免被默认超时打断
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
 
@@ -334,74 +333,159 @@ jobs:
           cache: npm
           cache-dependency-path: develop/package-lock.json
 
+      # 只装真机目标（aarch64-apple-ios）。不装模拟器目标 --
+      # 那是另一个 triple，多装一份只会拖慢缓存恢复。
       - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios
+          targets: aarch64-apple-ios
 
       - uses: swatinem/rust-cache@v2
         with:
           workspaces: develop/src-tauri
-          key: ios
+          key: ios-unsigned
 
       - name: Install dependencies
         working-directory: develop
         run: npm ci
 
+      # --ci 跳过所有交互式提问。GitHub Actions 本身会设置 CI=true，
+      # tauri 的 ci 参数也读该环境变量，这里显式传入双保险。
       - name: Init iOS project
         working-directory: develop
-        run: npm run tauri ios init
+        run: npm run tauri ios init -- --ci
 
-      - name: Import signing certificate
-        env:
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
-          APPLE_PROVISIONING_PROFILE: ${{ secrets.APPLE_PROVISIONING_PROFILE }}
-        run: |
-          set -euo pipefail
-          CERT_PATH=$RUNNER_TEMP/certificate.p12
-          PROFILE_PATH=$RUNNER_TEMP/profile.mobileprovision
-          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
-
-          echo -n "$APPLE_CERTIFICATE" | base64 --decode > "$CERT_PATH"
-          echo -n "$APPLE_PROVISIONING_PROFILE" | base64 --decode > "$PROFILE_PATH"
-
-          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
-          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          security import "$CERT_PATH" -P "$APPLE_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
-          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          security list-keychain -d user -s "$KEYCHAIN_PATH"
-
-          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
-          cp "$PROFILE_PATH" ~/Library/MobileDevice/Provisioning\ Profiles/
-
-      - name: Build iOS (ipa)
-        working-directory: develop
-        env:
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: npm run tauri ios build -- --export-method app-store-connect
-
-      - name: Collect artifacts
+      # tauri 在 build 前会调用 ensure_ios_runtime_installed()，
+      # 它会 `xcrun simctl list runtimes` 检查 iOS 运行时；缺失时抛出
+      # 一个**交互式提问**（CI 下读不到输入 → 取默认 false → 直接报错退出）。
+      # 虽然 macos-latest 一般自带运行时，但一旦缺就是 20 分钟后才失败，
+      # 这里提前探测并静默补装，把不确定性挡在前面。
+      #
+      # 注意：不要写成 `xcrun ... | grep -q`。开了 pipefail 后 grep -q 提前退出
+      # 会让 xcrun 收到 SIGPIPE，管道整体返回 141，条件判断就永远为假。
+      - name: Ensure iOS runtime available
         shell: bash
         run: |
+          set -euo pipefail
+          runtimes=$(xcrun simctl list runtimes)
+          if printf '%s\n' "$runtimes" | grep -q '^iOS '; then
+            echo "iOS 运行时已就绪"
+          else
+            echo "未检测到 iOS 运行时，开始下载（耗时较长）"
+            sudo xcodebuild -downloadPlatform iOS
+            xcrun simctl list runtimes
+          fi
+
+      # 确认 Info.plist 里的权限描述真的合入成功了。
+      #
+      # 为什么要在 CI 里查：iOS 访问相机 / Face ID 前会校验对应的
+      # UsageDescription，缺失时是**直接崩溃**而不是拒绝授权。
+      # 这种错误在编译期完全看不出来，只能靠检查产物发现；
+      # 一旦漏掉，用户装上去点「扫码」就闪退，反馈成本极高。
+      #
+      # 为什么遍历而不是写死路径：工程由 `ios init` 生成，scheme 目录名
+      # 与层级属于 Tauri 内部约定，随版本可能变化。这里只要求「存在某个
+      # Info.plist 同时含两个键」即可，对目录结构变化免疫。
+      - name: Verify Info.plist usage descriptions
+        shell: bash
+        run: |
+          set -euo pipefail
+          plists=$(find develop/src-tauri/gen/apple -name Info.plist || true)
+
+          found=0
+          while IFS= read -r plist; do
+            # 不能写 `[ -z "$plist" ] && continue`：条件为假时该语句返回 1，
+            # 在 set -e 下会直接终止脚本。
+            if [ -z "$plist" ]; then
+              continue
+            fi
+            if /usr/libexec/PlistBuddy -c "Print :NSCameraUsageDescription" "$plist" >/dev/null 2>&1 \
+               && /usr/libexec/PlistBuddy -c "Print :NSFaceIDUsageDescription" "$plist" >/dev/null 2>&1; then
+              echo "OK  $plist 已包含相机与 Face ID 说明"
+              found=1
+              break
+            fi
+          done <<< "$plists"
+
+          if [ "$found" -ne 1 ]; then
+            echo "未找到同时含 NSCameraUsageDescription 与 NSFaceIDUsageDescription 的 Info.plist"
+            echo "请检查 src-tauri/Info.plist 是否存在、plist 格式是否合法"
+            printf '%s\n' "$plists"
+            exit 1
+          fi
+
+      - name: Build iOS (unsigned)
+        working-directory: develop
+        run: npm run tauri ios build -- --no-sign --ci
+
+      # 打包成 ipa。
+      #
+      # 兼容两种产物形态：
+      #  1) tauri/xcode 直接吐出 .ipa（未来版本行为可能变化）
+      #  2) 只有 xcarchive 里的 .app（当前 --no-sign 的实际行为）
+      # ipa 的本质就是一个内含 Payload/<name>.app 的 zip，
+      # 所以手工打包与 Xcode 导出在格式上等价。
+      - name: Package unsigned ipa
+        shell: bash
+        run: |
+          set -euo pipefail
           ver=$(node -p "require('./develop/package.json').version")
-          mkdir -p artifacts
-          IPA=$(find develop/src-tauri/gen/apple -name '*.ipa' | head -n 1)
-          test -n "$IPA"
-          cp "$IPA" "artifacts/OneTOTP_${ver}_ios.ipa"
+          GEN=develop/src-tauri/gen/apple
+
+          # 注意：所有 `find | head` 都先落到变量再取首行。
+          # 开了 pipefail 之后，head 提前退出会给 find 发 SIGPIPE，
+          # 管道返回 141，`$(...)` 直接判定失败，脚本在 set -e 下退出。
+          IPA=$(find "$GEN" -name '*.ipa' || true)
+          IPA=$(printf '%s\n' "$IPA" | head -n 1)
+
+          APP=$(find "$GEN" -path '*.xcarchive/Products/Applications/*.app' -type d || true)
+          APP=$(printf '%s\n' "$APP" | head -n 1)
+          if [ -z "$APP" ]; then
+            # 兜底：有些布局把 .app 直接放在导出目录（不在 xcarchive 里）
+            APP=$(find "$GEN" -name '*.app' -type d -not -path '*.xcarchive/*' || true)
+            APP=$(printf '%s\n' "$APP" | head -n 1)
+          fi
+
+          rm -rf Payload artifacts && mkdir -p artifacts
+
+          if [ -n "$IPA" ]; then
+            echo "使用 tauri 已生成的 ipa：$IPA"
+            cp "$IPA" "artifacts/OneTOTP_${ver}_ios-unsigned.ipa"
+          elif [ -n "$APP" ]; then
+            echo "从 .app 手工打包：$APP"
+            mkdir -p Payload
+            cp -R "$APP" Payload/
+            # 交给 Xcode 重签时，Payload 里若残留旧的 _CodeSignature 会报冲突
+            rm -rf Payload/*.app/_CodeSignature
+            zip -qry "artifacts/OneTOTP_${ver}_ios-unsigned.ipa" Payload
+          else
+            echo "未找到任何 iOS 产物，构建目录结构如下："
+            find "$GEN" -maxdepth 3 -type d
+            exit 1
+          fi
+
+          test -s "artifacts/OneTOTP_${ver}_ios-unsigned.ipa"
+          echo "--- 产物 ---"
+          ls -lh artifacts
+          echo "--- ipa 内容校验 ---"
+          unzip -l "artifacts/OneTOTP_${ver}_ios-unsigned.ipa" > /tmp/ipa-list.txt
+          head -n 10 /tmp/ipa-list.txt
+          # Payload/ 下必须有且只有一个 .app，否则这个 ipa 装不上
+          grep -q 'Payload/[^/]*\.app/' /tmp/ipa-list.txt || {
+            echo "ipa 结构异常：缺少 Payload/<name>.app"
+            exit 1
+          }
 
       - uses: actions/upload-artifact@v4
         with:
           name: ios
           path: artifacts/
+          if-no-files-found: error
 
   # ═══════════════════════ 发布 Release ═══════════════════════
   publish:
     # 只要还有成功产物就发布（某个架构失败不阻断其余产物）；仅 tag 触发时发布
     if: ${{ always() && startsWith(github.ref, 'refs/tags/') }}
-    needs: [detect, build-windows, build-linux, build-macos, build-android, build-ios]
+    needs: [build-windows, build-linux, build-macos, build-android, build-ios]
     runs-on: ubuntu-latest
     permissions:
       contents: write

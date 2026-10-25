@@ -19,7 +19,7 @@ import { ChevronRight, Copy, Check, FolderOpen } from "../components/icons";
 import { ConfirmDialog } from "../components/Dialog";
 import { AboutDialog } from "../components/AboutDialog";
 import { copyText, formatBytes } from "../lib/utils";
-import { isDesktop } from "../lib/platform";
+import { isDesktop, isIOS } from "../lib/platform";
 import { useI18n } from "../i18n";
 
 const MAX_BACKUP_KEEP = 10;
@@ -53,6 +53,7 @@ export function SettingsPage() {
   const toast = useToast();
   const { t } = useI18n();
   const desktop = isDesktop();
+  const ios = isIOS();
   const [draft, setDraft] = useState(settings);
   // 即时保存的防抖定时器：连续快速切换时合并为一次落盘。
   // 声明靠前是因为下面的 settings 同步 effect 也要读 pendingSettings。
@@ -390,10 +391,18 @@ export function SettingsPage() {
           <Row title={t("点击即复制")} desc={t("点击验证码卡片直接复制")}>
             <Switch checked={draft.clickToCopy} onChange={(v) => update("clickToCopy", v)} label={t("点击即复制")} />
           </Row>
-          {/* 复制后自动隐藏：桌面端隐藏窗口，移动端切到后台，两端语义一致 */}
+          {/* 复制后自动隐藏：三端语义不同（见 useAutoLock.hideWindow / CodeCard）。
+              iOS 系统不允许程序主动切后台，故改为「立即锁定」，
+              文案必须如实说明，否则用户会以为行为与其他平台一致。 */}
           <Row
             title={t("复制后自动隐藏窗口")}
-            desc={desktop ? t("复制验证码后自动收起窗口") : t("复制验证码后自动切到后台")}
+            desc={
+              desktop
+                ? t("复制验证码后自动收起窗口")
+                : ios
+                  ? t("复制验证码后立即锁定，回来需重新解锁")
+                  : t("复制验证码后自动切到后台")
+            }
           >
             <Switch
               checked={draft.autoHideAfterCopy}

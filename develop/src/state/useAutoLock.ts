@@ -184,9 +184,12 @@ export function useAutoLock() {
 /**
  * 隐藏当前窗口（复制后自动隐藏使用）。
  *
- * - 桌面端：隐藏窗口，用户从托盘或快捷键唤起。
- * - 移动端：没有窗口概念，改为把应用切到后台（等价于按 Home 键），
- *   用户从最近任务切回即可继续使用。
+ * 桌面端隐藏窗口；Android 切到后台。iOS 不走本函数 —— iOS 不允许程序
+ * 主动切后台，改由调用方直接调用 `lockApp()`（见 CodeCard）。
+ *
+ * 为什么不在本函数里锁定：`lockApp` 来自 `AppContext`，而本模块是纯函数
+ * 工具模块（`lockDecision` 的单测依赖它不引入 React）。把锁定动作放进
+ * 组件层，依赖方向更清晰，也避免这里持有一份过期的 context 引用。
  */
 export async function hideWindow() {
   if (!isTauri()) return;

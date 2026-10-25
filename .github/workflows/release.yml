@@ -375,27 +375,42 @@ jobs:
             xcrun simctl list runtimes
           fi
 
-      # 确认 Info.plist 里的权限描述真的合入成功了。
+      - name: Build iOS (unsigned)
+        working-directory: develop
+        run: npm run tauri ios build -- --no-sign --ci
+
+      # 确认 Info.plist 里的权限描述真的合入到最终产物了。
       #
-      # 为什么要在 CI 里查：iOS 访问相机 / Face ID 前会校验对应的
+      # 为什么必须在 build 之后查：`src-tauri/Info.plist` 的合并发生在
+      # `ios build` 阶段（tauri 的 merge_plist），`ios init` 生成的工程里
+      # 还没有这两个键。放在 build 前查必然误报。
+      #
+      # 为什么查 .app 而不是工程里的 Info.plist：.app 里那份才是真正
+      # 打进包、被系统读取的。工程文件对但产物没带上，同样会崩。
+      #
+      # 为什么这很重要：iOS 访问相机 / Face ID 前会校验对应的
       # UsageDescription，缺失时是**直接崩溃**而不是拒绝授权。
-      # 这种错误在编译期完全看不出来，只能靠检查产物发现；
-      # 一旦漏掉，用户装上去点「扫码」就闪退，反馈成本极高。
-      #
-      # 为什么遍历而不是写死路径：工程由 `ios init` 生成，scheme 目录名
-      # 与层级属于 Tauri 内部约定，随版本可能变化。这里只要求「存在某个
-      # Info.plist 同时含两个键」即可，对目录结构变化免疫。
+      # 这种错误编译期完全看不出来，只能靠检查产物发现。
       - name: Verify Info.plist usage descriptions
         shell: bash
         run: |
           set -euo pipefail
-          plists=$(find develop/src-tauri/gen/apple -name Info.plist || true)
+          GEN=develop/src-tauri/gen/apple
+
+          apps=$(find "$GEN" -name '*.app' -type d || true)
+          if [ -z "$apps" ]; then
+            echo "未找到 .app 产物，无法校验 Info.plist"
+            find "$GEN" -maxdepth 3 -type d
+            exit 1
+          fi
 
           found=0
-          while IFS= read -r plist; do
-            # 不能写 `[ -z "$plist" ] && continue`：条件为假时该语句返回 1，
-            # 在 set -e 下会直接终止脚本。
-            if [ -z "$plist" ]; then
+          while IFS= read -r app; do
+            if [ -z "$app" ]; then
+              continue
+            fi
+            plist="$app/Info.plist"
+            if [ ! -f "$plist" ]; then
               continue
             fi
             if /usr/libexec/PlistBuddy -c "Print :NSCameraUsageDescription" "$plist" >/dev/null 2>&1 \
@@ -404,18 +419,14 @@ jobs:
               found=1
               break
             fi
-          done <<< "$plists"
+          done <<< "$apps"
 
           if [ "$found" -ne 1 ]; then
-            echo "未找到同时含 NSCameraUsageDescription 与 NSFaceIDUsageDescription 的 Info.plist"
+            echo "产物中的 Info.plist 缺少 NSCameraUsageDescription 或 NSFaceIDUsageDescription"
             echo "请检查 src-tauri/Info.plist 是否存在、plist 格式是否合法"
-            printf '%s\n' "$plists"
+            printf '%s\n' "$apps"
             exit 1
           fi
-
-      - name: Build iOS (unsigned)
-        working-directory: develop
-        run: npm run tauri ios build -- --no-sign --ci
 
       # 打包成 ipa。
       #

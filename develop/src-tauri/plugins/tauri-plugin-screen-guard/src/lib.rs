@@ -22,6 +22,10 @@ use tauri::{
     Manager, Runtime,
 };
 
+mod error;
+
+pub use error::{Error, Result};
+
 tauri::ios_plugin_binding!(init_plugin_screen_guard);
 
 /// Access to the screen guard APIs.
@@ -29,7 +33,7 @@ pub struct ScreenGuard<R: Runtime>(PluginHandle<R>);
 
 impl<R: Runtime> ScreenGuard<R> {
     /// 开启 / 关闭截屏保护。
-    pub fn set_secure(&self, enabled: bool) -> tauri::Result<()> {
+    pub fn set_secure(&self, enabled: bool) -> Result<()> {
         self.0
             .run_mobile_plugin::<()>("setSecure", SetSecurePayload { enabled })
             .map_err(Into::into)

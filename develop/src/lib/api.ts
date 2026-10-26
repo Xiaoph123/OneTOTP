@@ -15,6 +15,8 @@ export interface AccountView {
   categoryName: string;
   categoryColor: string;
   favorite: boolean;
+  /** 手动排序序号（0 表示未手动排序） */
+  sortOrder: number;
   createdAt: number;
   lastUsedAt: number;
 }
@@ -42,6 +44,7 @@ interface RawAccount {
   category_name: string;
   category_color: string;
   favorite: boolean;
+  sort_order: number;
   created_at: number;
   last_used_at: number;
 }
@@ -61,6 +64,7 @@ function mapAccount(raw: RawAccount): AccountView {
     categoryName: raw.category_name,
     categoryColor: raw.category_color,
     favorite: raw.favorite,
+    sortOrder: raw.sort_order ?? 0,
     createdAt: raw.created_at,
     lastUsedAt: raw.last_used_at,
   };
@@ -111,8 +115,9 @@ export type ThemeMode = "light" | "dark" | "system";
  * - `pop`：盾牌弹性放大，随后高光扫过
  * - `ring`：盾牌呼吸 + 外圈环形进度条走满
  * - `dots`：光点从四周向中心汇聚，随后盾牌弹出（默认）
+ * - `none`：关闭开屏动画，直接进入界面
  */
-export type SplashAnimation = "draw" | "pop" | "ring" | "dots";
+export type SplashAnimation = "draw" | "pop" | "ring" | "dots" | "none";
 
 export type CodeVisibility = "never" | "always" | "hover";
 
@@ -518,6 +523,11 @@ export const api = {
 
   reorderCategories(ids: string[]): Promise<void> {
     return invoke("reorder_categories", { ids });
+  },
+
+  /** 调整账户顺序（传入按目标顺序排列的账户 id 列表） */
+  reorderAccounts(ids: string[]): Promise<void> {
+    return invoke("reorder_accounts", { ids });
   },
 
   async setAccountCategory(accountId: string, categoryId: string): Promise<AccountView> {

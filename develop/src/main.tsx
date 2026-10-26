@@ -33,8 +33,16 @@ function revealWindow(): void {
  * 动画还没播完就被移除，观感上像「闪了一下」。
  * 这里保证至少展示 1.7 秒 = 动画 1.5 秒 + 200ms 缓冲，
  * 让开屏动画完整播完、稍作停留再进入首页，衔接更从容。
+ *
+ * 用户关闭开屏动画（data-splash="none"）时该时长归零：
+ * 没有动画可播，再等 1.7 秒只会让启动显得迟钝。
  */
 const SPLASH_MIN_MS = 1700;
+
+/** 当前是否关闭了开屏动画（由 theme-boot.js 在首帧前写入） */
+function splashDisabled(): boolean {
+  return document.documentElement.getAttribute("data-splash") === "none";
+}
 
 /** 启动画面开始展示的时刻（模块加载即视为开始） */
 const splashShownAt = performance.now();
@@ -50,6 +58,12 @@ function dismissSplash(): void {
   if (!splash) {
     // 启动画面已被移除（重复调用）：只补一次入场动画
     root?.classList.add("is-entering");
+    return;
+  }
+
+  // 关闭动画时没有任何过渡可播：直接移除，不留空画面占位
+  if (splashDisabled()) {
+    splash.remove();
     return;
   }
 
@@ -70,6 +84,11 @@ function dismissSplash(): void {
   // 双 rAF 等 React 完成锁定页/主界面首帧绘制，再淡出，衔接无闪烁
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
+      // 关闭动画时不做任何等待，立即进入界面
+      if (splashDisabled()) {
+        dismissSplash();
+        return;
+      }
       // 补足最短展示时长：动画播完再进入首页
       const elapsed = performance.now() - splashShownAt;
       const wait = Math.max(0, SPLASH_MIN_MS - elapsed);

@@ -684,6 +684,69 @@ fn normalize_otp_type(value: &str) -> String {
     }
 }
 
+/// 账户排序键：`sort_order` 升序，未设置序号（0）视为排在最后。
+///
+/// 返回元组供 `sort_by` 直接比较：
+/// - 第一项：序号（0 → i32::MAX，即「未排序的排最后」）
+/// - 第二项：收藏（Reverse，收藏在前）
+/// - 第三项：创建时间（Reverse，新的在前）
+/// - 第四项：服务名（稳定兜底，避免同键时顺序随机）
+fn account_sort_key(
+    sort_order: i32,
+    favorite: bool,
+    created_at: i64,
+    issuer: &str,
+) -> (i32, std::cmp::Reverse<bool>, std::cmp::Reverse<i64>, &str) {
+    let order = if sort_order > 0 { sort_order } else { i32::MAX };
+    (
+        order,
+        std::cmp::Reverse(favorite),
+        std::cmp::Reverse(created_at),
+        issuer,
+    )
+}
+
+/// 在列表最前面预留 `count` 个位置，返回第一个可用序号。
+///
+/// 新账户必须排在最前面（用户明确要求）：手动排序生效后，
+/// 把现有账户的序号整体后移 `count` 位，新账户占用 `1..=count`。
+/// 从未手动排序时返回 0——默认顺序本身就是「最新在前」，
+/// 新账户天然在第一位，无需改动任何序号。
+fn reserve_top_slots(accounts: &mut [Account], count: i32) -> i32 {
+    if count <= 0 {
+        return 0;
+    }
+    let manual = accounts.iter().any(|a| a.sort_order > 0);
+    if !manual {
+        return 0;
+    }
+    for acc in accounts.iter_mut() {
+        if acc.sort_order > 0 {
+            acc.sort_order = acc.sort_order.saturating_add(count);
+        }
+    }
+    1
+}
+
+/// 账户列表排序（唯一排序入口，桌面端与移动端共用）。
+///
+/// 规则：`sort_order` 升序；未设置序号（0）的账户一律视为「排在最后」。
+///
+/// 为什么用「0 → i32::MAX」而不是先判断「有没有人手动排过序」：
+/// 后者需要一个全局开关，一旦开关判断失误（例如某条写入路径漏了序号），
+/// 整个列表就会退回默认顺序，新账户又跑到最前面。这里让每个账户
+/// 自己决定位置，不存在「开关状态」这种可失效的中间态：
+/// - 全部为 0（从未手动排序）→ 全部并列在末尾 → 由收藏、创建时间决定，
+///   即默认的「收藏优先 + 最新在前」，与旧版本完全一致；
+/// - 手动排序后（1..N）→ 严格按序号。
+fn sort_accounts(list: &mut [AccountView]) {
+    list.sort_by(|a, b| {
+        account_sort_key(a.sort_order, a.favorite, a.created_at, &a.issuer).cmp(
+            &account_sort_key(b.sort_order, b.favorite, b.created_at, &b.issuer),
+        )
+    });
+}
+
 #[tauri::command]
 pub fn list_accounts(state: State<AppState>) -> Result<Vec<AccountView>, String> {
     state.with_payload(|p| {
@@ -693,16 +756,10 @@ pub fn list_accounts(state: State<AppState>) -> Result<Vec<AccountView>, String>
             .iter()
             .map(|a| AccountView::from_with_categories(a, &categories))
             .collect();
-        // 排序：收藏优先，其余按创建时间倒序（新账户在最前，顺序稳定）。
         // 刻意不按 last_used_at 排序——每次复制验证码都会更新该字段，
         // 若参与列表排序，被点击的卡片会立刻跳到顶部，从手指底下「跑掉」。
         // 「最近」筛选页由前端按 last_used_at 自行排序。
-        list.sort_by(|a, b| {
-            b.favorite
-                .cmp(&a.favorite)
-                .then(b.created_at.cmp(&a.created_at))
-                .then(a.issuer.cmp(&b.issuer))
-        });
+        sort_accounts(&mut list);
         Ok(list)
     })
 }
@@ -807,25 +864,9 @@ pub fn add_account(state: State<AppState>, input: AccountInput) -> Result<Accoun
     // 重复校验：密钥相同即视为同一个验证码（密钥决定生成的动态码）。
     // 错误信息带固定前缀，供前端识别并给出明确提示。
     // 校验与写入必须在同一次锁内完成，否则并发添加相同密钥会绕过去重。
-    let account = Account {
-        id: uuid::Uuid::new_v4().to_string(),
-        issuer,
-        account: account_name,
-        secret,
-        otp_type: normalize_otp_type(&input.otp_type),
-        algorithm: totp::normalize_algorithm(&input.algorithm),
-        digits: input.digits,
-        period: input.period,
-        counter: input.counter,
-        category_id: input.category_id,
-        category: String::new(),
-        favorite: false,
-        created_at: totp::now_millis(),
-        last_used_at: 0,
-    };
     let mut view: Option<AccountView> = None;
     state.with_payload(|p| {
-        if let Some(existing) = p.accounts.iter().find(|a| a.secret == account.secret) {
+        if let Some(existing) = p.accounts.iter().find(|a| a.secret == secret) {
             return Err(format!(
                 "{}|{}|{}",
                 DUPLICATE_MARKER,
@@ -833,6 +874,26 @@ pub fn add_account(state: State<AppState>, input: AccountInput) -> Result<Accoun
                 existing.account
             ));
         }
+        // 新账户必须排在最前面：手动排序生效时把现有序号整体后移一位，
+        // 新账户占用第 1 位；未手动排序时序号为 0，靠「最新在前」天然居首。
+        let sort_order = reserve_top_slots(&mut p.accounts, 1);
+        let account = Account {
+            id: uuid::Uuid::new_v4().to_string(),
+            issuer: issuer.clone(),
+            account: account_name.clone(),
+            secret: secret.clone(),
+            otp_type: normalize_otp_type(&input.otp_type),
+            algorithm: totp::normalize_algorithm(&input.algorithm),
+            digits: input.digits,
+            period: input.period,
+            counter: input.counter,
+            category_id: input.category_id.clone(),
+            category: String::new(),
+            favorite: false,
+            sort_order,
+            created_at: totp::now_millis(),
+            last_used_at: 0,
+        };
         view = Some(AccountView::from_with_categories(&account, &p.categories));
         p.accounts.push(account);
         Ok(())
@@ -862,6 +923,9 @@ pub fn import_otpauth_text(state: State<AppState>, text: String) -> Result<(u32,
     let mut added = 0u32;
     let mut skipped = 0u32;
     state.with_payload(|p| {
+        // 先筛出真正要新增的账户（去重 + 补全服务名），再统一分配序号：
+        // 序号需要按「本批新增数量」整体后移现有账户，边遍历边分配会算错。
+        let mut fresh: Vec<Account> = Vec::new();
         for mut acc in parsed {
             // 与 add_account 保持一致的服务端校验：
             // 批量导入若跳过这些校验，会写入 get_codes 无法渲染的账户
@@ -874,10 +938,23 @@ pub fn import_otpauth_text(state: State<AppState>, text: String) -> Result<(u32,
                 };
             }
             // 密钥相同即视为重复，跳过而不入库
-            if p.accounts.iter().any(|a| a.secret == acc.secret) {
+            if p.accounts.iter().any(|a| a.secret == acc.secret)
+                || fresh.iter().any(|a| a.secret == acc.secret)
+            {
                 skipped += 1;
                 continue;
             }
+            fresh.push(acc);
+        }
+        if fresh.is_empty() {
+            return Ok(());
+        }
+        // 与 add_account 一致：新账户排在最前面。
+        // 手动排序生效时现有账户整体后移，本批账户占用 1..=n（保持粘贴顺序）。
+        let count = fresh.len() as i32;
+        let base = reserve_top_slots(&mut p.accounts, count);
+        for (idx, mut acc) in fresh.into_iter().enumerate() {
+            acc.sort_order = if base > 0 { base + idx as i32 } else { 0 };
             p.accounts.push(acc);
             added += 1;
         }
@@ -1234,6 +1311,14 @@ pub fn import_vault(
                 p.accounts.iter().map(|a| a.id.clone()).collect();
             let mut existing_secrets: std::collections::HashSet<String> =
                 p.accounts.iter().map(|a| a.secret.clone()).collect();
+            // 本机是否已有账户：决定导入的排序序号怎么落地。
+            // - 空库（换机恢复的典型场景）：完整沿用备份里的顺序，
+            //   用户在新机器上看到的排列与旧机器完全一致，无感切换。
+            // - 非空库（合并导入）：备份序号与本机序号会冲突（都从 1 开始），
+            //   因此把备份账户整体追加到本机现有顺序之后，保持备份内部的相对顺序。
+            let local_empty = p.accounts.is_empty();
+            let local_max = p.accounts.iter().map(|a| a.sort_order).max().unwrap_or(0);
+            let mut appended = 0i32;
             for acc in imported.accounts.iter() {
                 if existing_ids.contains(&acc.id) {
                     continue;
@@ -1257,7 +1342,20 @@ pub fn import_vault(
                     continue;
                 }
                 existing_secrets.insert(acc.secret.clone());
-                p.accounts.push(acc.clone());
+                let mut acc = acc.clone();
+                if local_empty {
+                    // 空库：原样保留备份里的序号，换机后顺序完全一致。
+                    // 备份来自旧版本（序号全为 0）时也保持 0，走默认顺序。
+                } else if local_max > 0 {
+                    // 本机已手动排序：备份账户整体追加到末尾，保持备份内部相对顺序。
+                    // 备份序号可能从 1 开始，直接沿用会插到本机账户中间。
+                    appended += 1;
+                    acc.sort_order = local_max.saturating_add(appended);
+                } else {
+                    // 本机未手动排序：归零，与本机账户一起走默认顺序。
+                    acc.sort_order = 0;
+                }
+                p.accounts.push(acc);
                 added_accounts += 1;
             }
         }
@@ -1433,6 +1531,41 @@ pub fn reorder_categories(state: State<AppState>, ids: Vec<String>) -> Result<()
     Ok(())
 }
 
+/// 调整账户顺序（传入按目标顺序排列的账户 id 列表）。
+///
+/// 只接受已存在的 id，未知 id 直接忽略；未出现在列表中的账户保持原有相对位置
+/// （追加到末尾），避免前端只传部分 id 时把其余账户的序号清成 0。
+#[tauri::command]
+pub fn reorder_accounts(state: State<AppState>, ids: Vec<String>) -> Result<(), String> {
+    // 上限校验：账户数量本身有限，这里只防御异常超长入参
+    if ids.len() > 10_000 {
+        return Err("排序参数过多".to_string());
+    }
+    state.with_payload(|p| {
+        let mut next = 1i32;
+        let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+        for id in ids.iter() {
+            if !seen.insert(id.clone()) {
+                continue;
+            }
+            if let Some(acc) = p.accounts.iter_mut().find(|a| &a.id == id) {
+                acc.sort_order = next;
+                next += 1;
+            }
+        }
+        // 未在列表中的账户：排在已排序账户之后，保持彼此原有顺序
+        for acc in p.accounts.iter_mut() {
+            if !seen.contains(&acc.id) {
+                acc.sort_order = next;
+                next += 1;
+            }
+        }
+        Ok(())
+    })?;
+    state.persist()?;
+    Ok(())
+}
+
 /// 将账户移动到指定分类（空 id 表示未分类）
 #[tauri::command]
 pub fn set_account_category(
@@ -1518,7 +1651,8 @@ fn sanitize_settings(mut s: AppSettings) -> AppSettings {
         }
     }
     s.theme = one_of(&s.theme, &["light", "dark", "system"], "system");
-    s.splash_animation = one_of(&s.splash_animation, &["draw", "pop", "ring", "dots"], "dots");
+    s.splash_animation =
+        one_of(&s.splash_animation, &["draw", "pop", "ring", "dots", "none"], "dots");
     s.code_visibility = one_of(&s.code_visibility, &["never", "always", "hover"], "never");
     s.category_expand_mode =
         one_of(&s.category_expand_mode, &["expand", "collapse", "remember"], "expand");
@@ -1731,9 +1865,107 @@ mod tests {
             category_id: String::new(),
             category: name.to_string(),
             favorite: false,
+            sort_order: 0,
             created_at: 0,
             last_used_at: 0,
         }
+    }
+
+    // ── 账户排序：手动排序后新账户必须落在末尾 ──
+
+    fn view(id: &str, sort_order: i32, created_at: i64, favorite: bool) -> AccountView {
+        AccountView {
+            id: id.to_string(),
+            issuer: id.to_string(),
+            account: String::new(),
+            secret: String::new(),
+            otp_type: "totp".to_string(),
+            algorithm: "SHA1".to_string(),
+            digits: 6,
+            period: 30,
+            counter: 0,
+            category_id: String::new(),
+            category_name: String::new(),
+            category_color: String::new(),
+            favorite,
+            sort_order,
+            created_at,
+            last_used_at: 0,
+        }
+    }
+
+    /// 从未手动排序（全部为 0）：保持默认的「收藏优先 + 最新在前」
+    #[test]
+    fn sort_accounts_defaults_to_favorite_then_newest() {
+        let mut list = vec![
+            view("old", 0, 100, false),
+            view("new", 0, 300, false),
+            view("fav", 0, 200, true),
+        ];
+        sort_accounts(&mut list);
+        let ids: Vec<&str> = list.iter().map(|a| a.id.as_str()).collect();
+        assert_eq!(ids, vec!["fav", "new", "old"]);
+    }
+
+    /// 手动排序后：严格按序号，新账户（序号 0）排在末尾而不是最前
+    #[test]
+    fn sort_accounts_puts_new_account_last_after_manual_sort() {
+        let mut list = vec![
+            view("second", 2, 100, false),
+            view("brand-new", 0, 999, false),
+            view("first", 1, 100, false),
+        ];
+        sort_accounts(&mut list);
+        let ids: Vec<&str> = list.iter().map(|a| a.id.as_str()).collect();
+        assert_eq!(ids, vec!["first", "second", "brand-new"]);
+    }
+
+    /// 手动排序后收藏不改变位置：序号优先于收藏标记
+    #[test]
+    fn sort_accounts_manual_order_beats_favorite() {
+        let mut list = vec![
+            view("a", 1, 100, false),
+            view("b", 2, 100, true),
+        ];
+        sort_accounts(&mut list);
+        let ids: Vec<&str> = list.iter().map(|a| a.id.as_str()).collect();
+        assert_eq!(ids, vec!["a", "b"]);
+    }
+
+    /// 新账户必须排在最前面：手动排序生效时现有账户整体后移
+    #[test]
+    fn reserve_top_slots_moves_existing_down() {
+        let mut accounts = vec![
+            account_with_legacy_category("a"),
+            account_with_legacy_category("b"),
+        ];
+        accounts[0].sort_order = 1;
+        accounts[1].sort_order = 2;
+
+        let base = reserve_top_slots(&mut accounts, 1);
+        assert_eq!(base, 1, "新账户应占用第 1 位");
+        assert_eq!(accounts[0].sort_order, 2);
+        assert_eq!(accounts[1].sort_order, 3);
+    }
+
+    /// 从未手动排序时不改动任何序号：默认顺序本身就是「最新在前」
+    #[test]
+    fn reserve_top_slots_noop_without_manual_order() {
+        let mut accounts = vec![account_with_legacy_category("a")];
+        let base = reserve_top_slots(&mut accounts, 1);
+        assert_eq!(base, 0);
+        assert_eq!(accounts[0].sort_order, 0);
+    }
+
+    /// 批量预留：多个新账户占用 1..=n，现有账户整体后移 n 位
+    #[test]
+    fn reserve_top_slots_handles_batch() {
+        let mut accounts = vec![account_with_legacy_category("a")];
+        accounts[0].sort_order = 5;
+
+        let base = reserve_top_slots(&mut accounts, 3);
+        assert_eq!(base, 1);
+        assert_eq!(accounts[0].sort_order, 8);
     }
 
     // ── 关闭窗口：关闭到托盘必须同时锁定 ──

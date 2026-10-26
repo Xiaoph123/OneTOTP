@@ -27,6 +27,8 @@ interface Props {
   detail: CardDetail;
   autoHideAfterCopy: boolean;
   onOpen: () => void;
+  /** 长按拖动排序用的标识（由列表容器读取，见 useDragSort） */
+  sortId?: string;
 }
 
 export function CodeCard({
@@ -40,6 +42,7 @@ export function CodeCard({
   detail,
   autoHideAfterCopy,
   onOpen,
+  sortId,
 }: Props) {
   const { t } = useI18n();
   const toast = useToast();
@@ -117,6 +120,7 @@ export function CodeCard({
   return (
     <article
       className={`otp-card is-${density}${danger ? " is-expiring" : ""}`}
+      data-sort-id={sortId}
       onClick={handleCardClick}
       onMouseEnter={() => !mobile && setHovering(true)}
       onMouseLeave={() => !mobile && setHovering(false)}

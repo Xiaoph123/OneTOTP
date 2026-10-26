@@ -33,6 +33,14 @@ pub struct Account {
     pub category: String,
     #[serde(default)]
     pub favorite: bool,
+    /// 手动排序序号，越小越靠前。
+    ///
+    /// 全部为 0 表示「从未手动排序」，此时列表回退到
+    /// 「收藏优先 + 创建时间倒序」的默认顺序（与旧版本一致）。
+    /// 用户长按拖动排序后，所有账户会被写入互不相同的序号，
+    /// 此后列表严格按该序号排列。
+    #[serde(default)]
+    pub sort_order: i32,
     /// 创建时间（毫秒时间戳）
     #[serde(default)]
     pub created_at: i64,
@@ -133,7 +141,7 @@ pub struct AppSettings {
     /// 主题：light | dark | system
     #[serde(default = "default_theme")]
     pub theme: String,
-    /// 开屏动画样式：draw（描边绘制）| pop（弹入光扫）| ring（环形进度）| dots（光点聚合）
+    /// 开屏动画样式：draw（描边绘制）| pop（弹入光扫）| ring（环形进度）| dots（光点聚合）| none（关闭）
     #[serde(default = "default_splash_animation")]
     pub splash_animation: String,
     /// 卡片密度：compact（紧凑）| standard（标准）
@@ -326,6 +334,8 @@ pub struct AccountView {
     /// 分类颜色（联表填充）
     pub category_color: String,
     pub favorite: bool,
+    /// 手动排序序号（0 表示未手动排序）
+    pub sort_order: i32,
     pub created_at: i64,
     pub last_used_at: i64,
 }
@@ -348,6 +358,7 @@ impl AccountView {
             category_name: matched.map(|c| c.name.clone()).unwrap_or_default(),
             category_color: matched.map(|c| c.color.clone()).unwrap_or_default(),
             favorite: account.favorite,
+            sort_order: account.sort_order,
             created_at: account.created_at,
             last_used_at: account.last_used_at,
         }
@@ -371,6 +382,7 @@ impl From<&Account> for AccountView {
             category_name: String::new(),
             category_color: String::new(),
             favorite: a.favorite,
+            sort_order: a.sort_order,
             created_at: a.created_at,
             last_used_at: a.last_used_at,
         }

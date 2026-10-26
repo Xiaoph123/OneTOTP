@@ -391,6 +391,8 @@ export const en: Record<string, string> = {
   "玻璃反光": "Glass gloss",
   "液态粗细": "Liquid stroke",
   "汇聚光晕": "Converge glow",
+  "关闭动画": "Off",
+  "拖动排序": "Drag to reorder",
   "切换亮色 / 暗色，或跟随系统": "Light / dark, or follow the system",
   "亮色": "Light",
   "暗色": "Dark",

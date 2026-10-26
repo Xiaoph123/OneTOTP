@@ -714,6 +714,7 @@ pub fn parse_otpauth(uri: &str) -> Result<Account, String> {
         category_id: String::new(),
         category: String::new(),
         favorite: false,
+        sort_order: 0,
         created_at: crate::totp::now_millis(),
         last_used_at: 0,
     })
@@ -943,6 +944,7 @@ mod tests {
                     category_id: String::new(),
                     category: String::new(),
                     favorite: false,
+                    sort_order: 0,
                     created_at: 0,
                     last_used_at: 0,
                 })

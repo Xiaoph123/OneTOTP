@@ -7,6 +7,7 @@ import { applyCachedFontScale } from "../lib/fontScale";
 import { initToggleShortcut } from "../lib/shortcut";
 import { isMobile } from "../lib/platform";
 import { isLockSuppressed, markUnlocked } from "../lib/lockGuard";
+import { isDragLocked } from "../lib/dragLock";
 
 export type Route =
   | { name: "codes" }
@@ -281,6 +282,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     let timer: number | undefined;
 
     const tick = async () => {
+      // 拖动排序期间跳过取码：每秒一次的重渲染会让拖动明显卡顿，
+      // 且 React 更新 className 会覆盖 JS 动态加的拖动状态类。
+      // 拖动只持续一两秒，验证码数字短暂不刷新无感知。
+      if (isDragLocked()) return;
       try {
         const results = await api.getCodes();
         if (!alive) return;

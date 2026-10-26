@@ -51,6 +51,7 @@
 | **重复账户检测** | 以密钥为唯一标识，重复添加时明确提示并拒绝 |
 | **分类管理** | 自建分类，每个分类可指定主题色；折叠时按分类色淡色高亮，账户可在分类间移动；展开策略可选自动展开 / 不自动展开 / 按上次状态 |
 | **搜索与收藏** | 按服务名 / 账户标识实时过滤（200ms 防抖）；收藏账户优先排序 |
+| **拖动排序** | 首页卡片长按 1 秒进入拖动（桌面端与移动端一致），长按期间底部进度条填满、拖动时其余卡片压暗并显示落点指示线；松手自动保存。手动排序后新增账户固定排在最前，排序结果随加密备份跨设备迁移 |
 | **加密保险库** | AES-256-GCM 加密落盘，密钥由 Argon2id 从口令派生（16 字节随机 salt + 12 字节随机 nonce）；派生参数随文件落盘，旧库按历史参数读取 |
 | **锁定密码** | 可选启用解锁口令（至少 8 位），带弱口令黑名单校验与即时强度提示；支持密码提示；也可仅靠机器本地密钥保护 |
 | **生物识别解锁** | Windows Hello、macOS Touch ID、Android / iOS 指纹或面容；Android 侧用 Keystore AES-256-GCM，密钥由系统瞬时生成 |
@@ -63,7 +64,7 @@
 | **数据存储目录** | 账户、备份与密钥可迁移到自定义目录，切换后自动重启生效；移动端显示系统分配的私有目录路径并支持一键复制，同时提示卸载即清空 |
 | **托盘与自启** | 桌面端支持最小化到托盘、关闭行为可选（退出 / 托盘）、开机自启，托盘菜单可直接进入设置 |
 | **主题与语言** | 浅色 / 深色 / 跟随系统（默认跟随系统）；界面字体缩放；中文 / English 双语 |
-| **开屏动画** | 四种样式可选（汇聚光晕 / 描边绘制 / 玻璃反光 / 液态粗细，默认汇聚光晕），动画 1.5 秒播完后停留 0.2 秒再进入首页，配色随明暗模式切换 |
+| **开屏动画** | 五种样式可选（汇聚光晕 / 描边绘制 / 玻璃反光 / 液态粗细 / 关闭，默认汇聚光晕），动画 1.5 秒播完后停留 0.2 秒再进入首页，配色随明暗模式切换；选「关闭」则直接进入界面 |
 | **移动端适配** | 独立移动布局（`data-platform` 钩子），底部四项导航（验证码 / 收藏 / 最近 / 设置），触控尺寸按移动端重新校准；「复制后自动隐藏」在 Android 上表现为切到后台，iOS 因系统禁止程序主动切后台而改为立即锁定 |
 | **内嵌字体** | 验证码使用内置 Roboto Mono（400 / 700 真实字重），不依赖系统字体，各品牌 Android ROM 上都能正确加粗 |
 
@@ -81,7 +82,7 @@
 
 | 部分 | 做法 |
 | --- | --- |
-| 应用背景 | 亮色为 16px 极淡点阵，暗色为 SVG `feTurbulence` 微噪点（无周期性、不形成网格感），底色 `#FCFDFE` / `#0A0B0D` |
+| 应用背景 | 明暗两套主题统一使用 SVG `feTurbulence` 微噪点（无周期性、不形成网格感），仅按底色深浅调整透明度；底色 `#FCFDFE` / `#0A0B0D` |
 | 贴边容器 | 标题栏、页头、标签栏完全透明，让背景纹理贯穿；底部吸附操作条半透明 + 模糊，避免滚过内容互相干扰 |
 | 卡片 | 半透明玻璃（`rgba(255,255,255,.62)` / `rgba(26,29,34,.72)`）+ `blur(14px) saturate(1.4)` |
 | 品牌按钮 | 亮色为绿→青→靛标准渐变；暗色整体压暗 35% 并叠加顶部内高光，保留品牌色相但不刺眼 |
@@ -327,6 +328,7 @@ A desktop and mobile app that does two-factor authentication properly: collect `
 | **Duplicate detection** | The secret is the unique key — duplicates are rejected with a clear message |
 | **Categories** | Create your own categories, each with a theme color; collapsed groups are tinted with the category color; accounts can be moved between categories; expansion policy can be always expand / always collapse / restore last state |
 | **Search & favorites** | Live filtering by issuer / account label (200 ms debounce); favorites are sorted first |
+| **Drag to reorder** | Long-press a card for 1 second to drag it (identical on desktop and mobile); a progress bar fills during the press, other cards dim while dragging, and a drop indicator shows where it will land; the order is saved on release. After manual sorting, newly added accounts always go to the top, and the order travels with encrypted backups across devices |
 | **Encrypted vault** | AES-256-GCM encryption at rest; key derived from your passphrase with Argon2id (16-byte random salt + 12-byte random nonce); KDF parameters are stored with the file, so older vaults keep working with their historical settings |
 | **Lock passphrase** | Optional unlock passphrase (at least 8 characters) with a weak-password blocklist and live strength hints; supports a hint; or rely on the machine-local key alone |
 | **Biometric unlock** | Windows Hello, macOS Touch ID, Android / iOS fingerprint or face; on Android the credential is an AES-256-GCM key in Keystore, generated instantly by the system |
@@ -339,7 +341,7 @@ A desktop and mobile app that does two-factor authentication properly: collect `
 | **Data directory** | Move accounts, backups and keys to a custom folder; the app restarts automatically after the change; on mobile the system-assigned private folder path is shown and copyable, with a warning that uninstalling erases everything |
 | **Tray & autostart** | On desktop, minimize to tray, choose close behavior (quit / tray), start on login, and jump to Settings from the tray menu |
 | **Theme & language** | Light / dark / follow system (default: follow system); UI font scaling; Chinese / English |
-| **Splash animation** | Four styles (converge glow / outline draw / glass gloss / liquid stroke, default converge glow); the 1.5 s animation completes, holds 0.2 s, then the home screen fades in; colors follow the light/dark theme |
+| **Splash animation** | Five styles (converge glow / outline draw / glass gloss / liquid stroke / off, default converge glow); the 1.5 s animation completes, holds 0.2 s, then the home screen fades in; colors follow the light/dark theme. Choosing "off" goes straight to the UI |
 | **Mobile layout** | A dedicated mobile layout (`data-platform` hook) with a four-item bottom bar (codes / favorites / recent / settings) and touch-calibrated sizing; "hide after copy" sends the app to the background on Android, while iOS locks immediately since the platform forbids apps from backgrounding themselves |
 | **Embedded font** | Codes use a bundled Roboto Mono (real 400 / 700 weights) instead of system fonts, so bold renders correctly on every Android ROM |
 
@@ -357,7 +359,7 @@ Built on the Volcengine **源力 (Yuanli)** design system: primary color `#1664F
 
 | Part | Approach |
 | --- | --- |
-| App background | Light: a faint 16 px dot grid; dark: SVG `feTurbulence` micro-noise (non-periodic, no visible grid). Base colors `#FCFDFE` / `#0A0B0D` |
+| App background | Both themes use SVG `feTurbulence` micro-noise (non-periodic, no visible grid), with opacity tuned per theme. Base colors `#FCFDFE` / `#0A0B0D` |
 | Edge containers | Title bar, page headers and the tab bar are fully transparent so the background texture runs through them; the sticky action bar is translucent with blur so scrolled content does not interfere |
 | Cards | Translucent glass (`rgba(255,255,255,.62)` / `rgba(26,29,34,.72)`) with `blur(14px) saturate(1.4)` |
 | Brand buttons | Light uses the green → cyan → indigo gradient; dark dims it by ~35% and adds a top inner highlight, keeping brand hue without glare |

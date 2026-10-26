@@ -107,6 +107,7 @@ pub fn run() {
             commands::update_category,
             commands::delete_category,
             commands::reorder_categories,
+            commands::reorder_accounts,
             commands::set_account_category,
             commands::get_settings,
             commands::update_settings,

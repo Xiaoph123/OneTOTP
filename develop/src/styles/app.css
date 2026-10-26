@@ -79,31 +79,29 @@ select {
 }
 
 /* 窄窗口应用骨架 */
-/* 全局背景：亮色用点阵纹理，暗色用微噪点。
-   两者都是「极淡的均匀纹理」，替代此前的径向光斑——
-   窄窗口（290~370px）里两团径向光斑会挤在一起，边界叠加后像「一块脏」。
+/* 全局背景：明暗两种主题统一使用微噪点纹理。
+   此前亮色用 16px 点阵、暗色用噪点，两套纹理观感不一致：
+   点阵是规则网格，肉眼能数出格子，像「贴了一张网格纸」；
+   噪点是随机颗粒，没有周期性，更像纸张/胶片质感。
+   现在统一为噪点，只按底色深浅调整透明度。
 
-   为什么暗色不用点阵：点阵是 16px 规则网格，在深色底上对比更明显，
-   肉眼能数出网格，观感像「贴了一张网格纸」。噪点是随机分布的颗粒，
-   没有周期性，暗色下更像胶片颗粒，不会形成网格感。
-
-   亮色点阵 0.055 / 暗色噪点 0.035：
-   亮色底接近白，点阵需要 0.055 才看得见；暗色底深，
-   噪点 0.035 已足够，再高会像脏污。 */
+   亮色 0.03 / 暗色 0.028：
+   亮色底接近白，噪点需要略高才看得见；暗色底深，
+   同样的白色噪点在深底上对比更强，0.028 已足够，再高会像脏污。 */
 .app-window {
   display: flex;
   flex-direction: column;
   height: 100%;
   width: 100%;
   background-color: var(--color-bg-2);
-  background-image: radial-gradient(rgba(12, 13, 14, 0.055) 1px, transparent 1px);
-  background-size: 16px 16px;
+  /* 微噪点（SVG feTurbulence 分形噪声，120×120 平铺）。
+     stitchTiles="stitch" 让图块边缘的噪声连续，避免平铺时出现可见接缝。 */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+  background-size: 120px 120px;
 }
-/* 暗色：微噪点（SVG feTurbulence 分形噪声，120×120 平铺）。
-   stitchTiles="stitch" 让图块边缘的噪声连续，避免平铺时出现可见接缝。
-
-   opacity 从 0.035 降到 0.028：底色压暗到 #0A0B0D 后，
-   同样的白色噪点在更深的底上对比更强，0.035 会显得像脏污。 */
+/* 暗色：同一套噪点，透明度略降。
+   底色压暗到 #0A0B0D 后，同样的白色噪点在更深的底上对比更强，
+   0.03 会显得像脏污，因此降到 0.028。 */
 :root[data-theme="dark"] .app-window {
   background-color: var(--color-bg-2);
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)' opacity='0.028'/%3E%3C/svg%3E");
@@ -735,6 +733,12 @@ select {
   border-radius: var(--radius-md);
   font-size: var(--font-size-body);
   line-height: 18px;
+  /* 提示条文字不可选中：这些是应用给出的说明 / 错误信息，
+     用户没有复制它们的需求，长按划选反而会误触出蓝色选区。
+     与设置行、验证码卡片、标题栏的处理保持一致。 */
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 .notice svg {
   width: 14px;
@@ -838,6 +842,142 @@ html .sticky-actions .ui-btn {
   gap: 12px;
 }
 
+/* ── 长按拖动排序 ──────────────────────────────────────────
+   交互分两个阶段：
+   1. 长按中（data-pressing）：卡片轻微下压 + 底部进度条 1 秒填满。
+      没有这个反馈时，从按下到触发之间完全静默，主观上会觉得卡住。
+   2. 拖动中（data-sorting）：其余卡片压暗，被拖卡片保持清晰并加深阴影，
+      列表顶部浮出「拖动排序」提示条——形成「聚焦压暗」。
+
+   状态一律用 data-* 属性而非 class：验证码每秒轮询会触发 React 重渲染，
+   React 更新 className 时会把 JS 动态加的类整个覆盖掉，
+   表现为「倒计时一跳就取消拖动」。data-* 不在 React 受控范围内。
+
+   拖动中的卡片由 JS 直接写 transform（CSP 不允许行内 style），
+   这里只负责视觉。过渡必须关掉，否则卡片会追着手指慢半拍。 */
+
+/* 长按进度条：卡片底部一条主色条，1 秒内从 0 填满。
+   高度取 3px 而非 2px——2px 在 1x 屏上只有 2 个物理像素，
+   加上卡片圆角裁切，实际几乎看不见。 */
+.otp-card::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 3px;
+  width: 0;
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
+  background: var(--color-primary);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+.otp-card[data-pressing]::after {
+  opacity: 1;
+  animation: otp-press-fill 1000ms linear forwards;
+}
+@keyframes otp-press-fill {
+  from { width: 0; }
+  to { width: 100%; }
+}
+/* 长按中：卡片轻微下压 + 主色描边，按下瞬间就有反馈，
+   不必等 1 秒后才知道「按到了」。
+   选择器带上 .otp-list 提高权重，压过后面的 :active 规则
+   （两者特异性相同时，后定义的 :active 会赢）。 */
+.otp-list .otp-card[data-pressing] {
+  transform: scale(0.985);
+  border-color: var(--color-primary);
+  background: var(--color-primary-bg);
+  transition-duration: 90ms;
+}
+
+/* 拖动中：被拖卡片抬起 */
+.otp-list .otp-card[data-dragging] {
+  transition: none;
+  box-shadow: var(--shadow-4);
+  border-color: var(--color-primary);
+  background: var(--color-bg-card);
+  cursor: grabbing;
+}
+/* 聚焦压暗：其余卡片明显压暗并轻微模糊，视线集中在被拖卡片上。
+   模糊量刻意压到 0.4px——验证码数字仍需可读，不能糊成一团。 */
+.otp-list[data-sorting] .otp-card:not([data-dragging]) {
+  opacity: 0.35;
+  filter: blur(0.4px);
+}
+/* 拖动期间禁止选中文字与长按菜单，否则移动端会弹出系统菜单打断拖动 */
+.otp-list[data-sorting],
+.otp-list[data-sorting] .otp-card {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* 「拖动排序」提示条：拖动时从列表顶部浮出，明确告知当前处于排序状态。
+   绝对定位在列表上方，不占布局空间（否则会让卡片整体下移，拖动中跳动）。
+   文案由 JSX 渲染（而非 CSS content），以便跟随语言设置。 */
+.otp-list {
+  position: relative;
+}
+.otp-sort-hint {
+  position: absolute;
+  left: 50%;
+  top: -6px;
+  transform: translate(-50%, calc(-100% + 4px));
+  padding: 4px 12px;
+  border-radius: var(--radius-full);
+  background: var(--color-primary);
+  color: #fff;
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-medium);
+  line-height: 16px;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 30;
+  opacity: 0;
+  transition: opacity 160ms ease, transform 160ms ease;
+}
+.otp-list[data-sorting] .otp-sort-hint {
+  opacity: 1;
+  transform: translate(-50%, -100%);
+}
+
+/* 落点指示线：拖动时显示「松手会插到这里」。
+   只靠卡片让位，视觉空位与实际落点容易错位（卡片高度不一致时尤其明显），
+   这条线给出确定的落点，解决「插不进去」的困惑。
+   由 JS 动态创建并写入 top（CSP 不允许行内 style，只能走 CSSOM）。 */
+.otp-drop-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  margin-top: -1px;
+  border-radius: 1px;
+  background: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(22, 100, 255, 0.16);
+  pointer-events: none;
+  z-index: 25;
+  animation: otp-drop-line-in 140ms ease-out;
+}
+/* 两端加圆点，视觉上更像「插入点」而非一条普通分割线 */
+.otp-drop-line::before,
+.otp-drop-line::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  margin-top: -3px;
+  border-radius: 50%;
+  background: var(--color-primary);
+}
+.otp-drop-line::before { left: -3px; }
+.otp-drop-line::after { right: -3px; }
+@keyframes otp-drop-line-in {
+  from { opacity: 0; transform: scaleX(0.9); }
+  to   { opacity: 1; transform: scaleX(1); }
+}
+
 /* 分类分组 */
 .otp-groups {
   display: flex;
@@ -911,6 +1051,8 @@ html .sticky-actions .ui-btn {
   transform: rotate(-90deg);
 }
 .otp-card {
+  /* 长按进度条（::after）以卡片为定位基准 */
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -919,16 +1061,21 @@ html .sticky-actions .ui-btn {
   border-radius: var(--radius-md);
   padding: 8px 10px;
   box-shadow: var(--shadow-1);
-  /* transform / background 加入过渡，为按下反馈提供顺滑的回落动画 */
+  /* transform / background 加入过渡，为按下反馈提供顺滑的回落动画；
+     opacity / filter 用于拖动时的「聚焦压暗」平滑过渡 */
   transition:
     box-shadow 180ms ease,
     border-color 150ms ease,
     transform 140ms cubic-bezier(0.2, 0, 0.2, 1),
-    background-color 140ms ease;
+    background-color 140ms ease,
+    opacity 180ms ease,
+    filter 180ms ease;
   cursor: pointer;
   /* 卡片内文字不做选中（验证码通过点击复制，无需划选） */
   user-select: none;
   -webkit-user-select: none;
+  /* 移动端长按不弹系统菜单，否则会打断长按拖动排序 */
+  -webkit-touch-callout: none;
   -webkit-tap-highlight-color: transparent;
 }
 .otp-card:hover {

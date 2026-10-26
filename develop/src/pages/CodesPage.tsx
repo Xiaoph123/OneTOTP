@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useApp, type CodesFilter } from "../state/AppContext";
 import { CodeCard } from "../components/CodeCard";
 import { TabBar } from "../components/TabBar";
@@ -8,7 +8,9 @@ import { ChevronDown, Grid, Info, Plus, Search } from "../components/icons";
 import { useI18n } from "../i18n";
 import { hexToRgbTriplet } from "../lib/utils";
 import { isDesktop } from "../lib/platform";
-import type { AccountView } from "../lib/api";
+import { useDragSort } from "../components/useDragSort";
+import { useToast } from "../components/Toast";
+import { api, type AccountView } from "../lib/api";
 
 interface Group {
   /** 分类 id，空字符串代表「未分类」 */
@@ -58,8 +60,10 @@ function writeCollapsedState(state: Record<string, boolean>): void {
 }
 
 export function CodesPage() {
-  const { accounts, categories, codes, settings, navigate, codesFilter, setCodesFilter } = useApp();
+  const { accounts, categories, codes, settings, navigate, codesFilter, setCodesFilter, refreshAccounts } =
+    useApp();
   const { t } = useI18n();
+  const toast = useToast();
   // 桌面端：筛选由顶部「全部 / 收藏 / 最近」分段控件控制，默认全部。
   // 移动端：筛选由底部导航控制，与 TabBar 的四项一一对应。
   const desktop = isDesktop();
@@ -82,6 +86,13 @@ export function CodesPage() {
   // - collapse：全部收起
   // - remember：从 localStorage 还原上次状态
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  /**
+   * 刚提交、尚未回流的排序结果。
+   *
+   * 拖动松手后先按本地新顺序渲染，等 refreshAccounts 回来再清空，
+   * 否则会出现「卡片先弹回原位、下一帧才跳到新位置」的闪动。
+   */
+  const [pendingOrder, setPendingOrder] = useState<string[] | null>(null);
   const expandMode = settings?.categoryExpandMode ?? "expand";
   // 只在「分类集合首次就绪」时应用一次初始策略，
   // 之后用户的点击不应被设置项反复覆盖。
@@ -124,8 +135,16 @@ export function CodesPage() {
         (a) => a.issuer.toLowerCase().includes(q) || a.account.toLowerCase().includes(q),
       );
     }
+    // 拖动排序刚提交、后端数据尚未回流的这一帧，按本地新顺序渲染，
+    // 避免卡片先「弹回原位」再跳到新位置。
+    if (pendingOrder) {
+      const rank = new Map(pendingOrder.map((id, i) => [id, i]));
+      list = [...list].sort(
+        (a, b) => (rank.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (rank.get(b.id) ?? Number.MAX_SAFE_INTEGER),
+      );
+    }
     return list;
-  }, [accounts, filter, debouncedQuery]);
+  }, [accounts, filter, debouncedQuery, pendingOrder]);
 
   /** 按分类分组：分类按 order 排列，未分类置底 */
   const groups = useMemo<Group[]>(() => {
@@ -161,9 +180,53 @@ export function CodesPage() {
   // 有分类时才显示分组标题，否则保持原平铺观感
   const grouped = categories.length > 0;
 
+  /**
+   * 长按拖动排序的提交逻辑。
+   *
+   * 传入的是「当前可见列表」的新顺序（可能是某个分类分组内的顺序，
+   * 也可能是「收藏」筛选后的子集）。这里把它映射回全局顺序：
+   * 只替换这些 id 在全局顺序中占据的位置，其余账户（其他分类、
+   * 被筛选掉的账户）的相对位置完全不动。
+   *
+   * 为什么不直接提交可见列表：后端会把未出现在列表中的账户追加到末尾，
+   * 那样在分组视图里拖动一次就会打乱其他分类的顺序。
+   */
+  const commitOrder = useCallback(
+    async (ids: string[]) => {
+      const idSet = new Set(ids);
+      const global = accounts.map((a) => a.id);
+      const positions: number[] = [];
+      global.forEach((id, i) => {
+        if (idSet.has(id)) positions.push(i);
+      });
+      // 可见列表与全局数据不一致（例如刚好被外部改动）：放弃本次排序
+      if (positions.length !== ids.length) return;
+      const next = [...global];
+      positions.forEach((pos, i) => {
+        next[pos] = ids[i];
+      });
+      // 先按本地新顺序渲染，避免卡片弹回原位再跳过去
+      setPendingOrder(next);
+      try {
+        await api.reorderAccounts(next);
+        await refreshAccounts();
+      } catch (e) {
+        toast.error(String(e));
+      } finally {
+        setPendingOrder(null);
+      }
+    },
+    [accounts, refreshAccounts, toast],
+  );
+
+  // 「最近」按使用时间排序，拖动无意义；搜索时只显示子集，同样关闭拖动
+  const dragEnabled = !searching && filter !== "recent";
+  const { onPointerDown } = useDragSort({ enabled: dragEnabled, onCommit: commitOrder });
+
   const renderCard = (account: AccountView) => (
     <CodeCard
       key={account.id}
+      sortId={account.id}
       account={account}
       code={codes[account.id]}
       grouping={settings?.codeGrouping ?? true}
@@ -272,14 +335,20 @@ export function CodesPage() {
                     />
                   </button>
                   {!isCollapsed ? (
-                    <div className="otp-list">{g.accounts.map(renderCard)}</div>
+                    <div className="otp-list" data-sort-list onPointerDown={onPointerDown}>
+                      <span className="otp-sort-hint">{t("拖动排序")}</span>
+                      {g.accounts.map(renderCard)}
+                    </div>
                   ) : null}
                 </div>
               );
             })}
           </div>
         ) : (
-          <div className="otp-list">{visible.map(renderCard)}</div>
+          <div className="otp-list" data-sort-list onPointerDown={onPointerDown}>
+            <span className="otp-sort-hint">{t("拖动排序")}</span>
+            {visible.map(renderCard)}
+          </div>
         )}
 
         {/* 空状态自身撑满剩余空间并垂直居中，无需占位元素；非空时用占位把提示条顶到底部 */}

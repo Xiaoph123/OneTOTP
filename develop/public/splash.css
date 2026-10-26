@@ -116,6 +116,18 @@ html:not([data-splash]) #app-splash .splash-dots {
   display: flex;
 }
 
+/* ── 关闭开屏动画（data-splash="none"）──
+   用户显式关掉动画时，启动画面整体不显示：既没有加载动画，
+   也没有退出过渡，直接呈现最终界面。
+   注意这里只隐藏「画面内容」，不隐藏 #app-splash 容器本身——
+   容器仍承担首帧底色（防止白闪），只是内容为空。 */
+html[data-splash="none"] #app-splash .splash-variant {
+  display: none;
+}
+html[data-splash="none"] #app-splash .splash-text {
+  display: none;
+}
+
 /* ══════════ A · 描边绘制（双线 + 光点领跑 + 光晕脉冲） ══════════
    总时长 1500ms，时间轴：
      0    ~ 900ms  双线描边（外层粗光晕线 + 内层细实线，错开 60ms）
@@ -462,6 +474,11 @@ html[data-splash="dots"] #app-splash.is-hidden,
 html:not([data-splash]) #app-splash.is-hidden {
   animation: splash-exit-blur 340ms ease forwards;
 }
+/* 关闭动画时不做退出过渡：直接消失，避免「空画面淡出」的多余一帧 */
+html[data-splash="none"] #app-splash.is-hidden {
+  animation: none;
+  opacity: 0;
+}
 @keyframes splash-exit-zoom {
   to {
     opacity: 0;
@@ -500,6 +517,10 @@ html[data-splash="ring"] #root.is-entering {
 html[data-splash="dots"] #root.is-entering,
 html:not([data-splash]) #root.is-entering {
   animation: splash-home-unblur 420ms cubic-bezier(0.2, 0.8, 0.3, 1) forwards;
+}
+/* 关闭动画时首页也不做入场过渡：直接呈现，不拖泥带水 */
+html[data-splash="none"] #root.is-entering {
+  animation: none;
 }
 @keyframes splash-home-rise {
   from {

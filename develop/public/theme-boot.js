@@ -53,15 +53,25 @@
     apply();
 
     /**
-     * 开屏动画样式：draw | pop | ring | dots。
+     * 开屏动画样式：draw | pop | ring | dots | none。
      *
      * 与主题一样从 localStorage 读取——设置项存在加密保险库里，
      * 启动阶段解不开，必须靠本机缓存才能在首帧就选对动画。
      * 属性缺失时 splash.css 会回退到 dots，不会出现空白。
+     *
+     * `none` 表示用户关闭了开屏动画：此时给 <html> 打上 data-splash="none"，
+     * splash.css 会把整个启动画面隐藏，main.tsx 也会跳过最短展示时长，
+     * 直接进入界面。
      */
     try {
       var anim = localStorage.getItem("onetotp.splashAnimation");
-      if (anim !== "draw" && anim !== "pop" && anim !== "ring" && anim !== "dots") {
+      if (
+        anim !== "draw" &&
+        anim !== "pop" &&
+        anim !== "ring" &&
+        anim !== "dots" &&
+        anim !== "none"
+      ) {
         anim = "dots";
       }
       document.documentElement.setAttribute("data-splash", anim);

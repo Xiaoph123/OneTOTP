@@ -486,6 +486,7 @@ export function SettingsPage() {
                 { value: "draw" as const, label: t("描边绘制") },
                 { value: "pop" as const, label: t("玻璃反光") },
                 { value: "ring" as const, label: t("液态粗细") },
+                { value: "none" as const, label: t("关闭动画") },
               ]}
             />
           </Row>
